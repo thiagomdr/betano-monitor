@@ -1,0 +1,30 @@
+---
+description: Stack oficial e versões (Expo SDK 54)
+globs: **/*
+alwaysApply: true
+---
+
+# Stack e Dependências (Expo SDK 54)
+
+## Stack oficial
+
+- Expo SDK **54.0.35**
+- React Native **0.81.5** / React **19.1.0**
+- TypeScript **5.9.2**
+- WebView UA **Mobile Chrome** (fixo, sem `; wv)`)
+- SQLite local (`expo-sqlite`) — estado e alertas
+- Supabase — histórico de coletas
+- Parser local + fallback **GPT-4o-mini**
+- Notifee + Foreground Service (`react-native-background-actions`)
+- App Android pessoal (APK sideload)
+
+## Versões
+
+- Pins **exatos** em `package.json` (sem `^` ou `~`).
+- Preferir `npx expo install` para pacotes Expo/RN.
+- Docs: https://docs.expo.dev/versions/v54.0.0/
+
+## Build
+
+- Monitor em background exige **dev client** ou **APK** (não Expo Go completo).
+- Após alterar plugins nativos: `npx expo prebuild --platform android`.

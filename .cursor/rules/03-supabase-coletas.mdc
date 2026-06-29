@@ -1,0 +1,42 @@
+---
+description: Supabase — histórico de coletas Betano
+globs: src/**/*,supabase/**/*
+alwaysApply: false
+---
+
+# Supabase — Coletas Betano
+
+## Objetivo
+
+Registrar **cada coleta** da Betano para análise histórica posterior.
+
+## Tabelas oficiais
+
+| Entidade | Tabela |
+|----------|--------|
+| Coleta (1 por ciclo) | `coletas_betano` |
+| Jogos na coleta | `jogos_coleta` |
+| Alerta disparado | `alertas_betano` |
+
+**PROIBIDO** duplicar com nomes como `scrapes`, `history`.
+
+## Campos mínimos — coletas_betano
+
+`id`, `usuario_id`, `coletado_em`, `fonte_parser` (`local`|`llm`|`nenhum`),
+`sucesso`, `qtd_jogos`, `erro_mensagem`, `texto_tamanho`, `texto_preview`,
+`dispositivo_id`, `data_criacao`, `data_atualizacao`
+
+## Segurança
+
+- RLS em todas as tabelas.
+- Políticas para usuário autenticado (`auth.uid()`).
+- Variáveis: `EXPO_PUBLIC_SUPABASE_URL`, `EXPO_PUBLIC_SUPABASE_ANON_KEY` no `.env`.
+- **PROIBIDO** `service_role` no app.
+
+## Implementação
+
+- Cliente: `src/services/supabase.ts`
+- Coletas: `src/services/coletasSupabase.ts`
+- Migrations: `supabase/migrations/`
+
+Após migration: marcar itens em `docs/CHECKLIST.md`.

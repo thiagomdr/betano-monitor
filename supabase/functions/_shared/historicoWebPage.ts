@@ -1,0 +1,451 @@
+export const HISTORICO_URL_PLACEHOLDER = '__SUPABASE_URL__';
+export const HISTORICO_ANON_KEY_PLACEHOLDER = '__SUPABASE_ANON_KEY__';
+
+export function buildHistoricoTemplate(): string {
+  const configJson = `{"url":"${HISTORICO_URL_PLACEHOLDER}","anonKey":"${HISTORICO_ANON_KEY_PLACEHOLDER}"}`;
+
+  return `<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1" />
+  <title>Betano Monitor - Historico</title>
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+      background: #111;
+      color: #eee;
+      min-height: 100vh;
+      line-height: 1.4;
+    }
+    .header {
+      padding: 16px 12px 12px;
+      border-bottom: 1px solid #222;
+      position: sticky;
+      top: 0;
+      background: #111;
+      z-index: 10;
+    }
+    .title { font-size: 20px; font-weight: 700; color: #fff; }
+    .subtitle { font-size: 12px; color: #aaa; margin-top: 4px; }
+    .toolbar {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+      margin-top: 12px;
+      align-items: center;
+    }
+    button, .btn {
+      background: #333;
+      color: #fff;
+      border: none;
+      border-radius: 8px;
+      padding: 10px 14px;
+      font-size: 13px;
+      font-weight: 600;
+      cursor: pointer;
+    }
+    button.primary { background: #c45c00; }
+    button:disabled { opacity: 0.5; cursor: not-allowed; }
+    button.ghost { background: transparent; color: #c45c00; padding: 4px 0; }
+    .login-panel {
+      max-width: 400px;
+      margin: 48px auto;
+      padding: 0 16px;
+      display: flex;
+      flex-direction: column;
+      gap: 12px;
+    }
+    .login-panel h2 { font-size: 18px; color: #fff; }
+    .login-panel p { font-size: 13px; color: #999; }
+    input {
+      width: 100%;
+      background: #1a1a1a;
+      border: 1px solid #333;
+      border-radius: 8px;
+      padding: 12px;
+      color: #fff;
+      font-size: 14px;
+    }
+    input::placeholder { color: #666; }
+    .centro {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      padding: 48px 24px;
+      gap: 12px;
+      text-align: center;
+    }
+    .aviso { color: #999; font-size: 13px; line-height: 1.5; }
+    .erro { color: #ff6b6b; font-size: 13px; }
+    .spinner {
+      width: 32px; height: 32px;
+      border: 3px solid #333;
+      border-top-color: #c45c00;
+      border-radius: 50%;
+      animation: spin 0.8s linear infinite;
+    }
+    @keyframes spin { to { transform: rotate(360deg); } }
+    .lista { padding: 12px; padding-bottom: 32px; max-width: 720px; margin: 0 auto; }
+    .card {
+      background: #1a1a1a;
+      border-radius: 10px;
+      padding: 12px;
+      margin-bottom: 10px;
+    }
+    .card-header {
+      display: flex;
+      gap: 8px;
+      align-items: flex-start;
+      cursor: pointer;
+      width: 100%;
+      text-align: left;
+      background: none;
+      border: none;
+      color: inherit;
+      padding: 0;
+    }
+    .expand-icon {
+      color: #c45c00;
+      font-size: 12px;
+      margin-top: 3px;
+      width: 14px;
+      flex-shrink: 0;
+    }
+    .card-titulo { color: #fff; font-size: 14px; font-weight: 600; line-height: 1.4; }
+    .card-liga { color: #8ab4f8; font-size: 11px; margin-top: 2px; }
+    .card-meta { color: #888; font-size: 11px; margin-top: 2px; }
+    .timeline {
+      border-top: 1px solid #2a2a2a;
+      margin-top: 8px;
+      padding-top: 8px;
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+    }
+    .timeline-item { display: flex; gap: 6px; align-items: flex-start; }
+    .timeline-marcador { color: #c45c00; font-size: 12px; width: 12px; }
+    .timeline-conteudo { flex: 1; }
+    .timeline-linha { display: flex; flex-wrap: wrap; font-size: 12px; color: #ccc; }
+    .timeline-hora {
+      font-family: ui-monospace, monospace;
+      width: 42px;
+      flex-shrink: 0;
+    }
+    .timeline-detalhe { color: #999; font-size: 11px; margin-left: 42px; }
+    .user-email { font-size: 12px; color: #888; flex: 1; min-width: 120px; }
+    .hidden { display: none !important; }
+  </style>
+</head>
+<body>
+  <div id="app-login" class="login-panel hidden">
+    <h2>Login Supabase</h2>
+    <p>Use o mesmo e-mail e senha do monitor Betano.</p>
+    <input id="email" type="email" placeholder="E-mail" autocomplete="username" />
+    <input id="senha" type="password" placeholder="Senha" autocomplete="current-password" />
+    <button id="btn-login" class="primary" type="button">Entrar</button>
+    <p id="login-erro" class="erro hidden"></p>
+  </div>
+
+  <div id="app-main" class="hidden">
+    <header class="header">
+      <div class="title">Historico por jogo</div>
+      <div class="subtitle">Linha do tempo das coletas no Supabase</div>
+      <div class="toolbar">
+        <span id="user-email" class="user-email"></span>
+        <button id="btn-atualizar" type="button">Atualizar</button>
+        <button id="btn-sair" type="button">Sair</button>
+      </div>
+    </header>
+    <div id="conteudo"></div>
+  </div>
+
+  <script type="module">
+    import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.49.1';
+
+    const CONFIG = ${configJson};
+    const supabase = createClient(CONFIG.url, CONFIG.anonKey, {
+      auth: {
+        persistSession: true,
+        autoRefreshToken: true,
+        detectSessionInUrl: true,
+      },
+    });
+
+    const PERIODOS_AO_VIVO = new Set(['Q1', 'Q2', 'Q3', 'Q4', 'Intervalo', 'INT', 'HT', 'OT']);
+    const LIMITE_COLETAS = 80;
+    const AUTO_REFRESH_MS = 45_000;
+
+    const elLogin = document.getElementById('app-login');
+    const elMain = document.getElementById('app-main');
+    const elConteudo = document.getElementById('conteudo');
+    const elLoginErro = document.getElementById('login-erro');
+    const elUserEmail = document.getElementById('user-email');
+
+    let expandidos = new Set();
+    let refreshTimer = null;
+
+    function formatarHora(iso) {
+      try {
+        return new Date(iso).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' });
+      } catch {
+        return iso;
+      }
+    }
+
+    function buildGameKey(home, away) {
+      return [home, away]
+        .map((n) => n.trim().toLowerCase().replace(/\\s+/g, ' '))
+        .sort()
+        .join('|');
+    }
+
+    function formatarRotuloVantagem(pc, pf, tc, tf) {
+      const diff = Math.abs(pc - pf);
+      if (diff === 0) return 'empate';
+      const lider = pc > pf ? tc : tf;
+      return '+' + diff + ' ' + lider;
+    }
+
+    function inferirEstado(periodo) {
+      return PERIODOS_AO_VIVO.has(periodo.trim()) ? 'ao_vivo' : 'finalizado';
+    }
+
+    function montarGrupos(coletas, jogos) {
+      const coletaPorId = new Map(coletas.map((c) => [c.id, c]));
+      const gruposRaw = new Map();
+
+      for (const jogo of jogos) {
+        const coleta = coletaPorId.get(jogo.coleta_id);
+        if (!coleta) continue;
+
+        const entrada = {
+          id: jogo.id,
+          coletadoEm: coleta.coletado_em,
+          placarCasa: jogo.placar_casa,
+          placarFora: jogo.placar_fora,
+          periodo: jogo.periodo,
+          rotuloVantagem: formatarRotuloVantagem(
+            jogo.placar_casa, jogo.placar_fora, jogo.time_casa, jogo.time_fora,
+          ),
+        };
+
+        const grupoKey = buildGameKey(jogo.time_casa, jogo.time_fora);
+        const existente = gruposRaw.get(grupoKey);
+        if (existente) {
+          existente.entradas.push(entrada);
+          existente.meta = jogo;
+        } else {
+          gruposRaw.set(grupoKey, { meta: jogo, entradas: [entrada] });
+        }
+      }
+
+      const grupos = [];
+      for (const [gameKey, { meta, entradas }] of gruposRaw) {
+        const ultima = entradas.reduce((a, b) =>
+          new Date(a.coletadoEm) > new Date(b.coletadoEm) ? a : b,
+        );
+        entradas.sort((a, b) => new Date(b.coletadoEm) - new Date(a.coletadoEm));
+        grupos.push({
+          gameKey,
+          timeCasa: meta.time_casa,
+          timeFora: meta.time_fora,
+          liga: meta.liga,
+          estado: inferirEstado(ultima.periodo),
+          ultimaColetaEm: ultima.coletadoEm,
+          ultimoPlacarCasa: ultima.placarCasa,
+          ultimoPlacarFora: ultima.placarFora,
+          ultimoPeriodo: ultima.periodo,
+          entradas,
+        });
+      }
+
+      grupos.sort((a, b) => new Date(b.ultimaColetaEm) - new Date(a.ultimaColetaEm));
+      return grupos;
+    }
+
+    function rotuloEstado(estado) {
+      return estado === 'ao_vivo' ? 'Ao Vivo' : 'Finalizado';
+    }
+
+    function formatarCabecalho(j) {
+      const hora = formatarHora(j.ultimaColetaEm);
+      return hora + ' - ' + j.timeCasa + ' ' + j.ultimoPlacarCasa + ' x ' +
+        j.ultimoPlacarFora + ' ' + j.timeFora + ' (' + rotuloEstado(j.estado) + ')';
+    }
+
+    function formatarDetalhePeriodo(e) {
+      if (e.rotuloVantagem && e.rotuloVantagem !== 'empate') {
+        return e.periodo + ' » ' + e.rotuloVantagem;
+      }
+      if (e.rotuloVantagem === 'empate') return e.periodo + ' » empate';
+      return e.periodo;
+    }
+
+    function renderTimeline(entrada, timeCasa, timeFora) {
+      const hora = formatarHora(entrada.coletadoEm);
+      const placar = timeCasa + ' ' + entrada.placarCasa + ' x ' + entrada.placarFora + ' ' + timeFora;
+      return '<div class="timeline-item">' +
+        '<span class="timeline-marcador">»</span>' +
+        '<div class="timeline-conteudo">' +
+          '<div class="timeline-linha"><span class="timeline-hora">' + hora + '</span><span>' + placar + '</span></div>' +
+          '<div class="timeline-detalhe">(' + formatarDetalhePeriodo(entrada) + ')</div>' +
+        '</div></div>';
+    }
+
+    function renderCard(jogo) {
+      const exp = expandidos.has(jogo.gameKey);
+      const liga = jogo.liga ? '<div class="card-liga">' + escapeHtml(jogo.liga) + '</div>' : '';
+      const timeline = exp
+        ? '<div class="timeline">' + jogo.entradas.map((e) => renderTimeline(e, jogo.timeCasa, jogo.timeFora)).join('') + '</div>'
+        : '';
+
+      return '<article class="card">' +
+        '<button type="button" class="card-header" data-key="' + escapeHtml(jogo.gameKey) + '">' +
+          '<span class="expand-icon">' + (exp ? '▼' : '▶') + '</span>' +
+          '<div>' +
+            '<div class="card-titulo">' + escapeHtml(formatarCabecalho(jogo)) + '</div>' +
+            liga +
+            '<div class="card-meta">' + jogo.entradas.length + ' coleta(s) · ' + escapeHtml(jogo.ultimoPeriodo) + '</div>' +
+          '</div>' +
+        '</button>' + timeline + '</article>';
+    }
+
+    function escapeHtml(s) {
+      return String(s)
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;');
+    }
+
+    function renderLoading() {
+      elConteudo.innerHTML = '<div class="centro"><div class="spinner"></div></div>';
+    }
+
+    function renderErro(msg) {
+      elConteudo.innerHTML = '<div class="centro"><p class="erro">' + escapeHtml(msg) + '</p>' +
+        '<button type="button" id="btn-retry">Tentar novamente</button></div>';
+      document.getElementById('btn-retry')?.addEventListener('click', () => void carregar());
+    }
+
+    function renderVazio() {
+      elConteudo.innerHTML = '<div class="centro"><p class="aviso">Nenhum jogo registrado ainda. Ative o monitor na nuvem para começar a coletar.</p></div>';
+    }
+
+    function renderLista(jogos) {
+      elConteudo.innerHTML = '<div class="lista">' + jogos.map(renderCard).join('') + '</div>';
+      elConteudo.querySelectorAll('.card-header').forEach((btn) => {
+        btn.addEventListener('click', () => {
+          const key = btn.getAttribute('data-key');
+          if (!key) return;
+          if (expandidos.has(key)) expandidos.delete(key);
+          else expandidos.add(key);
+          renderLista(jogos);
+        });
+      });
+    }
+
+    async function buscarDados() {
+      const { data: coletas, error: errC } = await supabase
+        .from('coletas_betano')
+        .select('*')
+        .order('coletado_em', { ascending: false })
+        .limit(LIMITE_COLETAS);
+
+      if (errC) throw new Error(errC.message);
+      if (!coletas?.length) return [];
+
+      const ids = coletas.map((c) => c.id);
+      const { data: jogos, error: errJ } = await supabase
+        .from('jogos_coleta')
+        .select('*')
+        .in('coleta_id', ids);
+
+      if (errJ) throw new Error(errJ.message);
+      return montarGrupos(coletas, jogos ?? []);
+    }
+
+    async function carregar(silencioso = false) {
+      if (!silencioso) renderLoading();
+      try {
+        const jogos = await buscarDados();
+        if (jogos.length === 0) renderVazio();
+        else renderLista(jogos);
+      } catch (e) {
+        renderErro(e instanceof Error ? e.message : 'Erro ao carregar histórico');
+      }
+    }
+
+    function mostrarLogin() {
+      elLogin.classList.remove('hidden');
+      elMain.classList.add('hidden');
+      pararAutoRefresh();
+    }
+
+    function mostrarApp(email) {
+      elLogin.classList.add('hidden');
+      elMain.classList.remove('hidden');
+      elUserEmail.textContent = email;
+      iniciarAutoRefresh();
+      void carregar();
+    }
+
+    function iniciarAutoRefresh() {
+      pararAutoRefresh();
+      refreshTimer = setInterval(() => void carregar(true), AUTO_REFRESH_MS);
+    }
+
+    function pararAutoRefresh() {
+      if (refreshTimer) clearInterval(refreshTimer);
+      refreshTimer = null;
+    }
+
+    document.getElementById('btn-login').addEventListener('click', async () => {
+      elLoginErro.classList.add('hidden');
+      const email = document.getElementById('email').value.trim();
+      const senha = document.getElementById('senha').value;
+      const { data, error } = await supabase.auth.signInWithPassword({ email, password: senha });
+      if (error) {
+        elLoginErro.textContent = error.message;
+        elLoginErro.classList.remove('hidden');
+        return;
+      }
+      if (data.session?.user?.email) mostrarApp(data.session.user.email);
+    });
+
+    document.getElementById('btn-sair').addEventListener('click', async () => {
+      await supabase.auth.signOut();
+      expandidos = new Set();
+      mostrarLogin();
+    });
+
+    document.getElementById('btn-atualizar').addEventListener('click', () => void carregar());
+
+    document.getElementById('senha').addEventListener('keydown', (e) => {
+      if (e.key === 'Enter') document.getElementById('btn-login').click();
+    });
+
+    const { data: sessao } = await supabase.auth.getSession();
+    if (sessao.session?.user?.email) {
+      mostrarApp(sessao.session.user.email);
+    } else {
+      mostrarLogin();
+    }
+
+    supabase.auth.onAuthStateChange((_event, session) => {
+      if (session?.user?.email) mostrarApp(session.user.email);
+      else mostrarLogin();
+    });
+  </script>
+</body>
+</html>`;
+}
+
+export function buildHistoricoPage(supabaseUrl: string, supabaseAnonKey: string): string {
+  return buildHistoricoTemplate()
+    .replaceAll(HISTORICO_URL_PLACEHOLDER, supabaseUrl)
+    .replaceAll(HISTORICO_ANON_KEY_PLACEHOLDER, supabaseAnonKey);
+}

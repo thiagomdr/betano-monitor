@@ -1,0 +1,38 @@
+---
+description: Checklist vivo do projeto — atualizar a cada entrega
+globs: **/*
+alwaysApply: true
+---
+
+# Checklist do Projeto
+
+## Arquivo oficial
+
+**`docs/CHECKLIST.md`** — checklist do **projeto inteiro** (não só Supabase).
+
+## OBRIGATÓRIO para o Agent
+
+1. **Antes** de tarefas grandes: ler `docs/CHECKLIST.md` para contexto.
+2. **Depois** de concluir item: marcar `[x]` no checklist.
+3. Atualizar linha **Última atualização** com a data.
+4. Informar ao usuário quais itens foram marcados.
+
+## Formato dos itens
+
+```markdown
+- [ ] Pendente
+- [x] Concluído
+- [~] Em andamento (opcional)
+```
+
+## Seções do checklist
+
+1. Fundação e stack
+2. WebView e coleta Betano
+3. Parser, regras e alertas
+4. Monitor em background
+5. Supabase e histórico
+6. Build APK e produção
+7. Testes end-to-end
+
+Não criar checklists paralelos em outros arquivos sem pedido explícito.

@@ -1,0 +1,37 @@
+---
+description: Hierarquia das regras + princípios globais do betano-monitor
+globs: **/*
+alwaysApply: true
+---
+
+# Hierarquia e Princípios Globais
+
+## Precedência
+
+1. **00-hierarquia-e-principios.mdc**
+2. **03-supabase-coletas.mdc**
+3. **01-stack-expo54.mdc**
+4. **02-arquitetura-e-pastas.mdc**
+5. **04-checklist-projeto.mdc**
+
+Regra mais específica prevalece no mesmo nível.
+
+## Princípios
+
+### OBRIGATÓRIO
+
+- Alterar somente arquivos necessários à tarefa.
+- Mudanças pequenas e reversíveis.
+- Manter Expo SDK 54 e React Native 0.81.5.
+- Atualizar `docs/CHECKLIST.md` ao concluir item do checklist.
+- SQLite local para alertas; Supabase para histórico de coletas.
+
+### PROIBIDO
+
+- Atualizar dependências sem pedido explícito.
+- `service_role` ou secrets no código/commits.
+- Import de `servicos/supabase.ts` em telas/componentes (usar serviços).
+
+## Checklist do projeto
+
+Fonte única de progresso: **`docs/CHECKLIST.md`**

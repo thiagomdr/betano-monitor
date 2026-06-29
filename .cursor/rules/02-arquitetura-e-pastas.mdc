@@ -1,0 +1,35 @@
+---
+description: Arquitetura de pastas e fluxo de dados
+globs: src/**/*
+alwaysApply: false
+---
+
+# Arquitetura e Pastas
+
+## Estrutura
+
+```
+src/
+  components/     # UI reutilizável (ex.: BetanoWebView)
+  screens/        # Telas
+  services/       # Lógica: parser, monitor, store, supabase, notificações
+  types/          # Tipos TypeScript
+supabase/
+  migrations/     # SQL do banco
+docs/
+  CHECKLIST.md    # Progresso do projeto inteiro
+```
+
+## Fluxo de coleta
+
+```
+WebView → scrapeBridge → parseLocal / parseLlm
+  → processGames (SQLite + alerta Notifee)
+  → coletasSupabase (histórico append-only)
+```
+
+## Regras
+
+- Tela → serviço. Sem lógica de negócio pesada em componentes.
+- Falha no Supabase **não** bloqueia alerta local.
+- Regra de alerta: Q2 → Intervalo/Q3 e diferença ≥ 10 pts.

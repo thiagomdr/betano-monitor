@@ -1,20 +1,16 @@
-import { StatusBar } from 'expo-status-bar';
-import { StyleSheet, Text, View } from 'react-native';
+import { useState } from 'react';
+
+import { HistoricoColetasScreen } from './src/screens/HistoricoColetasScreen';
+import { MonitorScreen } from './src/screens/MonitorScreen';
+
+type TelaAtiva = 'monitor' | 'historico';
 
 export default function App() {
-  return (
-    <View style={styles.container}>
-      <Text>Open up App.tsx to start working on your app!</Text>
-      <StatusBar style="auto" />
-    </View>
-  );
-}
+  const [tela, setTela] = useState<TelaAtiva>('monitor');
 
-const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: '#fff',
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-});
+  if (tela === 'historico') {
+    return <HistoricoColetasScreen onVoltar={() => setTela('monitor')} />;
+  }
+
+  return <MonitorScreen onAbrirHistorico={() => setTela('historico')} />;
+}

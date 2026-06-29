@@ -31,6 +31,7 @@ yarn-error.*
 *.pem
 
 # local env files
+.env
 .env*.local
 
 # typescript
@@ -39,3 +40,13 @@ yarn-error.*
 # generated native folders
 /ios
 /android
+
+# historico web (gerado com chaves do .env)
+web/historico/index.html
+web/historico/abrir-no-celular.html
+
+# logs locais
+debug-*.log
+expo-start-log.txt
+expo-test-err.txt
+expo-test-out.txt
