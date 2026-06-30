@@ -130,6 +130,8 @@
     }
     .timeline-detalhe { color: #999; font-size: 11px; margin-left: 42px; }
     .user-email { font-size: 12px; color: #888; flex: 1; min-width: 120px; }
+    .monitor-status { font-size: 11px; color: #7cb342; max-width: 200px; }
+    .monitor-status.off { color: #888; }
     .hidden { display: none !important; }
   </style>
 </head>
@@ -149,6 +151,8 @@
       <div class="subtitle">Linha do tempo das coletas no Supabase</div>
       <div class="toolbar">
         <span id="user-email" class="user-email"></span>
+        <span id="monitor-status" class="monitor-status off">Coleta: parada</span>
+        <button id="btn-monitor" type="button">Iniciar coleta</button>
         <button id="btn-atualizar" type="button">Atualizar</button>
         <button id="btn-sair" type="button">Sair</button>
       </div>
@@ -177,9 +181,91 @@
     const elConteudo = document.getElementById('conteudo');
     const elLoginErro = document.getElementById('login-erro');
     const elUserEmail = document.getElementById('user-email');
+    const elMonitorStatus = document.getElementById('monitor-status');
+    const elBtnMonitor = document.getElementById('btn-monitor');
 
     let expandidos = new Set();
     let refreshTimer = null;
+    let monitorAtivo = false;
+
+    async function obterUsuarioId() {
+      const { data } = await supabase.auth.getUser();
+      return data.user?.id ?? null;
+    }
+
+    async function atualizarStatusMonitor() {
+      const { data, error } = await supabase
+        .from('coleta_scheduler')
+        .select('ativo, last_run_at, next_run_at')
+        .eq('id', 'default')
+        .maybeSingle();
+
+      if (error || !data) {
+        monitorAtivo = false;
+        elMonitorStatus.textContent = 'Coleta: nao configurada';
+        elMonitorStatus.className = 'monitor-status off';
+        elBtnMonitor.textContent = 'Iniciar coleta';
+        return;
+      }
+
+      monitorAtivo = Boolean(data.ativo);
+      if (monitorAtivo) {
+        let txt = 'Coleta: ativa';
+        if (data.last_run_at) {
+          txt += ' · ult. ' + formatarHora(data.last_run_at);
+        }
+        elMonitorStatus.textContent = txt;
+        elMonitorStatus.className = 'monitor-status';
+        elBtnMonitor.textContent = 'Parar coleta';
+      } else {
+        elMonitorStatus.textContent = 'Coleta: parada';
+        elMonitorStatus.className = 'monitor-status off';
+        elBtnMonitor.textContent = 'Iniciar coleta';
+      }
+    }
+
+    async function iniciarMonitorNuvem() {
+      const usuarioId = await obterUsuarioId();
+      if (!usuarioId) throw new Error('Faca login primeiro');
+
+      const agora = new Date().toISOString();
+      const { error } = await supabase.from('coleta_scheduler').upsert({
+        id: 'default',
+        usuario_id: usuarioId,
+        ativo: true,
+        next_run_at: agora,
+        data_atualizacao: agora,
+      });
+
+      // #region agent log
+      fetch('http://127.0.0.1:7904/ingest/86615625-6ae5-4e98-a1da-0a5f0f15fc42', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'X-Debug-Session-Id': '94b3c3' },
+        body: JSON.stringify({
+          sessionId: '94b3c3',
+          hypothesisId: 'H3-fix',
+          location: 'historicoWebPage:iniciarMonitorNuvem',
+          message: 'scheduler upsert',
+          data: { ok: !error, err: error?.message ?? null },
+          timestamp: Date.now(),
+          runId: 'post-fix',
+        }),
+      }).catch(() => {});
+      // #endregion
+
+      if (error) throw error;
+      await atualizarStatusMonitor();
+    }
+
+    async function pararMonitorNuvem() {
+      const { error } = await supabase
+        .from('coleta_scheduler')
+        .update({ ativo: false, data_atualizacao: new Date().toISOString() })
+        .eq('id', 'default');
+
+      if (error) throw error;
+      await atualizarStatusMonitor();
+    }
 
     function formatarHora(iso) {
       try {
@@ -384,6 +470,8 @@
       elMain.classList.remove('hidden');
       elUserEmail.textContent = email;
       iniciarAutoRefresh();
+      void atualizarStatusMonitor();
+      void iniciarMonitorNuvem().catch(() => {});
       void carregar();
     }
 
@@ -417,6 +505,15 @@
     });
 
     document.getElementById('btn-atualizar').addEventListener('click', () => void carregar());
+
+    elBtnMonitor.addEventListener('click', async () => {
+      try {
+        if (monitorAtivo) await pararMonitorNuvem();
+        else await iniciarMonitorNuvem();
+      } catch (e) {
+        alert(e instanceof Error ? e.message : 'Erro ao alterar coleta');
+      }
+    });
 
     document.getElementById('senha').addEventListener('keydown', (e) => {
       if (e.key === 'Enter') document.getElementById('btn-login').click();

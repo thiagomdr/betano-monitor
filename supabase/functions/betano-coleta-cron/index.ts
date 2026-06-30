@@ -46,6 +46,7 @@ Deno.serve(async (req) => {
         skipped: true,
         summary: 'Monitor na nuvem parado',
         ativo: false,
+        debug: { hypothesisId: 'H3', ativo: false, usuarioId: scheduler.usuario_id ?? null },
       });
     }
 
@@ -54,6 +55,7 @@ Deno.serve(async (req) => {
         ok: false,
         skipped: true,
         summary: 'Sem usuário vinculado — faça login no app e toque Iniciar',
+        debug: { hypothesisId: 'H4', ativo: scheduler.ativo, usuarioId: null },
       });
     }
 

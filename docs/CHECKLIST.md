@@ -33,7 +33,7 @@ Progresso do **projeto inteiro**. O Agent deve marcar `[x]` ao concluir cada ite
 - [x] Coleta automática via Supabase quando `.env` configurado (`monitorLoop`)
 - [x] Agendamento na nuvem `pg_cron` + `betano-coleta-cron` (4–8 min aleatório, ms)
 - [x] Migration `coleta_scheduler` + `jogos_estado_monitor`
-- [ ] Aplicar migration `20260629130000_coleta_scheduler.sql` no Supabase
+- [x] Aplicar migration `20260629130000_coleta_scheduler.sql` no Supabase
 - [ ] Configurar `CRON_SECRET` (opcional) em `coleta_cron_config` + Edge Secrets
 - [x] Deploy `betano-coleta` no Supabase + resultado validado no app
 - [ ] Deploy `betano-probe` no Supabase + resultado do probe validado
