@@ -52,12 +52,20 @@ export function buildHistoricoTemplate(): string {
       color: #fff;
       cursor: pointer;
     }
-    .menu-kebab:hover { background: transparent; }
+    .menu-kebab:hover,
+    .menu-kebab:active {
+      background: transparent;
+    }
     .menu-kebab-icon {
       display: block;
       width: 30px;
       height: 30px;
       filter: brightness(0) invert(1);
+      transition: filter 0.15s ease;
+    }
+    .menu-kebab:hover .menu-kebab-icon,
+    .menu-kebab:active .menu-kebab-icon {
+      filter: brightness(0) saturate(100%) invert(48%) sepia(90%) saturate(2000%) hue-rotate(360deg) brightness(95%);
     }
     .menu-popover {
       position: absolute;
