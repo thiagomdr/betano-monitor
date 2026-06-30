@@ -116,10 +116,47 @@ export function buildHistoricoTemplate(): string {
       width: 14px;
       flex-shrink: 0;
     }
-    .card-titulo { color: #fff; font-size: 14px; font-weight: 600; line-height: 1.4; }
+    .card-corpo { flex: 1; min-width: 0; }
+    .card-hora {
+      color: #fff;
+      font-size: 13px;
+      font-weight: 600;
+      font-family: ui-monospace, monospace;
+      margin-bottom: 8px;
+    }
+    .card.finalizado .card-hora { color: #888; }
+    .card-linha-time {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      margin-bottom: 6px;
+    }
+    .card-nome-time {
+      flex: 1;
+      font-size: 13px;
+      font-weight: 600;
+      color: #fff;
+      min-width: 0;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+    .card.finalizado .card-nome-time { color: #888; }
+    .card-box {
+      min-width: 44px;
+      padding: 4px 8px;
+      border-radius: 8px;
+      font-size: 12px;
+      font-weight: 700;
+      text-align: center;
+      font-family: ui-monospace, monospace;
+      flex-shrink: 0;
+    }
+    .card-box.casa.ao-vivo { background: #1a73e8; color: #fff; }
+    .card-box.fora.ao-vivo { background: #c62828; color: #fff; }
+    .card-box.finalizado { background: #454545; color: #fff; }
     .card.finalizado .expand-icon { color: #888; }
-    .card.finalizado .card-titulo { color: #888; }
-    .card-meta { color: #888; font-size: 11px; margin-top: 2px; }
+    .card-meta { color: #888; font-size: 11px; margin-top: 4px; }
     .status-badge {
       position: absolute;
       bottom: 8px;
@@ -425,11 +462,24 @@ export function buildHistoricoTemplate(): string {
       return estado === 'ao_vivo' ? 'Ao Vivo' : 'Finalizado';
     }
 
-    function formatarCabecalho(j) {
-      const hora = formatarHora(j.ultimaColetaEm);
-      return hora + ' - ' + formatarOddWeb(j.ultimoOddCasa) + ' ' + j.timeCasa + ' ' +
-        j.ultimoPlacarCasa + ' x ' + j.ultimoPlacarFora + ' ' + j.timeFora + ' ' +
-        formatarOddWeb(j.ultimoOddFora);
+    function renderLinhaTime(nome, odd, placar, lado, aoVivo) {
+      const clsBox = aoVivo ? 'card-box ' + lado + ' ao-vivo' : 'card-box finalizado';
+      return '<div class="card-linha-time">' +
+        '<span class="card-nome-time">' + escapeHtml(nome) + '</span>' +
+        '<span class="' + clsBox + '">' + escapeHtml(formatarOddWeb(odd)) + '</span>' +
+        '<span class="' + clsBox + '">' + escapeHtml(String(placar)) + '</span>' +
+      '</div>';
+    }
+
+    function renderCorpoCard(jogo) {
+      const hora = formatarHora(jogo.ultimaColetaEm);
+      const aoVivo = jogo.estado === 'ao_vivo';
+      return '<div class="card-corpo">' +
+        '<div class="card-hora">' + escapeHtml(hora) + '</div>' +
+        renderLinhaTime(jogo.timeCasa, jogo.ultimoOddCasa, jogo.ultimoPlacarCasa, 'casa', aoVivo) +
+        renderLinhaTime(jogo.timeFora, jogo.ultimoOddFora, jogo.ultimoPlacarFora, 'fora', aoVivo) +
+        '<div class="card-meta">' + escapeHtml(formatarMeta(jogo)) + '</div>' +
+      '</div>';
     }
 
     function formatarMeta(j) {
@@ -472,10 +522,7 @@ export function buildHistoricoTemplate(): string {
       return '<article class="card' + clsFinalizado + '">' +
         '<button type="button" class="card-header" data-key="' + escapeHtml(jogo.gameKey) + '">' +
           '<span class="expand-icon">' + (exp ? '▼' : '▶') + '</span>' +
-          '<div>' +
-            '<div class="card-titulo">' + escapeHtml(formatarCabecalho(jogo)) + '</div>' +
-            '<div class="card-meta">' + escapeHtml(formatarMeta(jogo)) + '</div>' +
-          '</div>' +
+          renderCorpoCard(jogo) +
         '</button>' +
         '<span class="status-badge ' + badgeCls + '">' + escapeHtml(rotuloEstado(jogo.estado)) + '</span>' +
         timeline + '</article>';
