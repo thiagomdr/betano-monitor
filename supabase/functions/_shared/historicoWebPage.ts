@@ -136,7 +136,7 @@ export function buildHistoricoTemplate(): string {
       color: #fff;
     }
     .status-badge.finalizado {
-      background: #5c5c5c;
+      background: #454545;
       color: #000;
       border-radius: 4px;
     }
