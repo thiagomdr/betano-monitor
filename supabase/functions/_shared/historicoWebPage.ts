@@ -97,9 +97,7 @@ export function buildHistoricoTemplate(): string {
       position: relative;
     }
     .card-header {
-      display: flex;
-      gap: 8px;
-      align-items: flex-start;
+      display: block;
       cursor: pointer;
       width: 100%;
       text-align: left;
@@ -111,11 +109,10 @@ export function buildHistoricoTemplate(): string {
     .expand-icon {
       color: #c45c00;
       font-size: 12px;
-      margin-top: 3px;
       width: 14px;
       flex-shrink: 0;
     }
-    .card-corpo { flex: 1; min-width: 0; }
+    .card-corpo { width: 100%; min-width: 0; }
     .card-hora-linha {
       display: flex;
       align-items: center;
@@ -207,7 +204,13 @@ export function buildHistoricoTemplate(): string {
     .card-box.fora.ao-vivo { background: #c62828; color: #fff; }
     .card-box.finalizado { background: #454545; color: #fff; }
     .card.finalizado .expand-icon { color: #888; }
-    .card-meta { color: #888; font-size: 11px; margin-top: 4px; }
+    .card-meta { color: #888; font-size: 11px; }
+    .card-meta-linha {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      margin-top: 4px;
+    }
     .status-badge {
       position: absolute;
       top: 10px;
@@ -578,7 +581,7 @@ export function buildHistoricoTemplate(): string {
         '</div>';
     }
 
-    function renderCorpoCard(jogo) {
+    function renderCorpoCard(jogo, expandido) {
       const hora = formatarHora(jogo.ultimaColetaEm);
       const aoVivo = jogo.estado === 'ao_vivo';
       const blocoPeriodo = blocoPeriodoTempo(jogo.ultimoPeriodo, jogo.ultimoTempoRestante, jogo.estado);
@@ -590,7 +593,10 @@ export function buildHistoricoTemplate(): string {
           jogo.ultimoPlacarCasa, jogo.ultimoPlacarFora,
           aoVivo, false,
         ) +
-        '<div class="card-meta">' + escapeHtml(formatarMeta(jogo)) + '</div>' +
+        '<div class="card-meta-linha">' +
+          '<span class="card-meta">' + escapeHtml(formatarMeta(jogo)) + '</span>' +
+          '<span class="expand-icon">' + (expandido ? '▼' : '▶') + '</span>' +
+        '</div>' +
       '</div>';
     }
 
@@ -631,8 +637,7 @@ export function buildHistoricoTemplate(): string {
 
       return '<article class="card' + clsFinalizado + '">' +
         '<button type="button" class="card-header" data-key="' + escapeHtml(jogo.gameKey) + '">' +
-          '<span class="expand-icon">' + (exp ? '▼' : '▶') + '</span>' +
-          renderCorpoCard(jogo) +
+          renderCorpoCard(jogo, exp) +
         '</button>' +
         '<span class="status-badge ' + badgeCls + '">' + escapeHtml(rotuloEstado(jogo.estado)) + '</span>' +
         timeline + '</article>';
