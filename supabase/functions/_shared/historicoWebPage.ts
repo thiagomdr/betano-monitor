@@ -287,7 +287,8 @@ export function buildHistoricoTemplate(): string {
       right: 10px;
       display: flex;
       align-items: center;
-      gap: 2px;
+      gap: 6px;
+      flex-direction: row-reverse;
       z-index: 5;
     }
     .status-badge {
@@ -309,11 +310,7 @@ export function buildHistoricoTemplate(): string {
       color: #000;
       border-radius: 4px;
     }
-    .card-menu-wrap {
-      position: relative;
-      flex-shrink: 0;
-    }
-    .card-menu-kebab {
+    .card-btn-excluir {
       display: flex;
       align-items: center;
       justify-content: center;
@@ -321,24 +318,16 @@ export function buildHistoricoTemplate(): string {
       border: none;
       border-radius: 6px;
       padding: 4px;
-      color: #aaa;
+      color: #bbb;
       cursor: pointer;
+      flex-shrink: 0;
     }
-    .card-menu-kebab:hover { background: #2a2a2a; color: #fff; }
-    .card-menu-popover {
-      position: absolute;
-      top: calc(100% + 4px);
-      right: 0;
-      min-width: 120px;
-      background: #1a1a1a;
-      border: 1px solid #333;
-      border-radius: 10px;
-      padding: 6px;
-      box-shadow: 0 8px 24px rgba(0, 0, 0, 0.45);
-      z-index: 30;
-      display: flex;
-      flex-direction: column;
-      gap: 4px;
+    .card-btn-excluir:hover { background: #2a2a2a; color: #fff; }
+    .card-btn-excluir img,
+    .card-btn-excluir svg {
+      display: block;
+      width: 18px;
+      height: 18px;
     }
     .timeline {
       margin-top: 8px;
@@ -438,12 +427,9 @@ export function buildHistoricoTemplate(): string {
     let coletando = false;
     let coletaAtivadaEm = null;
     let coletaParadaEm = null;
-    let cardMenuAberto = null;
 
-    const KEBAB_SVG = '<svg width="18" height="18" viewBox="0 0 24 24" aria-hidden="true">' +
-      '<circle cx="12" cy="5" r="2" fill="currentColor"/>' +
-      '<circle cx="12" cy="12" r="2" fill="currentColor"/>' +
-      '<circle cx="12" cy="19" r="2" fill="currentColor"/>' +
+    const TRASH_SVG = '<svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">' +
+      '<path d="M9 3h6l.5 1.5H20v2H4V4.5h4.5L9 3zm-2 6h2v10H7V9zm4 0h2v10h-2V9zm4 0h2v10h-2V9zM6 9h12v11a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2V9z"/>' +
       '</svg>';
 
     function lerAtivacaoLocal() {
@@ -530,34 +516,10 @@ export function buildHistoricoTemplate(): string {
       elBtnMenu.setAttribute('aria-expanded', 'false');
     }
 
-    function fecharCardMenu() {
-      if (!cardMenuAberto) return;
-      cardMenuAberto = null;
-      atualizarCardMenusDom();
-    }
-
-    function atualizarCardMenusDom() {
-      elConteudo.querySelectorAll('.card-menu-wrap').forEach((wrap) => {
-        const kebab = wrap.querySelector('.card-menu-kebab');
-        const pop = wrap.querySelector('.card-menu-popover');
-        const key = kebab?.getAttribute('data-key');
-        const aberto = Boolean(key && key === cardMenuAberto);
-        if (pop) pop.classList.toggle('hidden', !aberto);
-        if (kebab) kebab.setAttribute('aria-expanded', aberto ? 'true' : 'false');
-      });
-    }
-
-    function toggleCardMenu(key) {
-      fecharMenu();
-      cardMenuAberto = cardMenuAberto === key ? null : key;
-      atualizarCardMenusDom();
-    }
-
     function toggleMenu() {
       const aberto = !elMenuPopover.classList.contains('hidden');
       if (aberto) fecharMenu();
       else {
-        fecharCardMenu();
         if (monitorAtivo) atualizarTextoStatusMonitor();
         elMenuPopover.classList.remove('hidden');
         elBtnMenu.setAttribute('aria-expanded', 'true');
@@ -707,24 +669,7 @@ export function buildHistoricoTemplate(): string {
 
     function formatarOddWeb(valor) {
       const n = Number(valor ?? 0);
-      if (!Number.isFinite(n) || n <= 0) {
-        // #region agent log
-        fetch('http://127.0.0.1:7904/ingest/86615625-6ae5-4e98-a1da-0a5f0f15fc42', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json', 'X-Debug-Session-Id': '94b3c3' },
-          body: JSON.stringify({
-            sessionId: '94b3c3',
-            hypothesisId: 'H1',
-            location: 'historicoWebPage:formatarOddWeb',
-            message: 'odd vencedor ausente',
-            data: { valor, formatado: '0.0' },
-            timestamp: Date.now(),
-            runId: 'post-fix',
-          }),
-        }).catch(() => {});
-        // #endregion
-        return '0.0';
-      }
+      if (!Number.isFinite(n) || n <= 0) return '0.0';
       return n.toFixed(2);
     }
 
@@ -893,17 +838,11 @@ export function buildHistoricoTemplate(): string {
 
     function renderCardTopo(jogo) {
       const badgeCls = jogo.estado === 'ao_vivo' ? 'ao-vivo' : 'finalizado';
-      const menuAberto = cardMenuAberto === jogo.gameKey;
       return '<div class="card-topo">' +
+        '<button type="button" class="card-btn-excluir" data-key="' + escapeHtml(jogo.gameKey) + '" aria-label="Excluir jogo">' +
+          TRASH_SVG +
+        '</button>' +
         '<span class="status-badge ' + badgeCls + '">' + escapeHtml(rotuloEstado(jogo.estado)) + '</span>' +
-        '<div class="card-menu-wrap">' +
-          '<button type="button" class="card-menu-kebab" data-key="' + escapeHtml(jogo.gameKey) + '" aria-label="Opcoes do jogo" aria-expanded="' + (menuAberto ? 'true' : 'false') + '">' +
-            KEBAB_SVG +
-          '</button>' +
-          '<div class="card-menu-popover' + (menuAberto ? '' : ' hidden') + '">' +
-            '<button type="button" class="menu-item menu-item-danger card-btn-excluir" data-key="' + escapeHtml(jogo.gameKey) + '">Excluir</button>' +
-          '</div>' +
-        '</div>' +
       '</div>';
     }
 
@@ -947,48 +886,19 @@ export function buildHistoricoTemplate(): string {
 
     async function excluirJogo(gameKey, timeCasa, timeFora) {
       const rotulo = timeCasa + ' x ' + timeFora;
-      if (!confirm('Excluir todas as coletas de ' + rotulo + '?')) {
-        // #region agent log
-        fetch('http://127.0.0.1:7904/ingest/86615625-6ae5-4e98-a1da-0a5f0f15fc42',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'94b3c3'},body:JSON.stringify({sessionId:'94b3c3',hypothesisId:'H5',location:'historicoWebPage:excluirJogo',message:'confirm cancelado',data:{gameKey},timestamp:Date.now()})}).catch(()=>{});
-        // #endregion
-        return;
-      }
+      if (!confirm('Excluir todas as coletas de ' + rotulo + '?')) return;
 
       const usuarioId = await obterUsuarioId();
       if (!usuarioId) {
-        // #region agent log
-        fetch('http://127.0.0.1:7904/ingest/86615625-6ae5-4e98-a1da-0a5f0f15fc42',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'94b3c3'},body:JSON.stringify({sessionId:'94b3c3',hypothesisId:'H5',location:'historicoWebPage:excluirJogo',message:'sem usuarioId',data:{gameKey},timestamp:Date.now()})}).catch(()=>{});
-        // #endregion
         alert('Faca login primeiro');
         return;
       }
-
-      const keyClient = buildGameKey(timeCasa, timeFora);
-      const { data: amostraKey } = await supabase
-        .from('jogos_coleta')
-        .select('id, game_key, time_casa, time_fora')
-        .eq('game_key', gameKey)
-        .limit(5);
-      const { data: amostraTimes } = await supabase
-        .from('jogos_coleta')
-        .select('id, game_key, time_casa, time_fora')
-        .eq('time_casa', timeCasa)
-        .eq('time_fora', timeFora)
-        .limit(5);
-
-      // #region agent log
-      fetch('http://127.0.0.1:7904/ingest/86615625-6ae5-4e98-a1da-0a5f0f15fc42',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'94b3c3'},body:JSON.stringify({sessionId:'94b3c3',hypothesisId:'H2',location:'historicoWebPage:excluirJogo',message:'chaves antes do delete',data:{gameKeyDelete:gameKey,keyClient,timeCasa,timeFora,porGameKey:amostraKey?.length??0,porTimes:amostraTimes?.length??0,dbKeysFromTimes:[...new Set((amostraTimes??[]).map((r)=>r.game_key))],keyClientEqualsDb:(amostraTimes??[])[0]?.game_key===gameKey},timestamp:Date.now()})}).catch(()=>{});
-      // #endregion
 
       const { data: deletados, error: errJogos } = await supabase
         .from('jogos_coleta')
         .delete()
         .eq('game_key', gameKey)
         .select('id');
-
-      // #region agent log
-      fetch('http://127.0.0.1:7904/ingest/86615625-6ae5-4e98-a1da-0a5f0f15fc42',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'94b3c3'},body:JSON.stringify({sessionId:'94b3c3',hypothesisId:'H1',location:'historicoWebPage:excluirJogo',message:'resultado delete jogos_coleta',data:{gameKey,errMsg:errJogos?.message??null,qtdDeletados:deletados?.length??0},timestamp:Date.now()})}).catch(()=>{});
-      // #endregion
 
       if (errJogos) {
         alert(errJogos.message);
@@ -997,9 +907,6 @@ export function buildHistoricoTemplate(): string {
 
       if (!deletados?.length) {
         alert('Nenhum registro excluido. Tente atualizar a pagina.');
-        // #region agent log
-        fetch('http://127.0.0.1:7904/ingest/86615625-6ae5-4e98-a1da-0a5f0f15fc42',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'94b3c3'},body:JSON.stringify({sessionId:'94b3c3',hypothesisId:'H1',location:'historicoWebPage:excluirJogo',message:'zero linhas deletadas',data:{gameKey},timestamp:Date.now(),runId:'post-fix'})}).catch(()=>{});
-        // #endregion
         return;
       }
 
@@ -1010,13 +917,7 @@ export function buildHistoricoTemplate(): string {
         .eq('usuario_id', usuarioId);
 
       expandidos.delete(gameKey);
-      cardMenuAberto = null;
-      const antes = elConteudo.querySelectorAll('.card').length;
       await carregar(true);
-      const depois = elConteudo.querySelectorAll('.card').length;
-      // #region agent log
-      fetch('http://127.0.0.1:7904/ingest/86615625-6ae5-4e98-a1da-0a5f0f15fc42',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'94b3c3'},body:JSON.stringify({sessionId:'94b3c3',hypothesisId:'H4',location:'historicoWebPage:excluirJogo',message:'apos carregar',data:{gameKey,cardsAntes:antes,cardsDepois:depois},timestamp:Date.now()})}).catch(()=>{});
-      // #endregion
     }
 
     function renderLista(jogos) {
@@ -1031,58 +932,14 @@ export function buildHistoricoTemplate(): string {
         });
       });
 
-      elConteudo.querySelectorAll('.card-menu-kebab').forEach((btn) => {
-        btn.addEventListener('click', (e) => {
-          e.stopPropagation();
-          const key = btn.getAttribute('data-key');
-          if (key) toggleCardMenu(key);
-        });
-      });
-
-      elConteudo.querySelectorAll('.card-menu-popover').forEach((pop) => {
-        pop.addEventListener('click', (e) => e.stopPropagation());
-      });
-
       elConteudo.querySelectorAll('.card-btn-excluir').forEach((btn) => {
         btn.addEventListener('click', (e) => {
           e.stopPropagation();
           const key = btn.getAttribute('data-key');
           const jogo = jogos.find((j) => j.gameKey === key);
-          // #region agent log
-          fetch('http://127.0.0.1:7904/ingest/86615625-6ae5-4e98-a1da-0a5f0f15fc42',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'94b3c3'},body:JSON.stringify({sessionId:'94b3c3',hypothesisId:'H3',location:'historicoWebPage:card-btn-excluir',message:'clique excluir',data:{key,jogoFound:Boolean(jogo),timeCasa:jogo?.timeCasa??null},timestamp:Date.now()})}).catch(()=>{});
-          // #endregion
           if (key && jogo) void excluirJogo(key, jogo.timeCasa, jogo.timeFora);
         });
       });
-
-      // #region agent log
-      const sampleCard = elConteudo.querySelector('.card');
-      const sampleBoxes = sampleCard?.querySelector('.card-boxes');
-      const sampleBadge = sampleCard?.querySelector('.status-badge');
-      if (sampleCard && sampleBoxes && sampleBadge) {
-        const cardR = sampleCard.getBoundingClientRect();
-        const boxesR = sampleBoxes.getBoundingClientRect();
-        const badgeR = sampleBadge.getBoundingClientRect();
-        fetch('http://127.0.0.1:7904/ingest/86615625-6ae5-4e98-a1da-0a5f0f15fc42', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json', 'X-Debug-Session-Id': '94b3c3' },
-          body: JSON.stringify({
-            sessionId: '94b3c3',
-            hypothesisId: 'H1',
-            location: 'historicoWebPage:renderLista',
-            message: 'alinhamento placar/odds',
-            data: {
-              gapBoxesToCardRight: Math.round(cardR.right - boxesR.right),
-              gapBadgeToCardRight: Math.round(cardR.right - badgeR.right),
-              boxesRight: Math.round(boxesR.right),
-              badgeRight: Math.round(badgeR.right),
-            },
-            timestamp: Date.now(),
-            runId: 'post-fix-align',
-          }),
-        }).catch(() => {});
-      }
-      // #endregion
     }
 
     async function buscarDados() {
@@ -1292,10 +1149,7 @@ export function buildHistoricoTemplate(): string {
     });
 
     elMenuPopover.addEventListener('click', (e) => e.stopPropagation());
-    document.addEventListener('click', () => {
-      fecharMenu();
-      fecharCardMenu();
-    });
+    document.addEventListener('click', () => fecharMenu());
 
     document.getElementById('senha').addEventListener('keydown', (e) => {
       if (e.key === 'Enter') document.getElementById('btn-login').click();
