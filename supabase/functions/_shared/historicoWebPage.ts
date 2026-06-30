@@ -143,23 +143,16 @@ export function buildHistoricoTemplate(): string {
     }
     .card.finalizado .card-hora { color: #888; }
     .card.finalizado .card-periodo { color: #666; }
+    .card-valores { width: 100%; }
     .card-colunas,
     .card-linha-time {
-      display: grid;
-      grid-template-columns: 1fr 52px 52px;
-      gap: 8px;
+      display: flex;
       align-items: center;
+      gap: 8px;
+      width: 100%;
     }
     .card-colunas { margin-bottom: 4px; }
-    .card-col-titulo {
-      font-size: 9px;
-      font-weight: 600;
-      color: #888;
-      text-align: center;
-      text-transform: uppercase;
-      letter-spacing: 0.04em;
-    }
-    .card-linha-time { margin-bottom: 6px; }
+    .card-col-nome,
     .card-nome-time {
       flex: 1;
       font-size: 13px;
@@ -170,6 +163,23 @@ export function buildHistoricoTemplate(): string {
       text-overflow: ellipsis;
       white-space: nowrap;
     }
+    .card-col-nome { flex: 1; }
+    .card-boxes {
+      display: flex;
+      gap: 8px;
+      margin-left: auto;
+      flex-shrink: 0;
+    }
+    .card-col-titulo {
+      font-size: 9px;
+      font-weight: 600;
+      color: #888;
+      text-align: center;
+      text-transform: uppercase;
+      letter-spacing: 0.04em;
+      min-width: 44px;
+    }
+    .card-linha-time { margin-bottom: 6px; }
     .card.finalizado .card-nome-time { color: #888; }
     .card-box {
       min-width: 44px;
@@ -512,8 +522,10 @@ export function buildHistoricoTemplate(): string {
       const clsBox = aoVivo ? 'card-box ' + lado + ' ao-vivo' : 'card-box finalizado';
       return '<div class="card-linha-time">' +
         '<span class="card-nome-time">' + escapeHtml(nome) + '</span>' +
-        '<span class="' + clsBox + '">' + escapeHtml(String(placar)) + '</span>' +
-        '<span class="' + clsBox + '">' + escapeHtml(formatarOddWeb(odd)) + '</span>' +
+        '<div class="card-boxes">' +
+          '<span class="' + clsBox + '">' + escapeHtml(String(placar)) + '</span>' +
+          '<span class="' + clsBox + '">' + escapeHtml(formatarOddWeb(odd)) + '</span>' +
+        '</div>' +
       '</div>';
     }
 
@@ -530,8 +542,10 @@ export function buildHistoricoTemplate(): string {
         '<div class="card-valores">' +
           '<div class="card-colunas">' +
             '<span class="card-col-nome"></span>' +
-            '<span class="card-col-titulo">Placar</span>' +
-            '<span class="card-col-titulo">ODDS</span>' +
+            '<div class="card-boxes">' +
+              '<span class="card-col-titulo">Placar</span>' +
+              '<span class="card-col-titulo">ODDS</span>' +
+            '</div>' +
           '</div>' +
           renderLinhaTime(jogo.timeCasa, jogo.ultimoOddCasa, jogo.ultimoPlacarCasa, 'casa', aoVivo) +
           renderLinhaTime(jogo.timeFora, jogo.ultimoOddFora, jogo.ultimoPlacarFora, 'fora', aoVivo) +
