@@ -115,6 +115,8 @@ export function buildHistoricoTemplate(): string {
       flex-shrink: 0;
     }
     .card-titulo { color: #fff; font-size: 14px; font-weight: 600; line-height: 1.4; }
+    .card.finalizado .expand-icon { color: #888; }
+    .card.finalizado .card-titulo { color: #888; }
     .card-meta { color: #888; font-size: 11px; margin-top: 2px; }
     .timeline {
       border-top: 1px solid #2a2a2a;
@@ -458,7 +460,9 @@ export function buildHistoricoTemplate(): string {
         ? '<div class="timeline">' + jogo.entradas.map((e) => renderTimeline(e, jogo.timeCasa, jogo.timeFora)).join('') + '</div>'
         : '';
 
-      return '<article class="card">' +
+      const clsFinalizado = jogo.estado === 'finalizado' ? ' finalizado' : '';
+
+      return '<article class="card' + clsFinalizado + '">' +
         '<button type="button" class="card-header" data-key="' + escapeHtml(jogo.gameKey) + '">' +
           '<span class="expand-icon">' + (exp ? '▼' : '▶') + '</span>' +
           '<div>' +

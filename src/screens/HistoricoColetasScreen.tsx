@@ -77,6 +77,8 @@ function JogoCard({
   expandido: boolean;
   onToggle: () => void;
 }) {
+  const finalizado = jogo.estado === 'finalizado';
+
   return (
     <View style={styles.card}>
       <Pressable
@@ -85,9 +87,13 @@ function JogoCard({
         accessibilityRole="button"
         accessibilityState={{ expanded: expandido }}
       >
-        <Text style={styles.expandIcon}>{expandido ? '▼' : '▶'}</Text>
+        <Text style={[styles.expandIcon, finalizado && styles.expandIconFinalizado]}>
+          {expandido ? '▼' : '▶'}
+        </Text>
         <View style={styles.cardHeaderTexto}>
-          <Text style={styles.cardTitulo}>{formatarCabecalhoJogo(jogo)}</Text>
+          <Text style={[styles.cardTitulo, finalizado && styles.cardTituloFinalizado]}>
+            {formatarCabecalhoJogo(jogo)}
+          </Text>
           <Text style={styles.cardMeta}>{formatarMetaJogoHistorico(jogo)}</Text>
         </View>
       </Pressable>
@@ -240,8 +246,10 @@ const styles = StyleSheet.create({
     marginTop: 3,
     width: 14,
   },
+  expandIconFinalizado: { color: '#888' },
   cardHeaderTexto: { flex: 1, gap: 2 },
   cardTitulo: { color: '#fff', fontSize: 14, fontWeight: '600', lineHeight: 20 },
+  cardTituloFinalizado: { color: '#888' },
   cardMeta: { color: '#888', fontSize: 11 },
   timeline: {
     borderTopWidth: 1,
