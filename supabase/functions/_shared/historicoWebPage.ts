@@ -232,22 +232,20 @@ export function buildHistoricoTemplate(): string {
       border-radius: 4px;
     }
     .timeline {
-      border-top: 1px solid #2a2a2a;
       margin-top: 8px;
-      padding-top: 8px;
       display: flex;
       flex-direction: column;
-      gap: 12px;
+      gap: 8px;
     }
-    .timeline-item {
-      padding-bottom: 12px;
-      border-bottom: 1px solid #2a2a2a;
+    .timeline-item { width: 100%; }
+    .timeline-coleta {
+      width: 100%;
+      background: #141414;
+      border: 1px solid #2a2a2a;
+      border-radius: 8px;
+      padding: 10px;
+      box-sizing: border-box;
     }
-    .timeline-item:last-child {
-      padding-bottom: 0;
-      border-bottom: none;
-    }
-    .timeline-coleta { width: 100%; }
     .timeline-hora-linha { padding-right: 0; margin-bottom: 6px; }
     .user-email { font-size: 12px; color: #888; flex: 1; min-width: 120px; }
     .monitor-status { font-size: 11px; color: #7cb342; max-width: 200px; }
