@@ -9,7 +9,7 @@ export function buildHistoricoTemplate(): string {
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1" />
-  <title>Betano Monitor - Historico</title>
+  <title>Monitor Betano</title>
   <style>
     * { box-sizing: border-box; margin: 0; padding: 0; }
     body {
@@ -28,7 +28,7 @@ export function buildHistoricoTemplate(): string {
       z-index: 10;
     }
     .title { font-size: 20px; font-weight: 700; color: #fff; flex: 1; min-width: 0; }
-    .subtitle { font-size: 12px; color: #aaa; margin-top: 4px; }
+    .title-accent { color: #c45c00; }
     .header-top {
       display: flex;
       align-items: center;
@@ -384,7 +384,7 @@ export function buildHistoricoTemplate(): string {
   <div id="app-main" class="hidden">
     <header class="header">
       <div class="header-top">
-        <div class="title">Historico por jogo</div>
+        <div class="title">Monitor <span class="title-accent">Betano</span></div>
         <div class="menu-wrap">
           <button id="btn-menu" type="button" class="menu-kebab" aria-label="Menu" aria-expanded="false" aria-haspopup="true">
             <img class="menu-kebab-icon" src="icons/menu-gear.png" width="30" height="30" alt="" />
@@ -402,7 +402,6 @@ export function buildHistoricoTemplate(): string {
           </div>
         </div>
       </div>
-      <div class="subtitle">Linha do tempo das coletas no Supabase</div>
     </header>
     <div id="conteudo"></div>
   </div>
