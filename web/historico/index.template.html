@@ -321,11 +321,61 @@
       if (ultimaColeta && entradas.length) {
         const tsGlobal = new Date(ultimaColeta.coletado_em).getTime();
         const ultima = entradaMaisRecente(entradas);
-        if (new Date(ultima.coletadoEm).getTime() < tsGlobal) return 'finalizado';
+        if (new Date(ultima.coletadoEm).getTime() < tsGlobal) {
+          // #region agent log
+          fetch('http://127.0.0.1:7904/ingest/86615625-6ae5-4e98-a1da-0a5f0f15fc42', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json', 'X-Debug-Session-Id': '94b3c3' },
+            body: JSON.stringify({
+              sessionId: '94b3c3',
+              hypothesisId: 'H1',
+              location: 'historicoWebPage:inferirEstadoGrupo',
+              message: 'finalizado por coleta global',
+              data: { motivo: 'entrada_antiga', periodo: ultima.periodo },
+              timestamp: Date.now(),
+              runId: 'pre-fix',
+            }),
+          }).catch(() => {});
+          // #endregion
+          return 'finalizado';
+        }
       }
       const ref = ultimaEntradaPeriodoValido(entradas)?.periodo ?? entradaMaisRecente(entradas).periodo;
-      if (!periodoValido(ref)) return 'finalizado';
-      return PERIODOS_AO_VIVO.has(ref.trim()) ? 'ao_vivo' : 'finalizado';
+      if (!periodoValido(ref)) {
+        // #region agent log
+        fetch('http://127.0.0.1:7904/ingest/86615625-6ae5-4e98-a1da-0a5f0f15fc42', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', 'X-Debug-Session-Id': '94b3c3' },
+          body: JSON.stringify({
+            sessionId: '94b3c3',
+            hypothesisId: 'H1',
+            location: 'historicoWebPage:inferirEstadoGrupo',
+            message: 'finalizado por periodo invalido',
+            data: { ref },
+            timestamp: Date.now(),
+            runId: 'pre-fix',
+          }),
+        }).catch(() => {});
+        // #endregion
+        return 'finalizado';
+      }
+      const estado = PERIODOS_AO_VIVO.has(ref.trim()) ? 'ao_vivo' : 'finalizado';
+      // #region agent log
+      fetch('http://127.0.0.1:7904/ingest/86615625-6ae5-4e98-a1da-0a5f0f15fc42', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'X-Debug-Session-Id': '94b3c3' },
+        body: JSON.stringify({
+          sessionId: '94b3c3',
+          hypothesisId: 'H1',
+          location: 'historicoWebPage:inferirEstadoGrupo',
+          message: 'estado por periodo',
+          data: { ref: ref.trim(), estado },
+          timestamp: Date.now(),
+          runId: 'pre-fix',
+        }),
+      }).catch(() => {});
+      // #endregion
+      return estado;
     }
 
     function formatarPeriodoCard(periodo, estado) {
@@ -456,7 +506,7 @@
 
       const clsFinalizado = jogo.estado === 'finalizado' ? ' finalizado' : '';
 
-      return '<article class="card' + clsFinalizado + '">' +
+      return '<article class="card' + clsFinalizado + '" data-estado="' + escapeHtml(jogo.estado) + '">' +
         '<button type="button" class="card-header" data-key="' + escapeHtml(jogo.gameKey) + '">' +
           '<span class="expand-icon">' + (exp ? '▼' : '▶') + '</span>' +
           '<div>' +
@@ -499,6 +549,46 @@
           renderLista(jogos);
         });
       });
+
+      // #region agent log
+      const cards = elConteudo.querySelectorAll('.card');
+      const finCard = elConteudo.querySelector('.card.finalizado');
+      const iconColor = finCard
+        ? getComputedStyle(finCard.querySelector('.expand-icon')).color
+        : null;
+      const tituloColor = finCard
+        ? getComputedStyle(finCard.querySelector('.card-titulo')).color
+        : null;
+      const hasFinalizadoCss = [...document.styleSheets].some((sheet) => {
+        try {
+          return [...sheet.cssRules].some((r) => r.selectorText === '.card.finalizado .expand-icon');
+        } catch {
+          return false;
+        }
+      });
+      fetch('http://127.0.0.1:7904/ingest/86615625-6ae5-4e98-a1da-0a5f0f15fc42', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'X-Debug-Session-Id': '94b3c3' },
+        body: JSON.stringify({
+          sessionId: '94b3c3',
+          hypothesisId: 'H1-H5',
+          location: 'historicoWebPage:renderLista',
+          message: 'cards renderizados',
+          data: {
+            buildId: 'gray-debug-v1',
+            totalCards: cards.length,
+            finalizadoClassCount: elConteudo.querySelectorAll('.card.finalizado').length,
+            estados: [...cards].map((c) => c.getAttribute('data-estado')),
+            cabecalhos: jogos.map((j) => formatarCabecalho(j).slice(-20)),
+            hasFinalizadoCss,
+            iconColor,
+            tituloColor,
+          },
+          timestamp: Date.now(),
+          runId: 'pre-fix',
+        }),
+      }).catch(() => {});
+      // #endregion
     }
 
     async function buscarDados() {
