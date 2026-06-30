@@ -489,7 +489,8 @@ export function buildHistoricoTemplate(): string {
       if (monitorAtivo) {
         coletaAtivadaEm = lerAtivacaoLocal();
         elBtnMonitor.textContent = 'Parar Coleta';
-        iniciarTimerStatus();
+        if (coletaAtivadaEm) iniciarTimerStatus();
+        else atualizarTextoStatusMonitor();
       } else {
         coletaAtivadaEm = null;
         salvarAtivacaoLocal(null);
@@ -972,7 +973,6 @@ export function buildHistoricoTemplate(): string {
       elUserEmail.textContent = email;
       iniciarAutoRefresh();
       void atualizarStatusMonitor();
-      void iniciarMonitorNuvem().catch(() => {});
       void carregar();
     }
 
