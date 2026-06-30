@@ -383,6 +383,12 @@ export function buildHistoricoTemplate(): string {
       return '+' + diff + ' ' + lider;
     }
 
+    function formatarNomeComVantagem(nome, placar, placarOponente) {
+      const diff = Number(placar) - Number(placarOponente);
+      if (diff <= 0) return nome;
+      return nome + ' +' + diff;
+    }
+
     function periodoValido(periodo) {
       const p = String(periodo || '').trim();
       return p && !TEXTO_INVALIDO.test(p);
@@ -548,8 +554,14 @@ export function buildHistoricoTemplate(): string {
               '<span class="card-col-titulo">ODDS</span>' +
             '</div>' +
           '</div>' +
-          renderLinhaTime(jogo.timeCasa, jogo.ultimoOddCasa, jogo.ultimoPlacarCasa, 'casa', aoVivo) +
-          renderLinhaTime(jogo.timeFora, jogo.ultimoOddFora, jogo.ultimoPlacarFora, 'fora', aoVivo) +
+          renderLinhaTime(
+            formatarNomeComVantagem(jogo.timeCasa, jogo.ultimoPlacarCasa, jogo.ultimoPlacarFora),
+            jogo.ultimoOddCasa, jogo.ultimoPlacarCasa, 'casa', aoVivo,
+          ) +
+          renderLinhaTime(
+            formatarNomeComVantagem(jogo.timeFora, jogo.ultimoPlacarFora, jogo.ultimoPlacarCasa),
+            jogo.ultimoOddFora, jogo.ultimoPlacarFora, 'fora', aoVivo,
+          ) +
         '</div>' +
         '<div class="card-meta">' + escapeHtml(formatarMeta(jogo)) + '</div>' +
       '</div>';
