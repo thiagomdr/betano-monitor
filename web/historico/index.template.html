@@ -338,9 +338,14 @@
       return n.toFixed(2);
     }
 
+    function inferirEstadoEntrada(periodo) {
+      if (!periodoValido(periodo)) return 'finalizado';
+      return PERIODOS_AO_VIVO.has(periodo.trim()) ? 'ao_vivo' : 'finalizado';
+    }
+
     function blocoPeriodoTempo(periodo, tempo, estado) {
       const p = formatarPeriodoCard(periodo, estado);
-      if (estado === 'ao_vivo' && tempo) return p + ' [ ' + tempo + ' ]';
+      if (tempo) return p + ' [ ' + tempo + ' ]';
       return p;
     }
 
@@ -394,7 +399,7 @@
           ultimoPeriodo: formatarPeriodoCard(periodoRef, estado),
           ultimoOddCasa: ultima.oddCasa,
           ultimoOddFora: ultima.oddFora,
-          ultimoTempoRestante: estado === 'ao_vivo' ? ultima.tempoRestante : null,
+          ultimoTempoRestante: ultima.tempoRestante ?? null,
           entradas,
         });
       }
@@ -419,27 +424,26 @@
         blocoPeriodoTempo(j.ultimoPeriodo, j.ultimoTempoRestante, j.estado);
     }
 
-    function formatarDetalhePeriodo(e, estado) {
-      const bloco = blocoPeriodoTempo(
-        periodoValido(e.periodo) ? e.periodo.trim() : 'Finalizado',
-        e.tempoRestante,
-        estado,
-      );
+    function formatarDetalhePeriodo(e) {
+      const estadoEntrada = inferirEstadoEntrada(e.periodo);
+      const periodo = periodoValido(e.periodo) ? e.periodo.trim() : 'Finalizado';
+      const bloco = blocoPeriodoTempo(periodo, e.tempoRestante, estadoEntrada);
+      const odds = formatarOddWeb(e.oddCasa) + ' ' + formatarOddWeb(e.oddFora);
       if (e.rotuloVantagem && e.rotuloVantagem !== 'empate') {
-        return bloco + ' ' + e.rotuloVantagem;
+        return odds + ' ' + bloco + ' ' + e.rotuloVantagem;
       }
-      if (e.rotuloVantagem === 'empate') return bloco + ' empate';
-      return bloco;
+      if (e.rotuloVantagem === 'empate') return odds + ' ' + bloco + ' empate';
+      return odds + ' ' + bloco;
     }
 
-    function renderTimeline(entrada, timeCasa, timeFora, estado) {
+    function renderTimeline(entrada, timeCasa, timeFora) {
       const hora = formatarHora(entrada.coletadoEm);
       const placar = timeCasa + ' ' + entrada.placarCasa + ' x ' + entrada.placarFora + ' ' + timeFora;
       return '<div class="timeline-item">' +
         '<span class="timeline-marcador">»</span>' +
         '<div class="timeline-conteudo">' +
           '<div class="timeline-linha"><span class="timeline-hora">' + hora + '</span><span>' + placar + '</span></div>' +
-          '<div class="timeline-detalhe">(' + escapeHtml(formatarDetalhePeriodo(entrada, estado)) + ')</div>' +
+          '<div class="timeline-detalhe">(' + escapeHtml(formatarDetalhePeriodo(entrada)) + ')</div>' +
         '</div></div>';
     }
 
@@ -447,7 +451,7 @@
       const exp = expandidos.has(jogo.gameKey);
       const liga = jogo.liga ? '<div class="card-liga">' + escapeHtml(jogo.liga) + '</div>' : '';
       const timeline = exp
-        ? '<div class="timeline">' + jogo.entradas.map((e) => renderTimeline(e, jogo.timeCasa, jogo.timeFora, jogo.estado)).join('') + '</div>'
+        ? '<div class="timeline">' + jogo.entradas.map((e) => renderTimeline(e, jogo.timeCasa, jogo.timeFora)).join('') + '</div>'
         : '';
 
       return '<article class="card">' +

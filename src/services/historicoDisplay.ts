@@ -46,13 +46,18 @@ export function formatarPeriodoExibicao(
   return estado === 'finalizado' ? 'Finalizado' : '—';
 }
 
+export function inferirEstadoEntrada(periodo: string): EstadoJogoHistorico {
+  if (!periodoValidoParaExibicao(periodo)) return 'finalizado';
+  return PERIODOS_AO_VIVO.has(periodo.trim()) ? 'ao_vivo' : 'finalizado';
+}
+
 export function blocoPeriodoComTempo(
   periodo: string,
   tempoRestante: string | null | undefined,
   estado: EstadoJogoHistorico,
 ): string {
   const periodoFmt = formatarPeriodoExibicao(periodo, estado);
-  if (estado === 'ao_vivo' && tempoRestante) {
+  if (tempoRestante) {
     return `${periodoFmt} [ ${tempoRestante} ]`;
   }
   return periodoFmt;
@@ -117,7 +122,7 @@ export function resolverExibicaoGrupo(
     ultimoPlacarFora: ultima.placarFora,
     ultimoOddCasa: ultima.oddCasa,
     ultimoOddFora: ultima.oddFora,
-    ultimoTempoRestante: estado === 'ao_vivo' ? ultima.tempoRestante : null,
+    ultimoTempoRestante: ultima.tempoRestante ?? null,
   };
 }
 
@@ -154,17 +159,17 @@ export function formatarMetaJogoHistorico(jogo: JogoHistoricoGrupo): string {
   return `${jogo.entradas.length} coleta(s) - ${periodo}`;
 }
 
-export function formatarDetalhePeriodoHistorico(
-  entrada: EntradaHistoricoJogo,
-  estado: EstadoJogoHistorico = 'ao_vivo',
-): string {
-  const bloco = blocoPeriodoComTempo(entrada.periodo, entrada.tempoRestante, estado);
+export function formatarDetalhePeriodoHistorico(entrada: EntradaHistoricoJogo): string {
+  const estadoEntrada = inferirEstadoEntrada(entrada.periodo);
+  const bloco = blocoPeriodoComTempo(entrada.periodo, entrada.tempoRestante, estadoEntrada);
+  const odds =
+    `${formatarOdd(entrada.oddCasa)} ${formatarOdd(entrada.oddFora)}`;
 
   if (entrada.rotuloVantagem && entrada.rotuloVantagem !== 'empate') {
-    return `${bloco} ${entrada.rotuloVantagem}`;
+    return `${odds} ${bloco} ${entrada.rotuloVantagem}`;
   }
   if (entrada.rotuloVantagem === 'empate') {
-    return `${bloco} empate`;
+    return `${odds} ${bloco} empate`;
   }
-  return bloco;
+  return `${odds} ${bloco}`;
 }

@@ -40,12 +40,10 @@ function TimelineEntrada({
   entrada,
   timeCasa,
   timeFora,
-  estado,
 }: {
   entrada: EntradaHistoricoJogo;
   timeCasa: string;
   timeFora: string;
-  estado: JogoHistoricoGrupo['estado'];
 }) {
   const hora = formatarHora(entrada.coletadoEm);
   const placar = `${timeCasa} ${entrada.placarCasa} x ${entrada.placarFora} ${timeFora}`;
@@ -62,7 +60,7 @@ function TimelineEntrada({
           <Text style={styles.timelineHoraEspaco}>{hora}</Text>
           <Text style={styles.timelineDetalhe}>
             {' '}
-            ({formatarDetalhePeriodoHistorico(entrada, estado)})
+            ({formatarDetalhePeriodoHistorico(entrada)})
           </Text>
         </View>
       </View>
@@ -103,7 +101,6 @@ function JogoCard({
               entrada={entrada}
               timeCasa={jogo.timeCasa}
               timeFora={jogo.timeFora}
-              estado={jogo.estado}
             />
           ))}
         </View>
