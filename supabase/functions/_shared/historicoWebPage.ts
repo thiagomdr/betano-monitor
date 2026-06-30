@@ -456,11 +456,43 @@ export function buildHistoricoTemplate(): string {
       cursor: pointer;
     }
     .regras-vazio { color: #888; font-size: 13px; padding: 8px 0; line-height: 1.5; }
-    .historico-stats {
-      padding: 6px 12px 10px;
+    .historico-stats-bar {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 12px;
+      padding: 4px 12px 10px;
+      border-bottom: 1px solid #222;
+    }
+    .historico-stats-text {
       font-size: 12px;
       color: #888;
-      border-bottom: 1px solid #222;
+      flex: 1;
+      min-width: 0;
+      line-height: 1.4;
+    }
+    .regras-gear-wrap {
+      position: relative;
+      flex-shrink: 0;
+    }
+    .regras-gear-btn {
+      padding: 2px;
+    }
+    .regras-gear-icon {
+      width: 22px;
+      height: 22px;
+    }
+    .regras-popover {
+      position: absolute;
+      top: calc(100% + 6px);
+      right: 0;
+      min-width: 168px;
+      background: #1a1a1a;
+      border: 1px solid #333;
+      border-radius: 10px;
+      padding: 6px;
+      box-shadow: 0 8px 24px rgba(0, 0, 0, 0.45);
+      z-index: 200;
     }
     .hidden { display: none !important; }
   </style>
@@ -490,7 +522,6 @@ export function buildHistoricoTemplate(): string {
             </div>
             <div class="menu-divider" role="separator"></div>
             <button id="btn-coletar" class="menu-item menu-item-primary" type="button" role="menuitem">Coletar Agora</button>
-            <button id="btn-regras" class="menu-item" type="button" role="menuitem">Regras de Alerta</button>
             <button id="btn-monitor" class="menu-item" type="button" role="menuitem">Parar Coleta</button>
             <button id="btn-atualizar" class="menu-item" type="button" role="menuitem">Atualizar</button>
             <button id="btn-sair" class="menu-item" type="button" role="menuitem">Sair</button>
@@ -498,7 +529,17 @@ export function buildHistoricoTemplate(): string {
         </div>
       </div>
     </header>
-    <div id="historico-stats" class="historico-stats hidden" aria-live="polite"></div>
+    <div id="historico-stats-bar" class="historico-stats-bar hidden">
+      <span id="historico-stats" class="historico-stats-text" aria-live="polite"></span>
+      <div class="regras-gear-wrap">
+        <button id="btn-regras-gear" type="button" class="menu-kebab regras-gear-btn" aria-label="Regras" aria-expanded="false" aria-haspopup="true">
+          <img class="menu-kebab-icon regras-gear-icon" src="icons/menu-gear.png" width="22" height="22" alt="" />
+        </button>
+        <div id="regras-popover" class="regras-popover hidden" role="menu">
+          <button id="btn-regras" class="menu-item" type="button" role="menuitem">Regras de Alerta</button>
+        </div>
+      </div>
+    </div>
     <div id="conteudo"></div>
   </div>
 
@@ -564,7 +605,10 @@ export function buildHistoricoTemplate(): string {
     const elLogin = document.getElementById('app-login');
     const elMain = document.getElementById('app-main');
     const elConteudo = document.getElementById('conteudo');
+    const elHistoricoStatsBar = document.getElementById('historico-stats-bar');
     const elHistoricoStats = document.getElementById('historico-stats');
+    const elBtnRegrasGear = document.getElementById('btn-regras-gear');
+    const elRegrasPopover = document.getElementById('regras-popover');
     const elLoginErro = document.getElementById('login-erro');
     const elUserEmail = document.getElementById('user-email');
     const elMonitorStatus = document.getElementById('monitor-status');
@@ -677,6 +721,24 @@ export function buildHistoricoTemplate(): string {
       elBtnMenu.setAttribute('aria-expanded', 'false');
     }
 
+    function fecharRegrasPopover() {
+      if (!elRegrasPopover) return;
+      elRegrasPopover.classList.add('hidden');
+      elBtnRegrasGear?.setAttribute('aria-expanded', 'false');
+    }
+
+    function toggleRegrasPopover() {
+      const aberto = !elRegrasPopover.classList.contains('hidden');
+      if (aberto) {
+        fecharRegrasPopover();
+      } else {
+        fecharMenu();
+        fecharCardMenu();
+        elRegrasPopover.classList.remove('hidden');
+        elBtnRegrasGear.setAttribute('aria-expanded', 'true');
+      }
+    }
+
     function fecharCardMenu() {
       if (!cardMenuAberto) return;
       cardMenuAberto = null;
@@ -696,6 +758,7 @@ export function buildHistoricoTemplate(): string {
 
     function toggleCardMenu(key) {
       fecharMenu();
+      fecharRegrasPopover();
       cardMenuAberto = cardMenuAberto === key ? null : key;
       atualizarCardMenusDom();
     }
@@ -705,6 +768,7 @@ export function buildHistoricoTemplate(): string {
       if (aberto) fecharMenu();
       else {
         fecharCardMenu();
+        fecharRegrasPopover();
         if (monitorAtivo) atualizarTextoStatusMonitor();
         elMenuPopover.classList.remove('hidden');
         elBtnMenu.setAttribute('aria-expanded', 'true');
@@ -769,6 +833,7 @@ export function buildHistoricoTemplate(): string {
     }
 
     function abrirPainelRegras() {
+      fecharRegrasPopover();
       elPainelRegras.classList.remove('hidden');
       void carregarRegras();
     }
@@ -1358,16 +1423,12 @@ export function buildHistoricoTemplate(): string {
     }
 
     function atualizarStatsHistorico(stats) {
-      if (!elHistoricoStats) return;
-      if (!stats) {
-        elHistoricoStats.classList.add('hidden');
-        elHistoricoStats.textContent = '';
-        return;
-      }
-      elHistoricoStats.classList.remove('hidden');
-      elHistoricoStats.textContent =
-        stats.cards + ' jogo(s) · ' + stats.entradas + ' coleta(s) no histórico';
-      dbg('H5', 'historicoWebPage:stats', 'stats visiveis', stats, stats.runId);
+      if (!elHistoricoStatsBar || !elHistoricoStats) return;
+      elHistoricoStatsBar.classList.remove('hidden');
+      elHistoricoStats.textContent = stats
+        ? stats.cards + ' jogo(s) · ' + stats.entradas + ' coleta(s) no histórico'
+        : '0 jogo(s) · 0 coleta(s) no histórico';
+      if (stats) dbg('H5', 'historicoWebPage:stats', 'stats visiveis', stats, stats.runId);
     }
 
     async function buscarTodosJogos() {
@@ -1563,7 +1624,8 @@ export function buildHistoricoTemplate(): string {
     function mostrarLogin() {
       elLogin.classList.remove('hidden');
       elMain.classList.add('hidden');
-      atualizarStatsHistorico(null);
+      elHistoricoStatsBar?.classList.add('hidden');
+      fecharRegrasPopover();
       pararAutoRefresh();
       pararRealtime();
       pararTimerStatus();
@@ -1572,6 +1634,7 @@ export function buildHistoricoTemplate(): string {
     function mostrarApp(email) {
       elLogin.classList.add('hidden');
       elMain.classList.remove('hidden');
+      elHistoricoStatsBar?.classList.remove('hidden');
       elUserEmail.textContent = email;
       iniciarAutoRefresh();
       iniciarRealtime();
@@ -1657,6 +1720,13 @@ export function buildHistoricoTemplate(): string {
       void coletarAgora();
     });
 
+    elBtnRegrasGear.addEventListener('click', (e) => {
+      e.stopPropagation();
+      toggleRegrasPopover();
+    });
+
+    elRegrasPopover.addEventListener('click', (e) => e.stopPropagation());
+
     document.getElementById('btn-regras').addEventListener('click', () => {
       abrirPainelRegras();
     });
@@ -1707,6 +1777,7 @@ export function buildHistoricoTemplate(): string {
     document.addEventListener('click', () => {
       fecharMenu();
       fecharCardMenu();
+      fecharRegrasPopover();
     });
 
     document.getElementById('senha').addEventListener('keydown', (e) => {
