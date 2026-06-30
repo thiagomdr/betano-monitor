@@ -1,7 +1,11 @@
 import { createClient, type SupabaseClient } from 'https://esm.sh/@supabase/supabase-js@2.49.1';
 
 import type { ParsedGame } from './betanoOverviewParse.ts';
-import { buildGameKeyFromGame, detectQ2Alerts } from './betanoRules.ts';
+import {
+  buildGameKeyFromGame,
+  evaluateAlertRules,
+  type RegraAlerta,
+} from './betanoRules.ts';
 import {
   formatDelayHuman,
   pickNextDelayMs,
@@ -87,19 +91,112 @@ export async function scheduleNextRun(
   return { nextRunAt, intervalMs };
 }
 
-export async function loadGameStates(usuarioId: string): Promise<Map<string, GameStateRow>> {
+export async function loadActiveRules(usuarioId: string): Promise<RegraAlerta[]> {
   const { data, error } = await getServiceClient()
-    .from('jogos_estado_monitor')
-    .select('game_key, periodo, alerta_enviado')
-    .eq('usuario_id', usuarioId);
+    .from('regras_alerta')
+    .select('id, periodo, min_pontos, min_odd, ativo')
+    .eq('usuario_id', usuarioId)
+    .eq('ativo', true)
+    .order('ordem', { ascending: true });
 
-  if (error) throw new Error(`estado jogos: ${error.message}`);
+  if (error) throw new Error(`regras_alerta: ${error.message}`);
 
-  const map = new Map<string, GameStateRow>();
+  return (data ?? []).map((row) => ({
+    id: row.id as string,
+    periodo: row.periodo as RegraAlerta['periodo'],
+    minPontos: Number(row.min_pontos),
+    minOdd: Number(row.min_odd),
+    ativo: Boolean(row.ativo),
+  }));
+}
+
+export async function loadFiredRuleIdsByGame(
+  usuarioId: string,
+  gameKeys: string[],
+): Promise<Map<string, Set<string>>> {
+  const map = new Map<string, Set<string>>();
+  if (gameKeys.length === 0) return map;
+
+  const { data, error } = await getServiceClient()
+    .from('alertas_regra_disparados')
+    .select('game_key, regra_id')
+    .eq('usuario_id', usuarioId)
+    .in('game_key', gameKeys);
+
+  if (error) throw new Error(`alertas_regra_disparados: ${error.message}`);
+
   for (const row of data ?? []) {
-    map.set(row.game_key as string, row as GameStateRow);
+    const key = row.game_key as string;
+    const set = map.get(key) ?? new Set<string>();
+    set.add(row.regra_id as string);
+    map.set(key, set);
   }
   return map;
+}
+
+export async function avaliarEGravarAlertas(
+  usuarioId: string,
+  coletaId: string,
+  games: ParsedGame[],
+): Promise<number> {
+  if (games.length === 0) return 0;
+
+  const rules = await loadActiveRules(usuarioId);
+  if (rules.length === 0) return 0;
+
+  const gameKeys = games.map(buildGameKeyFromGame);
+  const firedByGame = await loadFiredRuleIdsByGame(usuarioId, gameKeys);
+  const agora = new Date().toISOString();
+  const client = getServiceClient();
+
+  const alertasParaInserir: Record<string, unknown>[] = [];
+  const disparosParaInserir: Record<string, unknown>[] = [];
+
+  for (const game of games) {
+    const gameKey = buildGameKeyFromGame(game);
+    const fired = firedByGame.get(gameKey) ?? new Set<string>();
+    const candidatos = evaluateAlertRules(game, rules, fired);
+
+    for (const c of candidatos) {
+      alertasParaInserir.push({
+        usuario_id: usuarioId,
+        coleta_id: coletaId,
+        regra_id: c.regraId,
+        game_key: c.gameKey,
+        time_casa: c.game.homeTeam,
+        time_fora: c.game.awayTeam,
+        liga: c.game.league,
+        placar_casa: c.game.homeScore,
+        placar_fora: c.game.awayScore,
+        diferenca_pontos: c.pointDiff,
+        periodo_anterior: null,
+        periodo_atual: c.game.period,
+        odd_lider: c.leaderOdd,
+        time_lider: c.leadingTeam,
+        telegram_enviado: false,
+        disparado_em: agora,
+      });
+      disparosParaInserir.push({
+        usuario_id: usuarioId,
+        game_key: c.gameKey,
+        regra_id: c.regraId,
+        disparado_em: agora,
+      });
+      fired.add(c.regraId);
+    }
+  }
+
+  if (alertasParaInserir.length === 0) return 0;
+
+  const { error: alertasError } = await client.from('alertas_betano').insert(alertasParaInserir);
+  if (alertasError) throw new Error(alertasError.message);
+
+  const { error: disparosError } = await client
+    .from('alertas_regra_disparados')
+    .upsert(disparosParaInserir, { onConflict: 'usuario_id,game_key,regra_id' });
+  if (disparosError) throw new Error(disparosError.message);
+
+  return alertasParaInserir.length;
 }
 
 export interface PersistResult {
@@ -141,9 +238,6 @@ export async function persistColetaComJogos(
   }
 
   const coletaId = coletaRow.id as string;
-  const estados = await loadGameStates(usuarioId);
-  const alertasParaInserir: Record<string, unknown>[] = [];
-  let alertasCount = 0;
 
   if (coleta.games.length > 0) {
     const linhasJogos = coleta.games.map((jogo) => ({
@@ -162,61 +256,25 @@ export async function persistColetaComJogos(
 
     const { error: jogosError } = await client.from('jogos_coleta').insert(linhasJogos);
     if (jogosError) throw new Error(jogosError.message);
+
+    for (const game of coleta.games) {
+      const gameKey = buildGameKeyFromGame(game);
+      await client.from('jogos_estado_monitor').upsert({
+        usuario_id: usuarioId,
+        game_key: gameKey,
+        time_casa: game.homeTeam,
+        time_fora: game.awayTeam,
+        liga: game.league,
+        periodo: game.period,
+        placar_casa: game.homeScore,
+        placar_fora: game.awayScore,
+        alerta_enviado: false,
+        data_atualizacao: agora,
+      });
+    }
   }
 
-  for (const game of coleta.games) {
-    const gameKey = buildGameKeyFromGame(game);
-    const previous = estados.get(gameKey);
-    const previousPeriod = (previous?.periodo as ParsedGame['period'] | undefined) ?? null;
-
-    await client.from('jogos_estado_monitor').upsert({
-      usuario_id: usuarioId,
-      game_key: gameKey,
-      time_casa: game.homeTeam,
-      time_fora: game.awayTeam,
-      liga: game.league,
-      periodo: game.period,
-      placar_casa: game.homeScore,
-      placar_fora: game.awayScore,
-      alerta_enviado: previous?.alerta_enviado ?? false,
-      data_atualizacao: agora,
-    });
-
-    if (previous?.alerta_enviado) continue;
-
-    const candidate = detectQ2Alerts(previousPeriod, game);
-    if (!candidate) continue;
-
-    alertasParaInserir.push({
-      usuario_id: usuarioId,
-      coleta_id: coletaId,
-      game_key: candidate.gameKey,
-      time_casa: candidate.game.homeTeam,
-      time_fora: candidate.game.awayTeam,
-      liga: candidate.game.league,
-      placar_casa: candidate.game.homeScore,
-      placar_fora: candidate.game.awayScore,
-      diferenca_pontos: candidate.pointDiff,
-      periodo_anterior: previousPeriod,
-      periodo_atual: candidate.game.period,
-      disparado_em: agora,
-    });
-
-    await client
-      .from('jogos_estado_monitor')
-      .update({ alerta_enviado: true, data_atualizacao: agora })
-      .eq('usuario_id', usuarioId)
-      .eq('game_key', gameKey);
-
-    alertasCount += 1;
-  }
-
-  if (alertasParaInserir.length > 0) {
-    const { error: alertasError } = await client
-      .from('alertas_betano')
-      .insert(alertasParaInserir);
-    if (alertasError) throw new Error(alertasError.message);
-  }
+  const alertasCount = await avaliarEGravarAlertas(usuarioId, coletaId, coleta.games);
 
   return { coletaId, alertas: alertasCount };
 }

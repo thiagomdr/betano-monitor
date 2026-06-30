@@ -124,13 +124,19 @@ Aplique no SQL Editor:
 
 Isso publica `coletas_betano`, `jogos_coleta` e `coleta_scheduler` no Realtime (com `REPLICA IDENTITY FULL` para RLS).
 
-### Excluir jogos do histórico
+### Regras de alerta configuráveis
 
 Aplique no SQL Editor:
 
-`supabase/migrations/20260629170000_delete_jogos.sql`
+`supabase/migrations/20260629180000_regras_alerta.sql`
 
-No painel: ⋮ no card do jogo → **Excluir** (remove todas as linhas de `jogos_coleta` daquele par).
+Deploy da function de avaliação (coleta manual no painel):
+
+```powershell
+npx supabase functions deploy betano-alertas-avaliar --project-ref mddortcbebtkopeanrhu
+```
+
+No painel: menu ⚙ → **Regras de Alerta** (Q1–Q4, +pts, odd líder). Próximo passo: Telegram (`telegram_config` + Edge Function).
 
 ---
 

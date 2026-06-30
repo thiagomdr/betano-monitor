@@ -1,14 +1,26 @@
 import type { ParsedGame } from './betanoOverviewParse.ts';
 
 export type GamePeriod = ParsedGame['period'];
+export type RegraPeriodo = 'Q1' | 'Q2' | 'Q3' | 'Q4';
+
+export interface RegraAlerta {
+  id: string;
+  periodo: RegraPeriodo;
+  minPontos: number;
+  minOdd: number;
+  ativo: boolean;
+}
 
 export interface AlertCandidate {
   gameKey: string;
   game: ParsedGame;
   pointDiff: number;
+  regraId: string;
+  leadingTeam: string;
+  leaderOdd: number;
 }
 
-const END_Q2_PERIODS: GamePeriod[] = ['Intervalo', 'Q3'];
+const PERIODOS_REGRA = new Set<RegraPeriodo>(['Q1', 'Q2', 'Q3', 'Q4']);
 
 export function buildGameKey(homeTeam: string, awayTeam: string): string {
   const teams = [homeTeam, awayTeam]
@@ -21,19 +33,47 @@ export function buildGameKeyFromGame(game: ParsedGame): string {
   return buildGameKey(game.homeTeam, game.awayTeam);
 }
 
-export function detectQ2Alerts(
-  previousPeriod: GamePeriod | null,
-  current: ParsedGame,
-): AlertCandidate | null {
-  if (previousPeriod !== 'Q2') return null;
-  if (!END_Q2_PERIODS.includes(current.period)) return null;
+function liderDoJogo(game: ParsedGame): { team: string; odd: number; diff: number } | null {
+  const diff = Math.abs(game.homeScore - game.awayScore);
+  if (game.homeScore > game.awayScore) {
+    return { team: game.homeTeam, odd: game.homeOdd, diff };
+  }
+  if (game.awayScore > game.homeScore) {
+    return { team: game.awayTeam, odd: game.awayOdd, diff };
+  }
+  return null;
+}
 
-  const pointDiff = Math.abs(current.homeScore - current.awayScore);
-  if (pointDiff < 10) return null;
+export function evaluateAlertRules(
+  game: ParsedGame,
+  rules: RegraAlerta[],
+  firedRuleIds: Set<string>,
+): AlertCandidate[] {
+  const periodo = game.period;
+  if (!PERIODOS_REGRA.has(periodo as RegraPeriodo)) return [];
 
-  return {
-    gameKey: buildGameKeyFromGame(current),
-    game: current,
-    pointDiff,
-  };
+  const lider = liderDoJogo(game);
+  if (!lider) return [];
+
+  const gameKey = buildGameKeyFromGame(game);
+  const candidatos: AlertCandidate[] = [];
+
+  for (const regra of rules) {
+    if (!regra.ativo) continue;
+    if (firedRuleIds.has(regra.id)) continue;
+    if (periodo !== regra.periodo) continue;
+    if (lider.diff < regra.minPontos) continue;
+    if (lider.odd <= regra.minOdd) continue;
+
+    candidatos.push({
+      gameKey,
+      game,
+      pointDiff: lider.diff,
+      regraId: regra.id,
+      leadingTeam: lider.team,
+      leaderOdd: lider.odd,
+    });
+  }
+
+  return candidatos;
 }
