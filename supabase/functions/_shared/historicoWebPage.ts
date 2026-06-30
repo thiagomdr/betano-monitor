@@ -120,7 +120,7 @@ export function buildHistoricoTemplate(): string {
     .card-hora-linha {
       display: flex;
       align-items: center;
-      gap: 10px;
+      gap: 0;
       flex-wrap: wrap;
       margin-bottom: 8px;
     }
@@ -134,6 +134,12 @@ export function buildHistoricoTemplate(): string {
       font-size: 12px;
       font-weight: 500;
       color: #aaa;
+    }
+    .card-hora-sep {
+      font-size: 13px;
+      font-weight: 600;
+      color: #888;
+      font-family: ui-monospace, monospace;
     }
     .card.finalizado .card-hora { color: #888; }
     .card.finalizado .card-periodo { color: #666; }
@@ -518,6 +524,7 @@ export function buildHistoricoTemplate(): string {
       return '<div class="card-corpo">' +
         '<div class="card-hora-linha">' +
           '<span class="card-hora">' + escapeHtml(hora) + '</span>' +
+          '<span class="card-hora-sep"> - </span>' +
           '<span class="card-periodo">' + escapeHtml(blocoPeriodo) + '</span>' +
         '</div>' +
         '<div class="card-valores">' +
