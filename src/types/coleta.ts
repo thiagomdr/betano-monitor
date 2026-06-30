@@ -27,6 +27,9 @@ export interface JogoColetaRow {
   periodo: string;
   placar_casa: number;
   placar_fora: number;
+  odd_casa?: number;
+  odd_fora?: number;
+  tempo_restante?: string | null;
   data_criacao: string;
 }
 
@@ -77,6 +80,9 @@ export interface EntradaHistoricoJogo {
   placarFora: number;
   periodo: string;
   rotuloVantagem: string | null;
+  oddCasa: number;
+  oddFora: number;
+  tempoRestante: string | null;
 }
 
 export interface JogoHistoricoGrupo {
@@ -89,5 +95,8 @@ export interface JogoHistoricoGrupo {
   ultimoPlacarCasa: number;
   ultimoPlacarFora: number;
   ultimoPeriodo: string;
+  ultimoOddCasa: number;
+  ultimoOddFora: number;
+  ultimoTempoRestante: string | null;
   entradas: EntradaHistoricoJogo[];
 }

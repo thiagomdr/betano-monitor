@@ -14,6 +14,9 @@ export interface ParsedGame {
   awayScore: number;
   period: GamePeriod;
   league: string | null;
+  homeOdd?: number;
+  awayOdd?: number;
+  tempoRestante?: string | null;
 }
 
 export interface GameState extends ParsedGame {

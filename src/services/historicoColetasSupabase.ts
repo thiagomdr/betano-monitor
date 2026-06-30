@@ -60,6 +60,9 @@ function montarGruposPorJogo(
         jogo.time_casa,
         jogo.time_fora,
       ),
+      oddCasa: Number(jogo.odd_casa ?? 0),
+      oddFora: Number(jogo.odd_fora ?? 0),
+      tempoRestante: jogo.tempo_restante ?? null,
     };
 
     const grupoKey = buildGameKeyFromGame({
@@ -99,6 +102,9 @@ function montarGruposPorJogo(
       ultimoPlacarCasa: exibicao.ultimoPlacarCasa,
       ultimoPlacarFora: exibicao.ultimoPlacarFora,
       ultimoPeriodo: exibicao.ultimoPeriodo,
+      ultimoOddCasa: exibicao.ultimoOddCasa,
+      ultimoOddFora: exibicao.ultimoOddFora,
+      ultimoTempoRestante: exibicao.ultimoTempoRestante,
       entradas,
     });
   }

@@ -1,4 +1,9 @@
-import type { ColetaBetanoRow, EntradaHistoricoJogo, EstadoJogoHistorico } from '../types/coleta';
+import type {
+  ColetaBetanoRow,
+  EntradaHistoricoJogo,
+  EstadoJogoHistorico,
+  JogoHistoricoGrupo,
+} from '../types/coleta';
 
 const PERIODOS_AO_VIVO = new Set([
   'Q1',
@@ -13,6 +18,12 @@ const PERIODOS_AO_VIVO = new Set([
 
 export const TEXTO_INVALIDO_PATTERN =
   /não existem mercados|mercados disponíveis|de momento|^unknown$/i;
+
+export function formatarOdd(valor: number | null | undefined): string {
+  const n = Number(valor ?? 0);
+  if (!Number.isFinite(n) || n <= 0) return '0.00';
+  return n.toFixed(2);
+}
 
 export function periodoValidoParaExibicao(periodo: string): boolean {
   const p = periodo.trim();
@@ -33,6 +44,18 @@ export function formatarPeriodoExibicao(
 ): string {
   if (periodoValidoParaExibicao(periodo)) return periodo.trim();
   return estado === 'finalizado' ? 'Finalizado' : '—';
+}
+
+export function blocoPeriodoComTempo(
+  periodo: string,
+  tempoRestante: string | null | undefined,
+  estado: EstadoJogoHistorico,
+): string {
+  const periodoFmt = formatarPeriodoExibicao(periodo, estado);
+  if (estado === 'ao_vivo' && tempoRestante) {
+    return `${periodoFmt} [ ${tempoRestante} ]`;
+  }
+  return periodoFmt;
 }
 
 function entradaMaisRecente(entradas: EntradaHistoricoJogo[]): EntradaHistoricoJogo {
@@ -77,6 +100,9 @@ export function resolverExibicaoGrupo(
   ultimaColetaEm: string;
   ultimoPlacarCasa: number;
   ultimoPlacarFora: number;
+  ultimoOddCasa: number;
+  ultimoOddFora: number;
+  ultimoTempoRestante: string | null;
 } {
   const ultima = entradaMaisRecente(entradas);
   const estado = inferirEstadoJogoHistorico(entradas, coletas);
@@ -89,19 +115,56 @@ export function resolverExibicaoGrupo(
     ultimaColetaEm: ultima.coletadoEm,
     ultimoPlacarCasa: ultima.placarCasa,
     ultimoPlacarFora: ultima.placarFora,
+    ultimoOddCasa: ultima.oddCasa,
+    ultimoOddFora: ultima.oddFora,
+    ultimoTempoRestante: estado === 'ao_vivo' ? ultima.tempoRestante : null,
   };
 }
 
-export function formatarDetalhePeriodoHistorico(entrada: EntradaHistoricoJogo): string {
-  const periodo = periodoValidoParaExibicao(entrada.periodo)
-    ? entrada.periodo.trim()
-    : 'Finalizado';
+export function formatarHoraHistorico(iso: string): string {
+  try {
+    return new Date(iso).toLocaleTimeString('pt-BR', {
+      hour: '2-digit',
+      minute: '2-digit',
+    });
+  } catch {
+    return iso;
+  }
+}
+
+export function rotuloEstadoHistorico(estado: EstadoJogoHistorico): string {
+  return estado === 'ao_vivo' ? 'Ao Vivo' : 'Finalizado';
+}
+
+export function formatarCabecalhoJogoHistorico(jogo: JogoHistoricoGrupo): string {
+  const hora = formatarHoraHistorico(jogo.ultimaColetaEm);
+  return (
+    `${hora} - ${formatarOdd(jogo.ultimoOddCasa)} ${jogo.timeCasa} ` +
+    `${jogo.ultimoPlacarCasa} x ${jogo.ultimoPlacarFora} ${jogo.timeFora} ` +
+    `${formatarOdd(jogo.ultimoOddFora)} (${rotuloEstadoHistorico(jogo.estado)})`
+  );
+}
+
+export function formatarMetaJogoHistorico(jogo: JogoHistoricoGrupo): string {
+  const periodo = blocoPeriodoComTempo(
+    jogo.ultimoPeriodo,
+    jogo.ultimoTempoRestante,
+    jogo.estado,
+  );
+  return `${jogo.entradas.length} coleta(s) - ${periodo}`;
+}
+
+export function formatarDetalhePeriodoHistorico(
+  entrada: EntradaHistoricoJogo,
+  estado: EstadoJogoHistorico = 'ao_vivo',
+): string {
+  const bloco = blocoPeriodoComTempo(entrada.periodo, entrada.tempoRestante, estado);
 
   if (entrada.rotuloVantagem && entrada.rotuloVantagem !== 'empate') {
-    return `${periodo} » ${entrada.rotuloVantagem}`;
+    return `${bloco} ${entrada.rotuloVantagem}`;
   }
   if (entrada.rotuloVantagem === 'empate') {
-    return `${periodo} » empate`;
+    return `${bloco} empate`;
   }
-  return periodo;
+  return bloco;
 }

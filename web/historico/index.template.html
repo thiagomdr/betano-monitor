@@ -332,6 +332,18 @@
       return estado === 'finalizado' ? 'Finalizado' : '—';
     }
 
+    function formatarOddWeb(valor) {
+      const n = Number(valor ?? 0);
+      if (!Number.isFinite(n) || n <= 0) return '0.00';
+      return n.toFixed(2);
+    }
+
+    function blocoPeriodoTempo(periodo, tempo, estado) {
+      const p = formatarPeriodoCard(periodo, estado);
+      if (estado === 'ao_vivo' && tempo) return p + ' [ ' + tempo + ' ]';
+      return p;
+    }
+
     function montarGrupos(coletas, jogos) {
       const coletaPorId = new Map(coletas.map((c) => [c.id, c]));
       const gruposRaw = new Map();
@@ -346,6 +358,9 @@
           placarCasa: jogo.placar_casa,
           placarFora: jogo.placar_fora,
           periodo: jogo.periodo,
+          oddCasa: Number(jogo.odd_casa ?? 0),
+          oddFora: Number(jogo.odd_fora ?? 0),
+          tempoRestante: jogo.tempo_restante ?? null,
           rotuloVantagem: formatarRotuloVantagem(
             jogo.placar_casa, jogo.placar_fora, jogo.time_casa, jogo.time_fora,
           ),
@@ -377,6 +392,9 @@
           ultimoPlacarCasa: ultima.placarCasa,
           ultimoPlacarFora: ultima.placarFora,
           ultimoPeriodo: formatarPeriodoCard(periodoRef, estado),
+          ultimoOddCasa: ultima.oddCasa,
+          ultimoOddFora: ultima.oddFora,
+          ultimoTempoRestante: estado === 'ao_vivo' ? ultima.tempoRestante : null,
           entradas,
         });
       }
@@ -391,27 +409,37 @@
 
     function formatarCabecalho(j) {
       const hora = formatarHora(j.ultimaColetaEm);
-      return hora + ' - ' + j.timeCasa + ' ' + j.ultimoPlacarCasa + ' x ' +
-        j.ultimoPlacarFora + ' ' + j.timeFora + ' (' + rotuloEstado(j.estado) + ')';
+      return hora + ' - ' + formatarOddWeb(j.ultimoOddCasa) + ' ' + j.timeCasa + ' ' +
+        j.ultimoPlacarCasa + ' x ' + j.ultimoPlacarFora + ' ' + j.timeFora + ' ' +
+        formatarOddWeb(j.ultimoOddFora) + ' (' + rotuloEstado(j.estado) + ')';
     }
 
-    function formatarDetalhePeriodo(e) {
-      const periodo = periodoValido(e.periodo) ? e.periodo.trim() : 'Finalizado';
+    function formatarMeta(j) {
+      return j.entradas.length + ' coleta(s) - ' +
+        blocoPeriodoTempo(j.ultimoPeriodo, j.ultimoTempoRestante, j.estado);
+    }
+
+    function formatarDetalhePeriodo(e, estado) {
+      const bloco = blocoPeriodoTempo(
+        periodoValido(e.periodo) ? e.periodo.trim() : 'Finalizado',
+        e.tempoRestante,
+        estado,
+      );
       if (e.rotuloVantagem && e.rotuloVantagem !== 'empate') {
-        return periodo + ' » ' + e.rotuloVantagem;
+        return bloco + ' ' + e.rotuloVantagem;
       }
-      if (e.rotuloVantagem === 'empate') return periodo + ' » empate';
-      return periodo;
+      if (e.rotuloVantagem === 'empate') return bloco + ' empate';
+      return bloco;
     }
 
-    function renderTimeline(entrada, timeCasa, timeFora) {
+    function renderTimeline(entrada, timeCasa, timeFora, estado) {
       const hora = formatarHora(entrada.coletadoEm);
       const placar = timeCasa + ' ' + entrada.placarCasa + ' x ' + entrada.placarFora + ' ' + timeFora;
       return '<div class="timeline-item">' +
         '<span class="timeline-marcador">»</span>' +
         '<div class="timeline-conteudo">' +
           '<div class="timeline-linha"><span class="timeline-hora">' + hora + '</span><span>' + placar + '</span></div>' +
-          '<div class="timeline-detalhe">(' + formatarDetalhePeriodo(entrada) + ')</div>' +
+          '<div class="timeline-detalhe">(' + escapeHtml(formatarDetalhePeriodo(entrada, estado)) + ')</div>' +
         '</div></div>';
     }
 
@@ -419,7 +447,7 @@
       const exp = expandidos.has(jogo.gameKey);
       const liga = jogo.liga ? '<div class="card-liga">' + escapeHtml(jogo.liga) + '</div>' : '';
       const timeline = exp
-        ? '<div class="timeline">' + jogo.entradas.map((e) => renderTimeline(e, jogo.timeCasa, jogo.timeFora)).join('') + '</div>'
+        ? '<div class="timeline">' + jogo.entradas.map((e) => renderTimeline(e, jogo.timeCasa, jogo.timeFora, jogo.estado)).join('') + '</div>'
         : '';
 
       return '<article class="card">' +
@@ -428,7 +456,7 @@
           '<div>' +
             '<div class="card-titulo">' + escapeHtml(formatarCabecalho(jogo)) + '</div>' +
             liga +
-            '<div class="card-meta">' + jogo.entradas.length + ' coleta(s) · ' + escapeHtml(jogo.ultimoPeriodo) + '</div>' +
+            '<div class="card-meta">' + escapeHtml(formatarMeta(jogo)) + '</div>' +
           '</div>' +
         '</button>' + timeline + '</article>';
     }
@@ -534,6 +562,9 @@
             periodo: g.period,
             placar_casa: g.homeScore,
             placar_fora: g.awayScore,
+            odd_casa: g.homeOdd ?? 0,
+            odd_fora: g.awayOdd ?? 0,
+            tempo_restante: g.tempoRestante ?? null,
           }));
           const { error: errJogos } = await supabase.from('jogos_coleta').insert(linhas);
           if (errJogos) throw new Error(errJogos.message);

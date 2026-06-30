@@ -103,6 +103,9 @@ export async function registrarColeta(
         periodo: jogo.period,
         placar_casa: jogo.homeScore,
         placar_fora: jogo.awayScore,
+        odd_casa: jogo.homeOdd ?? 0,
+        odd_fora: jogo.awayOdd ?? 0,
+        tempo_restante: jogo.tempoRestante ?? null,
       }));
 
       const { error: erroJogos } = await supabase

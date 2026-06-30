@@ -10,7 +10,16 @@ import {
 } from 'react-native';
 import { StatusBar } from 'expo-status-bar';
 
-import { formatarDetalhePeriodoHistorico } from '../services/historicoDisplay';
+import {
+  formatarCabecalhoJogoHistorico,
+  formatarDetalhePeriodoHistorico,
+  formatarHoraHistorico,
+  formatarMetaJogoHistorico,
+  formatarOdd,
+  blocoPeriodoComTempo,
+  formatarPeriodoExibicao,
+  rotuloEstadoHistorico,
+} from '../services/historicoDisplay';
 import { listarHistoricoPorJogo } from '../services/historicoColetasSupabase';
 import type { EntradaHistoricoJogo, JogoHistoricoGrupo } from '../types/coleta';
 import { supabaseConfigurado } from '../services/supabase';
@@ -20,37 +29,23 @@ interface HistoricoColetasScreenProps {
 }
 
 function formatarHora(iso: string): string {
-  try {
-    return new Date(iso).toLocaleTimeString('pt-BR', {
-      hour: '2-digit',
-      minute: '2-digit',
-    });
-  } catch {
-    return iso;
-  }
-}
-
-function rotuloEstado(estado: JogoHistoricoGrupo['estado']): string {
-  return estado === 'ao_vivo' ? 'Ao Vivo' : 'Finalizado';
+  return formatarHoraHistorico(iso);
 }
 
 function formatarCabecalhoJogo(jogo: JogoHistoricoGrupo): string {
-  const hora = formatarHora(jogo.ultimaColetaEm);
-  return `${hora} - ${jogo.timeCasa} ${jogo.ultimoPlacarCasa} x ${jogo.ultimoPlacarFora} ${jogo.timeFora} (${rotuloEstado(jogo.estado)})`;
-}
-
-function formatarDetalhePeriodo(entrada: EntradaHistoricoJogo): string {
-  return formatarDetalhePeriodoHistorico(entrada);
+  return formatarCabecalhoJogoHistorico(jogo);
 }
 
 function TimelineEntrada({
   entrada,
   timeCasa,
   timeFora,
+  estado,
 }: {
   entrada: EntradaHistoricoJogo;
   timeCasa: string;
   timeFora: string;
+  estado: JogoHistoricoGrupo['estado'];
 }) {
   const hora = formatarHora(entrada.coletadoEm);
   const placar = `${timeCasa} ${entrada.placarCasa} x ${entrada.placarFora} ${timeFora}`;
@@ -65,7 +60,10 @@ function TimelineEntrada({
         </View>
         <View style={styles.timelineLinha2}>
           <Text style={styles.timelineHoraEspaco}>{hora}</Text>
-          <Text style={styles.timelineDetalhe}> ({formatarDetalhePeriodo(entrada)})</Text>
+          <Text style={styles.timelineDetalhe}>
+            {' '}
+            ({formatarDetalhePeriodoHistorico(entrada, estado)})
+          </Text>
         </View>
       </View>
     </View>
@@ -93,9 +91,7 @@ function JogoCard({
         <View style={styles.cardHeaderTexto}>
           <Text style={styles.cardTitulo}>{formatarCabecalhoJogo(jogo)}</Text>
           {jogo.liga ? <Text style={styles.cardLiga}>{jogo.liga}</Text> : null}
-          <Text style={styles.cardMeta}>
-            {jogo.entradas.length} coleta(s) · {jogo.ultimoPeriodo}
-          </Text>
+          <Text style={styles.cardMeta}>{formatarMetaJogoHistorico(jogo)}</Text>
         </View>
       </Pressable>
 
@@ -107,6 +103,7 @@ function JogoCard({
               entrada={entrada}
               timeCasa={jogo.timeCasa}
               timeFora={jogo.timeFora}
+              estado={jogo.estado}
             />
           ))}
         </View>
