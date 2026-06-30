@@ -1,6 +1,6 @@
 /**
- * Gera web/historico/index.html a partir do template + variaveis de ambiente.
- * Usado localmente e no GitHub Actions (secrets EXPO_PUBLIC_SUPABASE_*).
+ * Gera web/historico/index.html a partir do template + config.
+ * Prioridade: variaveis de ambiente (GitHub Secrets) > supabase.config.json
  */
 import { readFileSync, writeFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
@@ -8,13 +8,20 @@ import { fileURLToPath } from 'node:url';
 
 const root = join(dirname(fileURLToPath(import.meta.url)), '..');
 const templatePath = join(root, 'web/historico/index.template.html');
+const configPath = join(root, 'web/historico/supabase.config.json');
 const outPath = join(root, 'web/historico/index.html');
 
-const url = (process.env.EXPO_PUBLIC_SUPABASE_URL ?? '').trim();
-const key = (process.env.EXPO_PUBLIC_SUPABASE_ANON_KEY ?? '').trim();
+let url = (process.env.EXPO_PUBLIC_SUPABASE_URL ?? '').trim();
+let key = (process.env.EXPO_PUBLIC_SUPABASE_ANON_KEY ?? '').trim();
 
 if (!url || !key) {
-  console.error('Defina EXPO_PUBLIC_SUPABASE_URL e EXPO_PUBLIC_SUPABASE_ANON_KEY');
+  const file = JSON.parse(readFileSync(configPath, 'utf8'));
+  url = (file.url ?? '').trim();
+  key = (file.anonKey ?? '').trim();
+}
+
+if (!url || !key) {
+  console.error('Defina EXPO_PUBLIC_SUPABASE_* ou web/historico/supabase.config.json');
   process.exit(1);
 }
 

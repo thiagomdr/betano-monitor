@@ -33,18 +33,23 @@ jobs:
         with:
           node-version: '22'
 
-      - name: Build template
-        run: node scripts/build-historico-template.mjs
-
-      - name: Fill Supabase config
-        run: node scripts/fill-historico-html.mjs
+      - name: Build HTML
+        run: |
+          node scripts/build-historico-template.mjs
+          node scripts/fill-historico-html.mjs
         env:
           EXPO_PUBLIC_SUPABASE_URL: ${{ secrets.EXPO_PUBLIC_SUPABASE_URL }}
           EXPO_PUBLIC_SUPABASE_ANON_KEY: ${{ secrets.EXPO_PUBLIC_SUPABASE_ANON_KEY }}
 
+      - name: Prepare site
+        run: |
+          mkdir -p site
+          cp web/historico/index.html site/index.html
+          touch site/.nojekyll
+
       - uses: actions/upload-pages-artifact@v3
         with:
-          path: web/historico
+          path: site
 
       - id: deployment
         uses: actions/deploy-pages@v4

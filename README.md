@@ -71,12 +71,13 @@ URL pública (GitHub Pages):
 
 Deploy automático a cada `git push` em `main` (workflow `.github/workflows/deploy-historico-pages.yml`).
 
-### Configurar uma vez no GitHub
+Config Supabase do painel: `web/historico/supabase.config.json` (chave **anon/publishable** — mesma do app).
 
-1. **Settings → Secrets and variables → Actions** — criar:
-   - `EXPO_PUBLIC_SUPABASE_URL`
-   - `EXPO_PUBLIC_SUPABASE_ANON_KEY`
-2. **Settings → Pages → Build and deployment → Source:** **GitHub Actions**
+### Ativar uma vez no GitHub
+
+**Settings → Pages → Build and deployment → Source:** **GitHub Actions**
+
+(Secrets em Actions são opcionais; sobrescrevem o `supabase.config.json` se definidos.)
 
 ### HTML local no celular (sem URL)
 
