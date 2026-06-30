@@ -140,6 +140,7 @@ export function buildHistoricoTemplate(): string {
       font-weight: 600;
       color: #888;
       font-family: ui-monospace, monospace;
+      margin: 0 0.4em;
     }
     .card.finalizado .card-hora { color: #888; }
     .card.finalizado .card-periodo { color: #666; }
@@ -524,7 +525,7 @@ export function buildHistoricoTemplate(): string {
       return '<div class="card-corpo">' +
         '<div class="card-hora-linha">' +
           '<span class="card-hora">' + escapeHtml(hora) + '</span>' +
-          '<span class="card-hora-sep"> - </span>' +
+          '<span class="card-hora-sep">  -  </span>' +
           '<span class="card-periodo">' + escapeHtml(blocoPeriodo) + '</span>' +
         '</div>' +
         '<div class="card-valores">' +
