@@ -44,14 +44,14 @@ Progresso do **projeto inteiro**. O Agent deve marcar `[x]` ao concluir cada ite
 
 - [x] Parser local (`parseLocal.ts`)
 - [x] Fallback GPT-4o-mini (`parseLlm.ts`)
-- [x] Regra fim Q2 + diferença ≥ 10 (`rules.ts`)
+- [x] Regra fim Q2 + diferença ≥ 10 (`rules.ts`) — legado app; nuvem usa `regras_alerta`
 - [x] SQLite local — estado por jogo (`store.ts`)
 - [x] Notificações locais Notifee
 - [x] `processGames` integrado ao ciclo de coleta
 - [ ] Ajustar parser com amostras reais de texto da Betano
 - [x] Regras configuráveis Q1–Q4 + pts + odd (`regras_alerta`, painel web)
 - [x] Motor `evaluateAlertRules` na nuvem (substitui Q2 fixo)
-- [ ] Deploy `betano-alertas-avaliar` + migration regras no Supabase
+- [x] Deploy `betano-alertas-avaliar` + migration regras no Supabase
 - [ ] Telegram (próximo passo)
 - [ ] Testar alerta real com regra customizada
 - [ ] Filtro eBasketball / simulados validado em produção
