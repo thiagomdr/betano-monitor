@@ -53,6 +53,12 @@ export function buildHistoricoTemplate(): string {
       cursor: pointer;
     }
     .menu-kebab:hover { background: #2a2a2a; }
+    .menu-kebab-icon {
+      display: block;
+      width: 20px;
+      height: 20px;
+      filter: brightness(0) invert(1);
+    }
     .menu-popover {
       position: absolute;
       top: calc(100% + 6px);
@@ -376,11 +382,7 @@ export function buildHistoricoTemplate(): string {
       <div class="toolbar">
         <div class="menu-wrap">
           <button id="btn-menu" type="button" class="menu-kebab" aria-label="Menu" aria-expanded="false" aria-haspopup="true">
-            <svg width="20" height="20" viewBox="0 0 24 24" aria-hidden="true">
-              <circle cx="12" cy="5" r="2" fill="currentColor"/>
-              <circle cx="12" cy="12" r="2" fill="currentColor"/>
-              <circle cx="12" cy="19" r="2" fill="currentColor"/>
-            </svg>
+            <img class="menu-kebab-icon" src="icons/menu-gear.png" width="20" height="20" alt="" />
           </button>
           <div id="menu-popover" class="menu-popover hidden" role="menu">
             <div class="menu-info">

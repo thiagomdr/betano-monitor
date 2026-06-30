@@ -45,6 +45,7 @@ jobs:
         run: |
           mkdir -p site
           cp web/historico/index.html site/index.html
+          cp -r web/historico/icons site/icons
           touch site/.nojekyll
 
       - uses: actions/upload-pages-artifact@v3
