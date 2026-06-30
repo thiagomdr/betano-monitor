@@ -88,7 +88,6 @@ function JogoCard({
         <Text style={styles.expandIcon}>{expandido ? '▼' : '▶'}</Text>
         <View style={styles.cardHeaderTexto}>
           <Text style={styles.cardTitulo}>{formatarCabecalhoJogo(jogo)}</Text>
-          {jogo.liga ? <Text style={styles.cardLiga}>{jogo.liga}</Text> : null}
           <Text style={styles.cardMeta}>{formatarMetaJogoHistorico(jogo)}</Text>
         </View>
       </Pressable>
@@ -243,7 +242,6 @@ const styles = StyleSheet.create({
   },
   cardHeaderTexto: { flex: 1, gap: 2 },
   cardTitulo: { color: '#fff', fontSize: 14, fontWeight: '600', lineHeight: 20 },
-  cardLiga: { color: '#8ab4f8', fontSize: 11 },
   cardMeta: { color: '#888', fontSize: 11 },
   timeline: {
     borderTopWidth: 1,

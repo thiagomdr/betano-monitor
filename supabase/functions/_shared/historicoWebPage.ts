@@ -115,7 +115,6 @@ export function buildHistoricoTemplate(): string {
       flex-shrink: 0;
     }
     .card-titulo { color: #fff; font-size: 14px; font-weight: 600; line-height: 1.4; }
-    .card-liga { color: #8ab4f8; font-size: 11px; margin-top: 2px; }
     .card-meta { color: #888; font-size: 11px; margin-top: 2px; }
     .timeline {
       border-top: 1px solid #2a2a2a;
@@ -455,7 +454,6 @@ export function buildHistoricoTemplate(): string {
 
     function renderCard(jogo) {
       const exp = expandidos.has(jogo.gameKey);
-      const liga = jogo.liga ? '<div class="card-liga">' + escapeHtml(jogo.liga) + '</div>' : '';
       const timeline = exp
         ? '<div class="timeline">' + jogo.entradas.map((e) => renderTimeline(e, jogo.timeCasa, jogo.timeFora)).join('') + '</div>'
         : '';
@@ -465,7 +463,6 @@ export function buildHistoricoTemplate(): string {
           '<span class="expand-icon">' + (exp ? '▼' : '▶') + '</span>' +
           '<div>' +
             '<div class="card-titulo">' + escapeHtml(formatarCabecalho(jogo)) + '</div>' +
-            liga +
             '<div class="card-meta">' + escapeHtml(formatarMeta(jogo)) + '</div>' +
           '</div>' +
         '</button>' + timeline + '</article>';
