@@ -2,7 +2,7 @@
 
 Progresso do **projeto inteiro**. O Agent deve marcar `[x]` ao concluir cada item e atualizar a data abaixo.
 
-**Última atualização:** 2026-06-29 (regras de alerta configuráveis)
+**Última atualização:** 2026-06-29 (histórico completo de jogos no painel)
 
 ---
 
@@ -88,7 +88,7 @@ Progresso do **projeto inteiro**. O Agent deve marcar `[x]` ao concluir cada ite
 - [x] Serviço `historicoColetasSupabase.ts` (`listarHistoricoPorJogo`)
 - [x] Painel web histórico — **GitHub Pages** (`thiagomdr.github.io/betano-monitor`)
 - [x] Painel web — **Supabase Realtime** (coletas + scheduler; fallback polling 45s)
-- [x] Painel web — menu ⋮ no card + **Excluir** jogo (RLS delete)
+- [x] Painel web — histórico completo de jogos (paginação automática no Supabase)
 - [~] Edge Function `betano-historico` (legado; Chrome bloqueia redirect — usar Pages)
 
 ### Nuvem — fazer depois

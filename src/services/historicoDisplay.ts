@@ -1,5 +1,4 @@
 import type {
-  ColetaBetanoRow,
   EntradaHistoricoJogo,
   EstadoJogoHistorico,
   JogoHistoricoGrupo,
@@ -80,11 +79,10 @@ function ultimaEntradaComPeriodoValido(
 
 export function inferirEstadoJogoHistorico(
   entradas: EntradaHistoricoJogo[],
-  coletas: ColetaBetanoRow[],
+  ultimaColetaGlobalEm: string | null,
 ): EstadoJogoHistorico {
-  const coletaMaisRecente = coletas[0];
-  if (coletaMaisRecente && entradas.length > 0) {
-    const tsGlobal = new Date(coletaMaisRecente.coletado_em).getTime();
+  if (ultimaColetaGlobalEm && entradas.length > 0) {
+    const tsGlobal = new Date(ultimaColetaGlobalEm).getTime();
     const ultima = entradaMaisRecente(entradas);
     if (new Date(ultima.coletadoEm).getTime() < tsGlobal) {
       return 'finalizado';
@@ -98,7 +96,7 @@ export function inferirEstadoJogoHistorico(
 
 export function resolverExibicaoGrupo(
   entradas: EntradaHistoricoJogo[],
-  coletas: ColetaBetanoRow[],
+  ultimaColetaGlobalEm: string | null,
 ): {
   estado: EstadoJogoHistorico;
   ultimoPeriodo: string;
@@ -110,7 +108,7 @@ export function resolverExibicaoGrupo(
   ultimoTempoRestante: string | null;
 } {
   const ultima = entradaMaisRecente(entradas);
-  const estado = inferirEstadoJogoHistorico(entradas, coletas);
+  const estado = inferirEstadoJogoHistorico(entradas, ultimaColetaGlobalEm);
   const periodoRef =
     ultimaEntradaComPeriodoValido(entradas)?.periodo ?? ultima.periodo;
 

@@ -456,6 +456,12 @@ export function buildHistoricoTemplate(): string {
       cursor: pointer;
     }
     .regras-vazio { color: #888; font-size: 13px; padding: 8px 0; line-height: 1.5; }
+    .historico-stats {
+      padding: 6px 12px 10px;
+      font-size: 12px;
+      color: #888;
+      border-bottom: 1px solid #222;
+    }
     .hidden { display: none !important; }
   </style>
 </head>
@@ -492,6 +498,7 @@ export function buildHistoricoTemplate(): string {
         </div>
       </div>
     </header>
+    <div id="historico-stats" class="historico-stats hidden" aria-live="polite"></div>
     <div id="conteudo"></div>
   </div>
 
@@ -531,14 +538,33 @@ export function buildHistoricoTemplate(): string {
 
     const PERIODOS_AO_VIVO = new Set(['Q1', 'Q2', 'Q3', 'Q4', 'Intervalo', 'INT', 'HT', 'OT']);
     const TEXTO_INVALIDO = /não existem mercados|mercados disponíveis|de momento|^unknown$/i;
-    const LIMITE_COLETAS = 80;
+    const HISTORICO_COLETAS_PAGE = 100;
     const AUTO_REFRESH_MS = 45_000;
     const CHAVE_COLETA_ATIVADA = 'betano_coleta_ativada_em';
     const CHAVE_COLETA_PARADA = 'betano_coleta_parada_em';
 
+    function dbg(hypothesisId, location, message, data, runId) {
+      // #region agent log
+      fetch('http://127.0.0.1:7904/ingest/86615625-6ae5-4e98-a1da-0a5f0f15fc42', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'X-Debug-Session-Id': '94b3c3' },
+        body: JSON.stringify({
+          sessionId: '94b3c3',
+          hypothesisId,
+          location,
+          message,
+          data,
+          timestamp: Date.now(),
+          runId: runId || 'pre-fix',
+        }),
+      }).catch(() => {});
+      // #endregion
+    }
+
     const elLogin = document.getElementById('app-login');
     const elMain = document.getElementById('app-main');
     const elConteudo = document.getElementById('conteudo');
+    const elHistoricoStats = document.getElementById('historico-stats');
     const elLoginErro = document.getElementById('login-erro');
     const elUserEmail = document.getElementById('user-email');
     const elMonitorStatus = document.getElementById('monitor-status');
@@ -908,10 +934,16 @@ export function buildHistoricoTemplate(): string {
       return ord.find((e) => periodoValido(e.periodo)) ?? null;
     }
 
-    function inferirEstadoGrupo(entradas, coletas) {
-      const ultimaColeta = coletas[0];
-      if (ultimaColeta && entradas.length) {
-        const tsGlobal = new Date(ultimaColeta.coletado_em).getTime();
+    function coletadoEmDoJogo(jogo) {
+      const emb = jogo.coletas_betano;
+      if (!emb) return null;
+      if (Array.isArray(emb)) return emb[0]?.coletado_em ?? null;
+      return emb.coletado_em ?? null;
+    }
+
+    function inferirEstadoGrupo(entradas, ultimaColetaGlobalEm) {
+      if (ultimaColetaGlobalEm && entradas.length) {
+        const tsGlobal = new Date(ultimaColetaGlobalEm).getTime();
         const ultima = entradaMaisRecente(entradas);
         if (new Date(ultima.coletadoEm).getTime() < tsGlobal) return 'finalizado';
       }
@@ -959,17 +991,20 @@ export function buildHistoricoTemplate(): string {
       return p;
     }
 
-    function montarGrupos(coletas, jogos) {
-      const coletaPorId = new Map(coletas.map((c) => [c.id, c]));
+    function montarGrupos(ultimaColetaGlobalEm, jogos) {
       const gruposRaw = new Map();
+      let semColetadoEm = 0;
 
       for (const jogo of jogos) {
-        const coleta = coletaPorId.get(jogo.coleta_id);
-        if (!coleta) continue;
+        const coletadoEm = coletadoEmDoJogo(jogo);
+        if (!coletadoEm) {
+          semColetadoEm += 1;
+          continue;
+        }
 
         const entrada = {
           id: jogo.id,
-          coletadoEm: coleta.coletado_em,
+          coletadoEm,
           placarCasa: jogo.placar_casa,
           placarFora: jogo.placar_fora,
           periodo: jogo.periodo,
@@ -995,7 +1030,7 @@ export function buildHistoricoTemplate(): string {
       for (const [gameKey, { meta, entradas }] of gruposRaw) {
         entradas.sort((a, b) => new Date(b.coletadoEm) - new Date(a.coletadoEm));
         const ultima = entradaMaisRecente(entradas);
-        const estado = inferirEstadoGrupo(entradas, coletas);
+        const estado = inferirEstadoGrupo(entradas, ultimaColetaGlobalEm);
         const periodoRef = ultimaEntradaPeriodoValido(entradas)?.periodo ?? ultima.periodo;
         grupos.push({
           gameKey,
@@ -1015,6 +1050,21 @@ export function buildHistoricoTemplate(): string {
       }
 
       grupos.sort((a, b) => new Date(b.ultimaColetaEm) - new Date(a.ultimaColetaEm));
+      const totalEntradas = grupos.reduce((s, g) => s + g.entradas.length, 0);
+      dbg('H2', 'historicoWebPage:montarGrupos', 'grupos montados', {
+        jogosInput: jogos.length,
+        semColetadoEm,
+        grupos: grupos.length,
+        totalEntradas,
+        amostraEmbed: jogos[0] ? {
+          temEmb: Boolean(jogos[0].coletas_betano),
+          tipoEmb: Array.isArray(jogos[0].coletas_betano) ? 'array' : typeof jogos[0].coletas_betano,
+        } : null,
+      });
+      dbg('H5', 'historicoWebPage:montarGrupos', 'cards vs entradas', {
+        cards: grupos.length,
+        entradas: totalEntradas,
+      });
       return grupos;
     }
 
@@ -1161,8 +1211,10 @@ export function buildHistoricoTemplate(): string {
       document.getElementById('btn-retry')?.addEventListener('click', () => void carregar());
     }
 
-    function renderVazio() {
-      elConteudo.innerHTML = '<div class="centro"><p class="aviso">Nenhum jogo registrado ainda. Ative o monitor na nuvem para começar a coletar.</p></div>';
+    function renderVazio(motivo) {
+      const msg = motivo ||
+        'Nenhum jogo registrado ainda. Use Iniciar Coleta ou Coletar Agora quando houver basquete ao vivo na Betano.';
+      elConteudo.innerHTML = '<div class="centro"><p class="aviso">' + escapeHtml(msg) + '</p></div>';
     }
 
     async function excluirJogo(gameKey, timeCasa, timeFora) {
@@ -1305,24 +1357,110 @@ export function buildHistoricoTemplate(): string {
       // #endregion
     }
 
+    function atualizarStatsHistorico(stats) {
+      if (!elHistoricoStats) return;
+      if (!stats) {
+        elHistoricoStats.classList.add('hidden');
+        elHistoricoStats.textContent = '';
+        return;
+      }
+      elHistoricoStats.classList.remove('hidden');
+      elHistoricoStats.textContent =
+        stats.cards + ' jogo(s) · ' + stats.entradas + ' coleta(s) no histórico';
+      dbg('H5', 'historicoWebPage:stats', 'stats visiveis', stats, stats.runId);
+    }
+
+    async function buscarTodosJogos() {
+      const todos = [];
+      let offsetColetas = 0;
+      let pageColetas = 0;
+      let coletasComJogos = 0;
+
+      while (true) {
+        pageColetas += 1;
+        const { data: coletas, error: errC } = await supabase
+          .from('coletas_betano')
+          .select('id, coletado_em')
+          .order('coletado_em', { ascending: false })
+          .range(offsetColetas, offsetColetas + HISTORICO_COLETAS_PAGE - 1);
+
+        dbg('H1', 'historicoWebPage:buscarTodosJogos', 'pagina coletas', {
+          pageColetas,
+          offsetColetas,
+          coletas: coletas?.length ?? 0,
+          errMsg: errC?.message ?? null,
+        });
+
+        if (errC) throw new Error(errC.message);
+        if (!coletas?.length) break;
+
+        const coletaMap = new Map(coletas.map((c) => [c.id, c.coletado_em]));
+        const ids = coletas.map((c) => c.id);
+
+        const { data: jogos, error: errJ } = await supabase
+          .from('jogos_coleta')
+          .select('*')
+          .in('coleta_id', ids);
+
+        dbg('H1', 'historicoWebPage:buscarTodosJogos', 'jogos do batch', {
+          pageColetas,
+          coletasNoBatch: ids.length,
+          jogosNoBatch: jogos?.length ?? 0,
+          errMsg: errJ?.message ?? null,
+        });
+
+        if (errJ) throw new Error(errJ.message);
+
+        for (const jogo of jogos ?? []) {
+          const coletadoEm = coletaMap.get(jogo.coleta_id);
+          if (!coletadoEm) continue;
+          coletasComJogos += 1;
+          todos.push({
+            ...jogo,
+            coletas_betano: { coletado_em: coletadoEm },
+          });
+        }
+
+        if (coletas.length < HISTORICO_COLETAS_PAGE) break;
+        offsetColetas += HISTORICO_COLETAS_PAGE;
+      }
+
+      dbg('H1', 'historicoWebPage:buscarTodosJogos', 'total final', {
+        paginasColetas: pageColetas,
+        totalJogos: todos.length,
+        coletasComJogos,
+      });
+      return todos;
+    }
+
     async function buscarDados() {
-      const { data: coletas, error: errC } = await supabase
-        .from('coletas_betano')
-        .select('*')
-        .order('coletado_em', { ascending: false })
-        .limit(LIMITE_COLETAS);
+      dbg('H4', 'historicoWebPage:buscarDados', 'inicio', {
+        coletasPage: HISTORICO_COLETAS_PAGE,
+        href: typeof location !== 'undefined' ? location.href : null,
+      });
+      const [{ data: ultimaColeta, error: errU }, jogos] = await Promise.all([
+        supabase
+          .from('coletas_betano')
+          .select('coletado_em')
+          .order('coletado_em', { ascending: false })
+          .limit(1)
+          .maybeSingle(),
+        buscarTodosJogos(),
+      ]);
 
-      if (errC) throw new Error(errC.message);
-      if (!coletas?.length) return [];
+      if (errU) throw new Error(errU.message);
+      if (!jogos.length) {
+        dbg('H3', 'historicoWebPage:buscarDados', 'zero jogos', { errU: errU?.message ?? null });
+        return [];
+      }
 
-      const ids = coletas.map((c) => c.id);
-      const { data: jogos, error: errJ } = await supabase
-        .from('jogos_coleta')
-        .select('*')
-        .in('coleta_id', ids);
-
-      if (errJ) throw new Error(errJ.message);
-      return montarGrupos(coletas, jogos ?? []);
+      const grupos = montarGrupos(ultimaColeta?.coletado_em ?? null, jogos);
+      dbg('H3', 'historicoWebPage:buscarDados', 'resultado', {
+        jogosDb: jogos.length,
+        gruposUi: grupos.length,
+        ultimaColetaEm: ultimaColeta?.coletado_em ?? null,
+      });
+      return grupos;
     }
 
     async function coletarAgora() {
@@ -1340,6 +1478,13 @@ export function buildHistoricoTemplate(): string {
         const coleta = fnData;
         if (!coleta) throw new Error('Resposta vazia da coleta');
 
+        const games = coleta.games ?? [];
+        if (!games.length) {
+          await atualizarStatusMonitor();
+          renderVazio(coleta.summary || 'Nenhum jogo de basquete ao vivo no momento.');
+          return;
+        }
+
         const agora = new Date().toISOString();
         const resumoJson = JSON.stringify(coleta);
         const { data: coletaRow, error: errIns } = await supabase
@@ -1349,8 +1494,8 @@ export function buildHistoricoTemplate(): string {
             coletado_em: agora,
             fonte_parser: 'api',
             sucesso: Boolean(coleta.ok) && !coleta.blocked,
-            qtd_jogos: coleta.gameCount ?? (coleta.games?.length ?? 0),
-            erro_mensagem: coleta.blocked ? coleta.summary : null,
+            qtd_jogos: games.length,
+            erro_mensagem: null,
             texto_tamanho: resumoJson.length,
             texto_preview: resumoJson.slice(0, 2000),
             dispositivo_id: 'web-historico',
@@ -1361,23 +1506,21 @@ export function buildHistoricoTemplate(): string {
 
         if (errIns) throw new Error(errIns.message);
 
-        if (coleta.games?.length) {
-          const linhas = coleta.games.map((g) => ({
-            coleta_id: coletaRow.id,
-            game_key: buildGameKey(g.homeTeam, g.awayTeam),
-            time_casa: g.homeTeam,
-            time_fora: g.awayTeam,
-            liga: g.league,
-            periodo: g.period,
-            placar_casa: g.homeScore,
-            placar_fora: g.awayScore,
-            odd_casa: g.homeOdd ?? 0,
-            odd_fora: g.awayOdd ?? 0,
-            tempo_restante: g.tempoRestante ?? null,
-          }));
-          const { error: errJogos } = await supabase.from('jogos_coleta').insert(linhas);
-          if (errJogos) throw new Error(errJogos.message);
-        }
+        const linhas = games.map((g) => ({
+          coleta_id: coletaRow.id,
+          game_key: buildGameKey(g.homeTeam, g.awayTeam),
+          time_casa: g.homeTeam,
+          time_fora: g.awayTeam,
+          liga: g.league,
+          periodo: g.period,
+          placar_casa: g.homeScore,
+          placar_fora: g.awayScore,
+          odd_casa: g.homeOdd ?? 0,
+          odd_fora: g.awayOdd ?? 0,
+          tempo_restante: g.tempoRestante ?? null,
+        }));
+        const { error: errJogos } = await supabase.from('jogos_coleta').insert(linhas);
+        if (errJogos) throw new Error(errJogos.message);
 
         try {
           await avaliarAlertasColeta(coletaRow.id);
@@ -1400,16 +1543,27 @@ export function buildHistoricoTemplate(): string {
       if (!silencioso) renderLoading();
       try {
         const jogos = await buscarDados();
+        const entradas = jogos.reduce((s, g) => s + g.entradas.length, 0);
+        dbg('H5', 'historicoWebPage:carregar', 'render', { grupos: jogos.length, entradas, silencioso });
+        atualizarStatsHistorico(
+          jogos.length
+            ? { cards: jogos.length, entradas, runId: 'pre-fix' }
+            : null,
+        );
         if (jogos.length === 0) renderVazio();
         else renderLista(jogos);
       } catch (e) {
-        renderErro(e instanceof Error ? e.message : 'Erro ao carregar histórico');
+        const msg = e instanceof Error ? e.message : 'Erro ao carregar histórico';
+        dbg('H3', 'historicoWebPage:carregar', 'erro', { msg });
+        atualizarStatsHistorico(null);
+        renderErro(msg);
       }
     }
 
     function mostrarLogin() {
       elLogin.classList.remove('hidden');
       elMain.classList.add('hidden');
+      atualizarStatsHistorico(null);
       pararAutoRefresh();
       pararRealtime();
       pararTimerStatus();

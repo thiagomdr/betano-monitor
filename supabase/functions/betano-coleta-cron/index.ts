@@ -75,18 +75,11 @@ Deno.serve(async (req) => {
     const ranAt = new Date();
 
     let persist: { coletaId: string; alertas: number } | null = null;
-    if (coleta.blocked) {
-      await persistColetaComJogos(scheduler.usuario_id, {
-        resumoJson: coleta.resumoJson,
-        sucesso: false,
-        erroMensagem: coleta.summary,
-        games: [],
-      });
-    } else {
+    if (coleta.games.length > 0) {
       persist = await persistColetaComJogos(scheduler.usuario_id, {
         resumoJson: coleta.resumoJson,
         sucesso: coleta.ok,
-        erroMensagem: coleta.gameCount === 0 ? coleta.summary : null,
+        erroMensagem: null,
         games: coleta.games,
       });
     }
