@@ -160,9 +160,20 @@ export function buildHistoricoTemplate(): string {
       font-weight: 600;
       color: #fff;
       min-width: 0;
+      display: flex;
+      align-items: center;
+      gap: 4px;
+    }
+    .card-nome-texto {
       overflow: hidden;
       text-overflow: ellipsis;
       white-space: nowrap;
+      min-width: 0;
+    }
+    .card-vantagem {
+      color: #fff;
+      font-weight: 700;
+      flex-shrink: 0;
     }
     .card-col-nome { flex: 1; }
     .card-boxes {
@@ -383,10 +394,9 @@ export function buildHistoricoTemplate(): string {
       return '+' + diff + ' ' + lider;
     }
 
-    function formatarNomeComVantagem(nome, placar, placarOponente) {
+    function calcularVantagem(placar, placarOponente) {
       const diff = Number(placar) - Number(placarOponente);
-      if (diff <= 0) return nome;
-      return nome + ' +' + diff;
+      return diff > 0 ? diff : null;
     }
 
     function periodoValido(periodo) {
@@ -525,10 +535,17 @@ export function buildHistoricoTemplate(): string {
       return estado === 'ao_vivo' ? 'Ao Vivo' : 'Finalizado';
     }
 
-    function renderLinhaTime(nome, odd, placar, lado, aoVivo) {
+    function renderLinhaTime(nome, odd, placar, placarOponente, lado, aoVivo) {
       const clsBox = aoVivo ? 'card-box ' + lado + ' ao-vivo' : 'card-box finalizado';
+      const vantagem = calcularVantagem(placar, placarOponente);
+      const vantagemHtml = vantagem != null
+        ? '<span class="card-vantagem">+' + vantagem + '</span>'
+        : '';
       return '<div class="card-linha-time">' +
-        '<span class="card-nome-time">' + escapeHtml(nome) + '</span>' +
+        '<span class="card-nome-time">' +
+          '<span class="card-nome-texto">' + escapeHtml(nome) + '</span>' +
+          vantagemHtml +
+        '</span>' +
         '<div class="card-boxes">' +
           '<span class="' + clsBox + '">' + escapeHtml(String(placar)) + '</span>' +
           '<span class="' + clsBox + '">' + escapeHtml(formatarOddWeb(odd)) + '</span>' +
@@ -555,12 +572,10 @@ export function buildHistoricoTemplate(): string {
             '</div>' +
           '</div>' +
           renderLinhaTime(
-            formatarNomeComVantagem(jogo.timeCasa, jogo.ultimoPlacarCasa, jogo.ultimoPlacarFora),
-            jogo.ultimoOddCasa, jogo.ultimoPlacarCasa, 'casa', aoVivo,
+            jogo.timeCasa, jogo.ultimoOddCasa, jogo.ultimoPlacarCasa, jogo.ultimoPlacarFora, 'casa', aoVivo,
           ) +
           renderLinhaTime(
-            formatarNomeComVantagem(jogo.timeFora, jogo.ultimoPlacarFora, jogo.ultimoPlacarCasa),
-            jogo.ultimoOddFora, jogo.ultimoPlacarFora, 'fora', aoVivo,
+            jogo.timeFora, jogo.ultimoOddFora, jogo.ultimoPlacarFora, jogo.ultimoPlacarCasa, 'fora', aoVivo,
           ) +
         '</div>' +
         '<div class="card-meta">' + escapeHtml(formatarMeta(jogo)) + '</div>' +
