@@ -10,9 +10,8 @@ import {
 } from 'react-native';
 import { StatusBar } from 'expo-status-bar';
 
-import {
-  listarHistoricoPorJogo,
-} from '../services/historicoColetasSupabase';
+import { formatarDetalhePeriodoHistorico } from '../services/historicoDisplay';
+import { listarHistoricoPorJogo } from '../services/historicoColetasSupabase';
 import type { EntradaHistoricoJogo, JogoHistoricoGrupo } from '../types/coleta';
 import { supabaseConfigurado } from '../services/supabase';
 
@@ -41,13 +40,7 @@ function formatarCabecalhoJogo(jogo: JogoHistoricoGrupo): string {
 }
 
 function formatarDetalhePeriodo(entrada: EntradaHistoricoJogo): string {
-  if (entrada.rotuloVantagem && entrada.rotuloVantagem !== 'empate') {
-    return `${entrada.periodo} » ${entrada.rotuloVantagem}`;
-  }
-  if (entrada.rotuloVantagem === 'empate') {
-    return `${entrada.periodo} » empate`;
-  }
-  return entrada.periodo;
+  return formatarDetalhePeriodoHistorico(entrada);
 }
 
 function TimelineEntrada({

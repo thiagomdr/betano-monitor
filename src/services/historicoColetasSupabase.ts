@@ -2,34 +2,21 @@ import type {
   AlertaBetanoRow,
   ColetaBetanoRow,
   EntradaHistoricoJogo,
-  EstadoJogoHistorico,
   JogoColetaRow,
   JogoHistoricoGrupo,
 } from '../types/coleta';
 import { buildGameKeyFromGame } from './parseLocal';
+import {
+  formatarDetalhePeriodoHistorico,
+  resolverExibicaoGrupo,
+  sanitizarLigaExibicao,
+} from './historicoDisplay';
 import { supabase, supabaseConfigurado } from './supabase';
 
 export interface ColetaHistoricoItem {
   coleta: ColetaBetanoRow;
   jogos: JogoColetaRow[];
   alertas: AlertaBetanoRow[];
-}
-
-const PERIODOS_AO_VIVO = new Set([
-  'Q1',
-  'Q2',
-  'Q3',
-  'Q4',
-  'Intervalo',
-  'INT',
-  'HT',
-  'OT',
-]);
-
-function inferirEstadoJogo(periodo: string): EstadoJogoHistorico {
-  const normalizado = periodo.trim();
-  if (PERIODOS_AO_VIVO.has(normalizado)) return 'ao_vivo';
-  return 'finalizado';
 }
 
 export function formatarRotuloVantagem(
@@ -96,26 +83,22 @@ function montarGruposPorJogo(
   const grupos: JogoHistoricoGrupo[] = [];
 
   for (const [gameKey, { meta, entradas }] of gruposRaw) {
-    const ultima = entradas.reduce((maisRecente, atual) =>
-      new Date(atual.coletadoEm).getTime() > new Date(maisRecente.coletadoEm).getTime()
-        ? atual
-        : maisRecente,
-    );
-
     entradas.sort(
       (a, b) => new Date(b.coletadoEm).getTime() - new Date(a.coletadoEm).getTime(),
     );
+
+    const exibicao = resolverExibicaoGrupo(entradas, coletas);
 
     grupos.push({
       gameKey,
       timeCasa: meta.time_casa,
       timeFora: meta.time_fora,
-      liga: meta.liga,
-      estado: inferirEstadoJogo(ultima.periodo),
-      ultimaColetaEm: ultima.coletadoEm,
-      ultimoPlacarCasa: ultima.placarCasa,
-      ultimoPlacarFora: ultima.placarFora,
-      ultimoPeriodo: ultima.periodo,
+      liga: sanitizarLigaExibicao(meta.liga),
+      estado: exibicao.estado,
+      ultimaColetaEm: exibicao.ultimaColetaEm,
+      ultimoPlacarCasa: exibicao.ultimoPlacarCasa,
+      ultimoPlacarFora: exibicao.ultimoPlacarFora,
+      ultimoPeriodo: exibicao.ultimoPeriodo,
       entradas,
     });
   }

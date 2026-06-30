@@ -153,6 +153,7 @@
         <span id="user-email" class="user-email"></span>
         <span id="monitor-status" class="monitor-status off">Coleta: parada</span>
         <button id="btn-monitor" type="button">Iniciar coleta</button>
+        <button id="btn-coletar" type="button" class="primary">Coletar agora</button>
         <button id="btn-atualizar" type="button">Atualizar</button>
         <button id="btn-sair" type="button">Sair</button>
       </div>
@@ -173,6 +174,7 @@
     });
 
     const PERIODOS_AO_VIVO = new Set(['Q1', 'Q2', 'Q3', 'Q4', 'Intervalo', 'INT', 'HT', 'OT']);
+    const TEXTO_INVALIDO = /não existem mercados|mercados disponíveis|de momento|^unknown$/i;
     const LIMITE_COLETAS = 80;
     const AUTO_REFRESH_MS = 45_000;
 
@@ -183,10 +185,12 @@
     const elUserEmail = document.getElementById('user-email');
     const elMonitorStatus = document.getElementById('monitor-status');
     const elBtnMonitor = document.getElementById('btn-monitor');
+    const elBtnColetar = document.getElementById('btn-coletar');
 
     let expandidos = new Set();
     let refreshTimer = null;
     let monitorAtivo = false;
+    let coletando = false;
 
     async function obterUsuarioId() {
       const { data } = await supabase.auth.getUser();
@@ -289,8 +293,43 @@
       return '+' + diff + ' ' + lider;
     }
 
-    function inferirEstado(periodo) {
-      return PERIODOS_AO_VIVO.has(periodo.trim()) ? 'ao_vivo' : 'finalizado';
+    function periodoValido(periodo) {
+      const p = String(periodo || '').trim();
+      return p && !TEXTO_INVALIDO.test(p);
+    }
+
+    function sanitizarLiga(liga) {
+      if (!liga) return null;
+      const t = String(liga).trim();
+      return t && !TEXTO_INVALIDO.test(t) ? t : null;
+    }
+
+    function entradaMaisRecente(entradas) {
+      return entradas.reduce((a, b) =>
+        new Date(a.coletadoEm) > new Date(b.coletadoEm) ? a : b,
+      );
+    }
+
+    function ultimaEntradaPeriodoValido(entradas) {
+      const ord = [...entradas].sort((a, b) => new Date(b.coletadoEm) - new Date(a.coletadoEm));
+      return ord.find((e) => periodoValido(e.periodo)) ?? null;
+    }
+
+    function inferirEstadoGrupo(entradas, coletas) {
+      const ultimaColeta = coletas[0];
+      if (ultimaColeta && entradas.length) {
+        const tsGlobal = new Date(ultimaColeta.coletado_em).getTime();
+        const ultima = entradaMaisRecente(entradas);
+        if (new Date(ultima.coletadoEm).getTime() < tsGlobal) return 'finalizado';
+      }
+      const ref = ultimaEntradaPeriodoValido(entradas)?.periodo ?? entradaMaisRecente(entradas).periodo;
+      if (!periodoValido(ref)) return 'finalizado';
+      return PERIODOS_AO_VIVO.has(ref.trim()) ? 'ao_vivo' : 'finalizado';
+    }
+
+    function formatarPeriodoCard(periodo, estado) {
+      if (periodoValido(periodo)) return String(periodo).trim();
+      return estado === 'finalizado' ? 'Finalizado' : '—';
     }
 
     function montarGrupos(coletas, jogos) {
@@ -324,20 +363,20 @@
 
       const grupos = [];
       for (const [gameKey, { meta, entradas }] of gruposRaw) {
-        const ultima = entradas.reduce((a, b) =>
-          new Date(a.coletadoEm) > new Date(b.coletadoEm) ? a : b,
-        );
         entradas.sort((a, b) => new Date(b.coletadoEm) - new Date(a.coletadoEm));
+        const ultima = entradaMaisRecente(entradas);
+        const estado = inferirEstadoGrupo(entradas, coletas);
+        const periodoRef = ultimaEntradaPeriodoValido(entradas)?.periodo ?? ultima.periodo;
         grupos.push({
           gameKey,
           timeCasa: meta.time_casa,
           timeFora: meta.time_fora,
-          liga: meta.liga,
-          estado: inferirEstado(ultima.periodo),
+          liga: sanitizarLiga(meta.liga),
+          estado,
           ultimaColetaEm: ultima.coletadoEm,
           ultimoPlacarCasa: ultima.placarCasa,
           ultimoPlacarFora: ultima.placarFora,
-          ultimoPeriodo: ultima.periodo,
+          ultimoPeriodo: formatarPeriodoCard(periodoRef, estado),
           entradas,
         });
       }
@@ -357,11 +396,12 @@
     }
 
     function formatarDetalhePeriodo(e) {
+      const periodo = periodoValido(e.periodo) ? e.periodo.trim() : 'Finalizado';
       if (e.rotuloVantagem && e.rotuloVantagem !== 'empate') {
-        return e.periodo + ' » ' + e.rotuloVantagem;
+        return periodo + ' » ' + e.rotuloVantagem;
       }
-      if (e.rotuloVantagem === 'empate') return e.periodo + ' » empate';
-      return e.periodo;
+      if (e.rotuloVantagem === 'empate') return periodo + ' » empate';
+      return periodo;
     }
 
     function renderTimeline(entrada, timeCasa, timeFora) {
@@ -448,6 +488,84 @@
       return montarGrupos(coletas, jogos ?? []);
     }
 
+    async function coletarAgora() {
+      if (coletando) return;
+      coletando = true;
+      elBtnColetar.disabled = true;
+      elBtnColetar.textContent = 'Coletando...';
+
+      try {
+        const usuarioId = await obterUsuarioId();
+        if (!usuarioId) throw new Error('Faca login primeiro');
+
+        const { data: fnData, error: fnErr } = await supabase.functions.invoke('betano-coleta', { body: {} });
+        if (fnErr) throw new Error(fnErr.message);
+        const coleta = fnData;
+        if (!coleta) throw new Error('Resposta vazia da coleta');
+
+        const agora = new Date().toISOString();
+        const resumoJson = JSON.stringify(coleta);
+        const { data: coletaRow, error: errIns } = await supabase
+          .from('coletas_betano')
+          .insert({
+            usuario_id: usuarioId,
+            coletado_em: agora,
+            fonte_parser: 'api',
+            sucesso: Boolean(coleta.ok) && !coleta.blocked,
+            qtd_jogos: coleta.gameCount ?? (coleta.games?.length ?? 0),
+            erro_mensagem: coleta.blocked ? coleta.summary : null,
+            texto_tamanho: resumoJson.length,
+            texto_preview: resumoJson.slice(0, 2000),
+            dispositivo_id: 'web-historico',
+            data_atualizacao: agora,
+          })
+          .select('id')
+          .single();
+
+        if (errIns) throw new Error(errIns.message);
+
+        if (coleta.games?.length) {
+          const linhas = coleta.games.map((g) => ({
+            coleta_id: coletaRow.id,
+            game_key: buildGameKey(g.homeTeam, g.awayTeam),
+            time_casa: g.homeTeam,
+            time_fora: g.awayTeam,
+            liga: g.league,
+            periodo: g.period,
+            placar_casa: g.homeScore,
+            placar_fora: g.awayScore,
+          }));
+          const { error: errJogos } = await supabase.from('jogos_coleta').insert(linhas);
+          if (errJogos) throw new Error(errJogos.message);
+        }
+
+        // #region agent log
+        fetch('http://127.0.0.1:7904/ingest/86615625-6ae5-4e98-a1da-0a5f0f15fc42', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', 'X-Debug-Session-Id': '94b3c3' },
+          body: JSON.stringify({
+            sessionId: '94b3c3',
+            hypothesisId: 'coletar-btn',
+            location: 'historicoWebPage:coletarAgora',
+            message: 'coleta manual ok',
+            data: { gameCount: coleta.gameCount ?? 0, coletaId: coletaRow.id },
+            timestamp: Date.now(),
+            runId: 'post-fix',
+          }),
+        }).catch(() => {});
+        // #endregion
+
+        await atualizarStatusMonitor();
+        await carregar(true);
+      } catch (e) {
+        alert(e instanceof Error ? e.message : 'Falha na coleta');
+      } finally {
+        coletando = false;
+        elBtnColetar.disabled = false;
+        elBtnColetar.textContent = 'Coletar agora';
+      }
+    }
+
     async function carregar(silencioso = false) {
       if (!silencioso) renderLoading();
       try {
@@ -505,6 +623,8 @@
     });
 
     document.getElementById('btn-atualizar').addEventListener('click', () => void carregar());
+
+    elBtnColetar.addEventListener('click', () => void coletarAgora());
 
     elBtnMonitor.addEventListener('click', async () => {
       try {
