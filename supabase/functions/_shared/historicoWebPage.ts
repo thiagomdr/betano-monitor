@@ -82,6 +82,8 @@ export function buildHistoricoTemplate(): string {
     }
     .menu-item:hover { background: #2a2a2a; }
     .menu-item-primary { color: #c45c00; }
+    .menu-item-danger { color: #ff6b6b; }
+    .menu-item-danger:hover { background: #3a2222; }
     .menu-item:disabled { opacity: 0.5; cursor: not-allowed; }
     .menu-info {
       padding: 8px 12px 6px;
@@ -187,7 +189,7 @@ export function buildHistoricoTemplate(): string {
       gap: 0;
       flex-wrap: wrap;
       margin-bottom: 8px;
-      padding-right: 72px;
+      padding-right: 108px;
     }
     .card-hora {
       color: #fff;
@@ -279,16 +281,24 @@ export function buildHistoricoTemplate(): string {
       gap: 6px;
       margin-top: 4px;
     }
-    .status-badge {
+    .card-topo {
       position: absolute;
       top: 10px;
       right: 10px;
+      display: flex;
+      align-items: center;
+      gap: 2px;
+      z-index: 5;
+    }
+    .status-badge {
+      position: static;
       font-size: 10px;
       font-weight: 600;
       padding: 4px 10px;
       border-radius: 999px;
       line-height: 1.2;
       pointer-events: none;
+      flex-shrink: 0;
     }
     .status-badge.ao-vivo {
       background: #1a73e8;
@@ -298,6 +308,37 @@ export function buildHistoricoTemplate(): string {
       background: #454545;
       color: #000;
       border-radius: 4px;
+    }
+    .card-menu-wrap {
+      position: relative;
+      flex-shrink: 0;
+    }
+    .card-menu-kebab {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      background: transparent;
+      border: none;
+      border-radius: 6px;
+      padding: 4px;
+      color: #aaa;
+      cursor: pointer;
+    }
+    .card-menu-kebab:hover { background: #2a2a2a; color: #fff; }
+    .card-menu-popover {
+      position: absolute;
+      top: calc(100% + 4px);
+      right: 0;
+      min-width: 120px;
+      background: #1a1a1a;
+      border: 1px solid #333;
+      border-radius: 10px;
+      padding: 6px;
+      box-shadow: 0 8px 24px rgba(0, 0, 0, 0.45);
+      z-index: 30;
+      display: flex;
+      flex-direction: column;
+      gap: 4px;
     }
     .timeline {
       margin-top: 8px;
@@ -397,6 +438,13 @@ export function buildHistoricoTemplate(): string {
     let coletando = false;
     let coletaAtivadaEm = null;
     let coletaParadaEm = null;
+    let cardMenuAberto = null;
+
+    const KEBAB_SVG = '<svg width="18" height="18" viewBox="0 0 24 24" aria-hidden="true">' +
+      '<circle cx="12" cy="5" r="2" fill="currentColor"/>' +
+      '<circle cx="12" cy="12" r="2" fill="currentColor"/>' +
+      '<circle cx="12" cy="19" r="2" fill="currentColor"/>' +
+      '</svg>';
 
     function lerAtivacaoLocal() {
       const v = localStorage.getItem(CHAVE_COLETA_ATIVADA);
@@ -482,10 +530,34 @@ export function buildHistoricoTemplate(): string {
       elBtnMenu.setAttribute('aria-expanded', 'false');
     }
 
+    function fecharCardMenu() {
+      if (!cardMenuAberto) return;
+      cardMenuAberto = null;
+      atualizarCardMenusDom();
+    }
+
+    function atualizarCardMenusDom() {
+      elConteudo.querySelectorAll('.card-menu-wrap').forEach((wrap) => {
+        const kebab = wrap.querySelector('.card-menu-kebab');
+        const pop = wrap.querySelector('.card-menu-popover');
+        const key = kebab?.getAttribute('data-key');
+        const aberto = Boolean(key && key === cardMenuAberto);
+        if (pop) pop.classList.toggle('hidden', !aberto);
+        if (kebab) kebab.setAttribute('aria-expanded', aberto ? 'true' : 'false');
+      });
+    }
+
+    function toggleCardMenu(key) {
+      fecharMenu();
+      cardMenuAberto = cardMenuAberto === key ? null : key;
+      atualizarCardMenusDom();
+    }
+
     function toggleMenu() {
       const aberto = !elMenuPopover.classList.contains('hidden');
       if (aberto) fecharMenu();
       else {
+        fecharCardMenu();
         if (monitorAtivo) atualizarTextoStatusMonitor();
         elMenuPopover.classList.remove('hidden');
         elBtnMenu.setAttribute('aria-expanded', 'true');
@@ -819,6 +891,22 @@ export function buildHistoricoTemplate(): string {
       '</div>';
     }
 
+    function renderCardTopo(jogo) {
+      const badgeCls = jogo.estado === 'ao_vivo' ? 'ao-vivo' : 'finalizado';
+      const menuAberto = cardMenuAberto === jogo.gameKey;
+      return '<div class="card-topo">' +
+        '<span class="status-badge ' + badgeCls + '">' + escapeHtml(rotuloEstado(jogo.estado)) + '</span>' +
+        '<div class="card-menu-wrap">' +
+          '<button type="button" class="card-menu-kebab" data-key="' + escapeHtml(jogo.gameKey) + '" aria-label="Opcoes do jogo" aria-expanded="' + (menuAberto ? 'true' : 'false') + '">' +
+            KEBAB_SVG +
+          '</button>' +
+          '<div class="card-menu-popover' + (menuAberto ? '' : ' hidden') + '">' +
+            '<button type="button" class="menu-item menu-item-danger card-btn-excluir" data-key="' + escapeHtml(jogo.gameKey) + '">Excluir</button>' +
+          '</div>' +
+        '</div>' +
+      '</div>';
+    }
+
     function renderCard(jogo) {
       const exp = expandidos.has(jogo.gameKey);
       const timeline = exp
@@ -826,13 +914,12 @@ export function buildHistoricoTemplate(): string {
         : '';
 
       const clsFinalizado = jogo.estado === 'finalizado' ? ' finalizado' : '';
-      const badgeCls = jogo.estado === 'ao_vivo' ? 'ao-vivo' : 'finalizado';
 
       return '<article class="card' + clsFinalizado + '">' +
+        renderCardTopo(jogo) +
         '<button type="button" class="card-header" data-key="' + escapeHtml(jogo.gameKey) + '">' +
           renderCorpoCard(jogo, exp) +
         '</button>' +
-        '<span class="status-badge ' + badgeCls + '">' + escapeHtml(rotuloEstado(jogo.estado)) + '</span>' +
         timeline + '</article>';
     }
 
@@ -858,6 +945,37 @@ export function buildHistoricoTemplate(): string {
       elConteudo.innerHTML = '<div class="centro"><p class="aviso">Nenhum jogo registrado ainda. Ative o monitor na nuvem para começar a coletar.</p></div>';
     }
 
+    async function excluirJogo(gameKey, timeCasa, timeFora) {
+      const rotulo = timeCasa + ' x ' + timeFora;
+      if (!confirm('Excluir todas as coletas de ' + rotulo + '?')) return;
+
+      const usuarioId = await obterUsuarioId();
+      if (!usuarioId) {
+        alert('Faca login primeiro');
+        return;
+      }
+
+      const { error: errJogos } = await supabase
+        .from('jogos_coleta')
+        .delete()
+        .eq('game_key', gameKey);
+
+      if (errJogos) {
+        alert(errJogos.message);
+        return;
+      }
+
+      await supabase
+        .from('jogos_estado_monitor')
+        .delete()
+        .eq('game_key', gameKey)
+        .eq('usuario_id', usuarioId);
+
+      expandidos.delete(gameKey);
+      cardMenuAberto = null;
+      await carregar(true);
+    }
+
     function renderLista(jogos) {
       elConteudo.innerHTML = '<div class="lista">' + jogos.map(renderCard).join('') + '</div>';
       elConteudo.querySelectorAll('.card-header').forEach((btn) => {
@@ -867,6 +985,27 @@ export function buildHistoricoTemplate(): string {
           if (expandidos.has(key)) expandidos.delete(key);
           else expandidos.add(key);
           renderLista(jogos);
+        });
+      });
+
+      elConteudo.querySelectorAll('.card-menu-kebab').forEach((btn) => {
+        btn.addEventListener('click', (e) => {
+          e.stopPropagation();
+          const key = btn.getAttribute('data-key');
+          if (key) toggleCardMenu(key);
+        });
+      });
+
+      elConteudo.querySelectorAll('.card-menu-popover').forEach((pop) => {
+        pop.addEventListener('click', (e) => e.stopPropagation());
+      });
+
+      elConteudo.querySelectorAll('.card-btn-excluir').forEach((btn) => {
+        btn.addEventListener('click', (e) => {
+          e.stopPropagation();
+          const key = btn.getAttribute('data-key');
+          const jogo = jogos.find((j) => j.gameKey === key);
+          if (key && jogo) void excluirJogo(key, jogo.timeCasa, jogo.timeFora);
         });
       });
 
@@ -1107,7 +1246,10 @@ export function buildHistoricoTemplate(): string {
     });
 
     elMenuPopover.addEventListener('click', (e) => e.stopPropagation());
-    document.addEventListener('click', () => fecharMenu());
+    document.addEventListener('click', () => {
+      fecharMenu();
+      fecharCardMenu();
+    });
 
     document.getElementById('senha').addEventListener('keydown', (e) => {
       if (e.key === 'Enter') document.getElementById('btn-login').click();

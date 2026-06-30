@@ -124,6 +124,14 @@ Aplique no SQL Editor:
 
 Isso publica `coletas_betano`, `jogos_coleta` e `coleta_scheduler` no Realtime (com `REPLICA IDENTITY FULL` para RLS).
 
+### Excluir jogos do histórico
+
+Aplique no SQL Editor:
+
+`supabase/migrations/20260629170000_delete_jogos.sql`
+
+No painel: ⋮ no card do jogo → **Excluir** (remove todas as linhas de `jogos_coleta` daquele par).
+
 ---
 
 Testa se a Betano aceita `fetch` da nuvem Supabase com headers de Chrome mobile.
