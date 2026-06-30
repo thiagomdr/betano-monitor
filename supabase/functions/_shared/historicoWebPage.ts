@@ -83,6 +83,27 @@ export function buildHistoricoTemplate(): string {
     .menu-item:hover { background: #2a2a2a; }
     .menu-item-primary { color: #c45c00; }
     .menu-item:disabled { opacity: 0.5; cursor: not-allowed; }
+    .menu-info {
+      padding: 8px 12px 6px;
+    }
+    .menu-email {
+      font-size: 12px;
+      color: #aaa;
+      word-break: break-all;
+      line-height: 1.4;
+    }
+    .menu-status {
+      font-size: 12px;
+      margin-top: 6px;
+      color: #7cb342;
+      line-height: 1.4;
+    }
+    .menu-status.off { color: #888; }
+    .menu-divider {
+      height: 1px;
+      background: #333;
+      margin: 4px 0;
+    }
     button, .btn {
       background: #333;
       color: #fff;
@@ -294,9 +315,6 @@ export function buildHistoricoTemplate(): string {
       box-sizing: border-box;
     }
     .timeline-hora-linha { padding-right: 0; margin-bottom: 6px; }
-    .user-email { font-size: 12px; color: #888; flex: 1; min-width: 120px; }
-    .monitor-status { font-size: 11px; color: #7cb342; max-width: 200px; }
-    .monitor-status.off { color: #888; }
     .hidden { display: none !important; }
   </style>
 </head>
@@ -315,8 +333,6 @@ export function buildHistoricoTemplate(): string {
       <div class="title">Historico por jogo</div>
       <div class="subtitle">Linha do tempo das coletas no Supabase</div>
       <div class="toolbar">
-        <span id="user-email" class="user-email"></span>
-        <span id="monitor-status" class="monitor-status off">Coleta: parada</span>
         <div class="menu-wrap">
           <button id="btn-menu" type="button" class="menu-kebab" aria-label="Menu" aria-expanded="false" aria-haspopup="true">
             <svg width="20" height="20" viewBox="0 0 24 24" aria-hidden="true">
@@ -326,8 +342,13 @@ export function buildHistoricoTemplate(): string {
             </svg>
           </button>
           <div id="menu-popover" class="menu-popover hidden" role="menu">
-            <button id="btn-coletar" class="menu-item menu-item-primary" type="button" role="menuitem">Coletar agora</button>
-            <button id="btn-monitor" class="menu-item" type="button" role="menuitem">Parar coleta</button>
+            <div class="menu-info">
+              <div id="user-email" class="menu-email"></div>
+              <div id="monitor-status" class="menu-status off">Coleta: Parada</div>
+            </div>
+            <div class="menu-divider" role="separator"></div>
+            <button id="btn-coletar" class="menu-item menu-item-primary" type="button" role="menuitem">Coletar Agora</button>
+            <button id="btn-monitor" class="menu-item" type="button" role="menuitem">Parar Coleta</button>
             <button id="btn-atualizar" class="menu-item" type="button" role="menuitem">Atualizar</button>
             <button id="btn-sair" class="menu-item" type="button" role="menuitem">Sair</button>
           </div>
@@ -353,6 +374,7 @@ export function buildHistoricoTemplate(): string {
     const TEXTO_INVALIDO = /não existem mercados|mercados disponíveis|de momento|^unknown$/i;
     const LIMITE_COLETAS = 80;
     const AUTO_REFRESH_MS = 45_000;
+    const CHAVE_COLETA_ATIVADA = 'betano_coleta_ativada_em';
 
     const elLogin = document.getElementById('app-login');
     const elMain = document.getElementById('app-main');
@@ -367,8 +389,65 @@ export function buildHistoricoTemplate(): string {
 
     let expandidos = new Set();
     let refreshTimer = null;
+    let statusTimer = null;
     let monitorAtivo = false;
     let coletando = false;
+    let coletaAtivadaEm = null;
+
+    function lerAtivacaoLocal() {
+      const v = localStorage.getItem(CHAVE_COLETA_ATIVADA);
+      if (!v) return null;
+      const ts = Date.parse(v);
+      return Number.isFinite(ts) ? ts : null;
+    }
+
+    function salvarAtivacaoLocal(iso) {
+      if (iso) localStorage.setItem(CHAVE_COLETA_ATIVADA, iso);
+      else localStorage.removeItem(CHAVE_COLETA_ATIVADA);
+    }
+
+    function formatarDuracao(ms) {
+      const totalSec = Math.max(0, Math.floor(ms / 1000));
+      const h = Math.floor(totalSec / 3600);
+      const m = Math.floor((totalSec % 3600) / 60);
+      const s = totalSec % 60;
+      return (
+        String(h).padStart(2, '0') + ':' +
+        String(m).padStart(2, '0') + ':' +
+        String(s).padStart(2, '0')
+      );
+    }
+
+    function atualizarTextoStatusMonitor() {
+      if (!monitorAtivo) {
+        elMonitorStatus.textContent = 'Coleta: Parada';
+        elMonitorStatus.className = 'menu-status off';
+        return;
+      }
+      const inicio = coletaAtivadaEm ?? lerAtivacaoLocal();
+      if (!inicio) {
+        elMonitorStatus.textContent = 'Coleta: Ativa';
+        elMonitorStatus.className = 'menu-status';
+        return;
+      }
+      coletaAtivadaEm = inicio;
+      const elapsed = formatarDuracao(Date.now() - inicio);
+      elMonitorStatus.textContent = 'Coleta: Ativa (' + elapsed + ')';
+      elMonitorStatus.className = 'menu-status';
+    }
+
+    function iniciarTimerStatus() {
+      pararTimerStatus();
+      atualizarTextoStatusMonitor();
+      statusTimer = setInterval(atualizarTextoStatusMonitor, 1000);
+    }
+
+    function pararTimerStatus() {
+      if (statusTimer) {
+        clearInterval(statusTimer);
+        statusTimer = null;
+      }
+    }
 
     function fecharMenu() {
       elMenuPopover.classList.add('hidden');
@@ -379,6 +458,7 @@ export function buildHistoricoTemplate(): string {
       const aberto = !elMenuPopover.classList.contains('hidden');
       if (aberto) fecharMenu();
       else {
+        if (monitorAtivo) atualizarTextoStatusMonitor();
         elMenuPopover.classList.remove('hidden');
         elBtnMenu.setAttribute('aria-expanded', 'true');
       }
@@ -398,25 +478,24 @@ export function buildHistoricoTemplate(): string {
 
       if (error || !data) {
         monitorAtivo = false;
-        elMonitorStatus.textContent = 'Coleta: nao configurada';
-        elMonitorStatus.className = 'monitor-status off';
-        elBtnMonitor.textContent = 'Iniciar coleta';
+        coletaAtivadaEm = null;
+        elBtnMonitor.textContent = 'Iniciar Coleta';
+        pararTimerStatus();
+        atualizarTextoStatusMonitor();
         return;
       }
 
       monitorAtivo = Boolean(data.ativo);
       if (monitorAtivo) {
-        let txt = 'Coleta: ativa';
-        if (data.last_run_at) {
-          txt += ' · ult. ' + formatarHora(data.last_run_at);
-        }
-        elMonitorStatus.textContent = txt;
-        elMonitorStatus.className = 'monitor-status';
-        elBtnMonitor.textContent = 'Parar coleta';
+        coletaAtivadaEm = lerAtivacaoLocal();
+        elBtnMonitor.textContent = 'Parar Coleta';
+        iniciarTimerStatus();
       } else {
-        elMonitorStatus.textContent = 'Coleta: parada';
-        elMonitorStatus.className = 'monitor-status off';
-        elBtnMonitor.textContent = 'Iniciar coleta';
+        coletaAtivadaEm = null;
+        salvarAtivacaoLocal(null);
+        elBtnMonitor.textContent = 'Iniciar Coleta';
+        pararTimerStatus();
+        atualizarTextoStatusMonitor();
       }
     }
 
@@ -434,6 +513,8 @@ export function buildHistoricoTemplate(): string {
       });
 
       if (error) throw error;
+      salvarAtivacaoLocal(agora);
+      coletaAtivadaEm = Date.parse(agora);
       await atualizarStatusMonitor();
     }
 
@@ -444,6 +525,8 @@ export function buildHistoricoTemplate(): string {
         .eq('id', 'default');
 
       if (error) throw error;
+      salvarAtivacaoLocal(null);
+      coletaAtivadaEm = null;
       await atualizarStatusMonitor();
     }
 
@@ -861,7 +944,7 @@ export function buildHistoricoTemplate(): string {
       } finally {
         coletando = false;
         elBtnColetar.disabled = false;
-        elBtnColetar.textContent = 'Coletar agora';
+        elBtnColetar.textContent = 'Coletar Agora';
       }
     }
 
@@ -880,6 +963,7 @@ export function buildHistoricoTemplate(): string {
       elLogin.classList.remove('hidden');
       elMain.classList.add('hidden');
       pararAutoRefresh();
+      pararTimerStatus();
     }
 
     function mostrarApp(email) {
