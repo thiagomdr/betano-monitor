@@ -115,13 +115,14 @@ export function buildHistoricoTemplate(): string {
       width: 14px;
       flex-shrink: 0;
     }
-    .card-corpo { flex: 1; min-width: 0; padding-right: 76px; }
+    .card-corpo { flex: 1; min-width: 0; }
     .card-hora-linha {
       display: flex;
       align-items: center;
       gap: 0;
       flex-wrap: wrap;
       margin-bottom: 8px;
+      padding-right: 72px;
     }
     .card-hora {
       color: #fff;
@@ -632,6 +633,35 @@ export function buildHistoricoTemplate(): string {
           renderLista(jogos);
         });
       });
+
+      // #region agent log
+      const sampleCard = elConteudo.querySelector('.card');
+      const sampleBoxes = sampleCard?.querySelector('.card-boxes');
+      const sampleBadge = sampleCard?.querySelector('.status-badge');
+      if (sampleCard && sampleBoxes && sampleBadge) {
+        const cardR = sampleCard.getBoundingClientRect();
+        const boxesR = sampleBoxes.getBoundingClientRect();
+        const badgeR = sampleBadge.getBoundingClientRect();
+        fetch('http://127.0.0.1:7904/ingest/86615625-6ae5-4e98-a1da-0a5f0f15fc42', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', 'X-Debug-Session-Id': '94b3c3' },
+          body: JSON.stringify({
+            sessionId: '94b3c3',
+            hypothesisId: 'H1',
+            location: 'historicoWebPage:renderLista',
+            message: 'alinhamento placar/odds',
+            data: {
+              gapBoxesToCardRight: Math.round(cardR.right - boxesR.right),
+              gapBadgeToCardRight: Math.round(cardR.right - badgeR.right),
+              boxesRight: Math.round(boxesR.right),
+              badgeRight: Math.round(badgeR.right),
+            },
+            timestamp: Date.now(),
+            runId: 'post-fix-align',
+          }),
+        }).catch(() => {});
+      }
+      // #endregion
     }
 
     async function buscarDados() {
