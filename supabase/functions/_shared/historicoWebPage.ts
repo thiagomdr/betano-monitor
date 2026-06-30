@@ -27,18 +27,16 @@ export function buildHistoricoTemplate(): string {
       background: #111;
       z-index: 10;
     }
-    .title { font-size: 20px; font-weight: 700; color: #fff; }
+    .title { font-size: 20px; font-weight: 700; color: #fff; flex: 1; min-width: 0; }
     .subtitle { font-size: 12px; color: #aaa; margin-top: 4px; }
-    .toolbar {
+    .header-top {
       display: flex;
-      flex-wrap: wrap;
-      gap: 8px;
-      margin-top: 12px;
       align-items: center;
+      justify-content: space-between;
+      gap: 12px;
     }
     .menu-wrap {
       position: relative;
-      margin-left: auto;
       flex-shrink: 0;
     }
     .menu-kebab {
@@ -385,9 +383,8 @@ export function buildHistoricoTemplate(): string {
 
   <div id="app-main" class="hidden">
     <header class="header">
-      <div class="title">Historico por jogo</div>
-      <div class="subtitle">Linha do tempo das coletas no Supabase</div>
-      <div class="toolbar">
+      <div class="header-top">
+        <div class="title">Historico por jogo</div>
         <div class="menu-wrap">
           <button id="btn-menu" type="button" class="menu-kebab" aria-label="Menu" aria-expanded="false" aria-haspopup="true">
             <img class="menu-kebab-icon" src="icons/menu-gear.png" width="30" height="30" alt="" />
@@ -405,6 +402,7 @@ export function buildHistoricoTemplate(): string {
           </div>
         </div>
       </div>
+      <div class="subtitle">Linha do tempo das coletas no Supabase</div>
     </header>
     <div id="conteudo"></div>
   </div>
