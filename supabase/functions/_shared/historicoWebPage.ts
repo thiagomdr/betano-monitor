@@ -93,7 +93,6 @@ export function buildHistoricoTemplate(): string {
       background: #1a1a1a;
       border-radius: 10px;
       padding: 12px;
-      padding-bottom: 30px;
       margin-bottom: 10px;
       position: relative;
     }
@@ -116,7 +115,7 @@ export function buildHistoricoTemplate(): string {
       width: 14px;
       flex-shrink: 0;
     }
-    .card-corpo { flex: 1; min-width: 0; }
+    .card-corpo { flex: 1; min-width: 0; padding-right: 76px; }
     .card-hora-linha {
       display: flex;
       align-items: center;
@@ -189,7 +188,7 @@ export function buildHistoricoTemplate(): string {
     .card-meta { color: #888; font-size: 11px; margin-top: 4px; }
     .status-badge {
       position: absolute;
-      bottom: 8px;
+      top: 10px;
       right: 10px;
       font-size: 10px;
       font-weight: 600;
