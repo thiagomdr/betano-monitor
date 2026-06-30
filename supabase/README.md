@@ -113,8 +113,16 @@ A function redireciona para `data:text/html` (contorna limite do Supabase que fo
 
 1. Login com o mesmo e-mail/senha do Supabase Auth
 2. Toque no jogo para expandir a timeline
-3. **Atualizar** ou auto-refresh a cada 45s
+3. **Atualizar**, **Supabase Realtime** (instantâneo) ou fallback a cada 45s
 4. Salve nos favoritos do Chrome
+
+### Realtime (atualização instantânea)
+
+Aplique no SQL Editor:
+
+`supabase/migrations/20260629160000_realtime_historico.sql`
+
+Isso publica `coletas_betano`, `jogos_coleta` e `coleta_scheduler` no Realtime (com `REPLICA IDENTITY FULL` para RLS).
 
 ---
 

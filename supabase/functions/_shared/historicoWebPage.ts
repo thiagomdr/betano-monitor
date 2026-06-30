@@ -391,6 +391,8 @@ export function buildHistoricoTemplate(): string {
     let expandidos = new Set();
     let refreshTimer = null;
     let statusTimer = null;
+    let realtimeChannel = null;
+    let realtimeDebounce = null;
     let monitorAtivo = false;
     let coletando = false;
     let coletaAtivadaEm = null;
@@ -998,6 +1000,7 @@ export function buildHistoricoTemplate(): string {
       elLogin.classList.remove('hidden');
       elMain.classList.add('hidden');
       pararAutoRefresh();
+      pararRealtime();
       pararTimerStatus();
     }
 
@@ -1006,6 +1009,7 @@ export function buildHistoricoTemplate(): string {
       elMain.classList.remove('hidden');
       elUserEmail.textContent = email;
       iniciarAutoRefresh();
+      iniciarRealtime();
       void atualizarStatusMonitor();
       void carregar();
     }
@@ -1018,6 +1022,47 @@ export function buildHistoricoTemplate(): string {
     function pararAutoRefresh() {
       if (refreshTimer) clearInterval(refreshTimer);
       refreshTimer = null;
+    }
+
+    function agendarRecargaRealtime() {
+      if (realtimeDebounce) clearTimeout(realtimeDebounce);
+      realtimeDebounce = setTimeout(() => {
+        realtimeDebounce = null;
+        void carregar(true);
+      }, 400);
+    }
+
+    function pararRealtime() {
+      if (realtimeDebounce) {
+        clearTimeout(realtimeDebounce);
+        realtimeDebounce = null;
+      }
+      if (realtimeChannel) {
+        void supabase.removeChannel(realtimeChannel);
+        realtimeChannel = null;
+      }
+    }
+
+    function iniciarRealtime() {
+      pararRealtime();
+      realtimeChannel = supabase
+        .channel('historico-web-' + Date.now())
+        .on(
+          'postgres_changes',
+          { event: 'INSERT', schema: 'public', table: 'coletas_betano' },
+          () => agendarRecargaRealtime()
+        )
+        .on(
+          'postgres_changes',
+          { event: 'INSERT', schema: 'public', table: 'jogos_coleta' },
+          () => agendarRecargaRealtime()
+        )
+        .on(
+          'postgres_changes',
+          { event: 'UPDATE', schema: 'public', table: 'coleta_scheduler' },
+          () => void atualizarStatusMonitor()
+        )
+        .subscribe();
     }
 
     document.getElementById('btn-login').addEventListener('click', async () => {
