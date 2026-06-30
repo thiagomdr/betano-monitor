@@ -1034,24 +1034,20 @@ export function buildHistoricoTemplate(): string {
     });
 
     document.getElementById('btn-sair').addEventListener('click', async () => {
-      fecharMenu();
       await supabase.auth.signOut();
       expandidos = new Set();
       mostrarLogin();
     });
 
     document.getElementById('btn-atualizar').addEventListener('click', () => {
-      fecharMenu();
       void carregar();
     });
 
     elBtnColetar.addEventListener('click', () => {
-      fecharMenu();
       void coletarAgora();
     });
 
     elBtnMonitor.addEventListener('click', async () => {
-      fecharMenu();
       try {
         if (monitorAtivo) await pararMonitorNuvem();
         else await iniciarMonitorNuvem();
