@@ -594,14 +594,15 @@ export function buildHistoricoTemplate(): string {
           aoVivo, false,
         ) +
         '<div class="card-meta-linha">' +
-          '<span class="card-meta">' + escapeHtml(formatarMeta(jogo)) + '</span>' +
           '<span class="expand-icon">' + (expandido ? '▼' : '▶') + '</span>' +
+          '<span class="card-meta">' + escapeHtml(formatarMeta(jogo)) + '</span>' +
         '</div>' +
       '</div>';
     }
 
     function formatarMeta(j) {
-      return j.entradas.length + ' coleta(s)';
+      const n = j.entradas.length;
+      return n === 1 ? '1 Coleta' : n + ' Coletas';
     }
 
     function renderBlocoColeta(entrada, timeCasa, timeFora) {
