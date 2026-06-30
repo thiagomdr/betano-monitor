@@ -649,7 +649,7 @@ export function buildHistoricoTemplate(): string {
 
     function buildGameKey(home, away) {
       return [home, away]
-        .map((n) => n.trim().toLowerCase().replace(/\\s+/g, ' '))
+        .map((n) => n.trim().toLowerCase().replace(/\s+/g, ' '))
         .sort()
         .join('|');
     }
@@ -761,7 +761,7 @@ export function buildHistoricoTemplate(): string {
           ),
         };
 
-        const grupoKey = buildGameKey(jogo.time_casa, jogo.time_fora);
+        const grupoKey = jogo.game_key || buildGameKey(jogo.time_casa, jogo.time_fora);
         const existente = gruposRaw.get(grupoKey);
         if (existente) {
           existente.entradas.push(entrada);
@@ -992,6 +992,14 @@ export function buildHistoricoTemplate(): string {
 
       if (errJogos) {
         alert(errJogos.message);
+        return;
+      }
+
+      if (!deletados?.length) {
+        alert('Nenhum registro excluido. Tente atualizar a pagina.');
+        // #region agent log
+        fetch('http://127.0.0.1:7904/ingest/86615625-6ae5-4e98-a1da-0a5f0f15fc42',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'94b3c3'},body:JSON.stringify({sessionId:'94b3c3',hypothesisId:'H1',location:'historicoWebPage:excluirJogo',message:'zero linhas deletadas',data:{gameKey},timestamp:Date.now(),runId:'post-fix'})}).catch(()=>{});
+        // #endregion
         return;
       }
 
