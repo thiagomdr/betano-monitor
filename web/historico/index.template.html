@@ -378,7 +378,24 @@
 
     function formatarOddWeb(valor) {
       const n = Number(valor ?? 0);
-      if (!Number.isFinite(n) || n <= 0) return '0.00';
+      if (!Number.isFinite(n) || n <= 0) {
+        // #region agent log
+        fetch('http://127.0.0.1:7904/ingest/86615625-6ae5-4e98-a1da-0a5f0f15fc42', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', 'X-Debug-Session-Id': '94b3c3' },
+          body: JSON.stringify({
+            sessionId: '94b3c3',
+            hypothesisId: 'H1',
+            location: 'historicoWebPage:formatarOddWeb',
+            message: 'odd vencedor ausente',
+            data: { valor, formatado: '0.0' },
+            timestamp: Date.now(),
+            runId: 'post-fix',
+          }),
+        }).catch(() => {});
+        // #endregion
+        return '0.0';
+      }
       return n.toFixed(2);
     }
 
