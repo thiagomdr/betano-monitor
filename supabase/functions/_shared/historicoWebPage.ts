@@ -117,14 +117,26 @@ export function buildHistoricoTemplate(): string {
       flex-shrink: 0;
     }
     .card-corpo { flex: 1; min-width: 0; }
+    .card-hora-linha {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      flex-wrap: wrap;
+      margin-bottom: 8px;
+    }
     .card-hora {
       color: #fff;
       font-size: 13px;
       font-weight: 600;
       font-family: ui-monospace, monospace;
-      margin-bottom: 8px;
+    }
+    .card-periodo {
+      font-size: 12px;
+      font-weight: 500;
+      color: #aaa;
     }
     .card.finalizado .card-hora { color: #888; }
+    .card.finalizado .card-periodo { color: #666; }
     .card-colunas,
     .card-linha-time {
       display: grid;
@@ -502,8 +514,12 @@ export function buildHistoricoTemplate(): string {
     function renderCorpoCard(jogo) {
       const hora = formatarHora(jogo.ultimaColetaEm);
       const aoVivo = jogo.estado === 'ao_vivo';
+      const blocoPeriodo = blocoPeriodoTempo(jogo.ultimoPeriodo, jogo.ultimoTempoRestante, jogo.estado);
       return '<div class="card-corpo">' +
-        '<div class="card-hora">' + escapeHtml(hora) + '</div>' +
+        '<div class="card-hora-linha">' +
+          '<span class="card-hora">' + escapeHtml(hora) + '</span>' +
+          '<span class="card-periodo">' + escapeHtml(blocoPeriodo) + '</span>' +
+        '</div>' +
         '<div class="card-valores">' +
           '<div class="card-colunas">' +
             '<span class="card-col-nome"></span>' +
@@ -518,8 +534,7 @@ export function buildHistoricoTemplate(): string {
     }
 
     function formatarMeta(j) {
-      return j.entradas.length + ' coleta(s) - ' +
-        blocoPeriodoTempo(j.ultimoPeriodo, j.ultimoTempoRestante, j.estado);
+      return j.entradas.length + ' coleta(s)';
     }
 
     function formatarDetalhePeriodo(e) {
