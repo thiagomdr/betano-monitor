@@ -87,7 +87,9 @@
       background: #1a1a1a;
       border-radius: 10px;
       padding: 12px;
+      padding-bottom: 30px;
       margin-bottom: 10px;
+      position: relative;
     }
     .card-header {
       display: flex;
@@ -112,6 +114,25 @@
     .card.finalizado .expand-icon { color: #888; }
     .card.finalizado .card-titulo { color: #888; }
     .card-meta { color: #888; font-size: 11px; margin-top: 2px; }
+    .status-badge {
+      position: absolute;
+      bottom: 8px;
+      right: 10px;
+      font-size: 10px;
+      font-weight: 600;
+      padding: 4px 10px;
+      border-radius: 999px;
+      line-height: 1.2;
+      pointer-events: none;
+    }
+    .status-badge.ao-vivo {
+      background: #1a73e8;
+      color: #fff;
+    }
+    .status-badge.finalizado {
+      background: #bdbdbd;
+      color: #000;
+    }
     .timeline {
       border-top: 1px solid #2a2a2a;
       margin-top: 8px;
@@ -242,22 +263,6 @@
         data_atualizacao: agora,
       });
 
-      // #region agent log
-      fetch('http://127.0.0.1:7904/ingest/86615625-6ae5-4e98-a1da-0a5f0f15fc42', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json', 'X-Debug-Session-Id': '94b3c3' },
-        body: JSON.stringify({
-          sessionId: '94b3c3',
-          hypothesisId: 'H3-fix',
-          location: 'historicoWebPage:iniciarMonitorNuvem',
-          message: 'scheduler upsert',
-          data: { ok: !error, err: error?.message ?? null },
-          timestamp: Date.now(),
-          runId: 'post-fix',
-        }),
-      }).catch(() => {});
-      // #endregion
-
       if (error) throw error;
       await atualizarStatusMonitor();
     }
@@ -321,61 +326,11 @@
       if (ultimaColeta && entradas.length) {
         const tsGlobal = new Date(ultimaColeta.coletado_em).getTime();
         const ultima = entradaMaisRecente(entradas);
-        if (new Date(ultima.coletadoEm).getTime() < tsGlobal) {
-          // #region agent log
-          fetch('http://127.0.0.1:7904/ingest/86615625-6ae5-4e98-a1da-0a5f0f15fc42', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json', 'X-Debug-Session-Id': '94b3c3' },
-            body: JSON.stringify({
-              sessionId: '94b3c3',
-              hypothesisId: 'H1',
-              location: 'historicoWebPage:inferirEstadoGrupo',
-              message: 'finalizado por coleta global',
-              data: { motivo: 'entrada_antiga', periodo: ultima.periodo },
-              timestamp: Date.now(),
-              runId: 'pre-fix',
-            }),
-          }).catch(() => {});
-          // #endregion
-          return 'finalizado';
-        }
+        if (new Date(ultima.coletadoEm).getTime() < tsGlobal) return 'finalizado';
       }
       const ref = ultimaEntradaPeriodoValido(entradas)?.periodo ?? entradaMaisRecente(entradas).periodo;
-      if (!periodoValido(ref)) {
-        // #region agent log
-        fetch('http://127.0.0.1:7904/ingest/86615625-6ae5-4e98-a1da-0a5f0f15fc42', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json', 'X-Debug-Session-Id': '94b3c3' },
-          body: JSON.stringify({
-            sessionId: '94b3c3',
-            hypothesisId: 'H1',
-            location: 'historicoWebPage:inferirEstadoGrupo',
-            message: 'finalizado por periodo invalido',
-            data: { ref },
-            timestamp: Date.now(),
-            runId: 'pre-fix',
-          }),
-        }).catch(() => {});
-        // #endregion
-        return 'finalizado';
-      }
-      const estado = PERIODOS_AO_VIVO.has(ref.trim()) ? 'ao_vivo' : 'finalizado';
-      // #region agent log
-      fetch('http://127.0.0.1:7904/ingest/86615625-6ae5-4e98-a1da-0a5f0f15fc42', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json', 'X-Debug-Session-Id': '94b3c3' },
-        body: JSON.stringify({
-          sessionId: '94b3c3',
-          hypothesisId: 'H1',
-          location: 'historicoWebPage:inferirEstadoGrupo',
-          message: 'estado por periodo',
-          data: { ref: ref.trim(), estado },
-          timestamp: Date.now(),
-          runId: 'pre-fix',
-        }),
-      }).catch(() => {});
-      // #endregion
-      return estado;
+      if (!periodoValido(ref)) return 'finalizado';
+      return PERIODOS_AO_VIVO.has(ref.trim()) ? 'ao_vivo' : 'finalizado';
     }
 
     function formatarPeriodoCard(periodo, estado) {
@@ -467,7 +422,7 @@
       const hora = formatarHora(j.ultimaColetaEm);
       return hora + ' - ' + formatarOddWeb(j.ultimoOddCasa) + ' ' + j.timeCasa + ' ' +
         j.ultimoPlacarCasa + ' x ' + j.ultimoPlacarFora + ' ' + j.timeFora + ' ' +
-        formatarOddWeb(j.ultimoOddFora) + ' (' + rotuloEstado(j.estado) + ')';
+        formatarOddWeb(j.ultimoOddFora);
     }
 
     function formatarMeta(j) {
@@ -505,15 +460,18 @@
         : '';
 
       const clsFinalizado = jogo.estado === 'finalizado' ? ' finalizado' : '';
+      const badgeCls = jogo.estado === 'ao_vivo' ? 'ao-vivo' : 'finalizado';
 
-      return '<article class="card' + clsFinalizado + '" data-estado="' + escapeHtml(jogo.estado) + '">' +
+      return '<article class="card' + clsFinalizado + '">' +
         '<button type="button" class="card-header" data-key="' + escapeHtml(jogo.gameKey) + '">' +
           '<span class="expand-icon">' + (exp ? '▼' : '▶') + '</span>' +
           '<div>' +
             '<div class="card-titulo">' + escapeHtml(formatarCabecalho(jogo)) + '</div>' +
             '<div class="card-meta">' + escapeHtml(formatarMeta(jogo)) + '</div>' +
           '</div>' +
-        '</button>' + timeline + '</article>';
+        '</button>' +
+        '<span class="status-badge ' + badgeCls + '">' + escapeHtml(rotuloEstado(jogo.estado)) + '</span>' +
+        timeline + '</article>';
     }
 
     function escapeHtml(s) {
@@ -549,46 +507,6 @@
           renderLista(jogos);
         });
       });
-
-      // #region agent log
-      const cards = elConteudo.querySelectorAll('.card');
-      const finCard = elConteudo.querySelector('.card.finalizado');
-      const iconColor = finCard
-        ? getComputedStyle(finCard.querySelector('.expand-icon')).color
-        : null;
-      const tituloColor = finCard
-        ? getComputedStyle(finCard.querySelector('.card-titulo')).color
-        : null;
-      const hasFinalizadoCss = [...document.styleSheets].some((sheet) => {
-        try {
-          return [...sheet.cssRules].some((r) => r.selectorText === '.card.finalizado .expand-icon');
-        } catch {
-          return false;
-        }
-      });
-      fetch('http://127.0.0.1:7904/ingest/86615625-6ae5-4e98-a1da-0a5f0f15fc42', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json', 'X-Debug-Session-Id': '94b3c3' },
-        body: JSON.stringify({
-          sessionId: '94b3c3',
-          hypothesisId: 'H1-H5',
-          location: 'historicoWebPage:renderLista',
-          message: 'cards renderizados',
-          data: {
-            buildId: 'gray-debug-v1',
-            totalCards: cards.length,
-            finalizadoClassCount: elConteudo.querySelectorAll('.card.finalizado').length,
-            estados: [...cards].map((c) => c.getAttribute('data-estado')),
-            cabecalhos: jogos.map((j) => formatarCabecalho(j).slice(-20)),
-            hasFinalizadoCss,
-            iconColor,
-            tituloColor,
-          },
-          timestamp: Date.now(),
-          runId: 'pre-fix',
-        }),
-      }).catch(() => {});
-      // #endregion
     }
 
     async function buscarDados() {
@@ -664,22 +582,6 @@
           const { error: errJogos } = await supabase.from('jogos_coleta').insert(linhas);
           if (errJogos) throw new Error(errJogos.message);
         }
-
-        // #region agent log
-        fetch('http://127.0.0.1:7904/ingest/86615625-6ae5-4e98-a1da-0a5f0f15fc42', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json', 'X-Debug-Session-Id': '94b3c3' },
-          body: JSON.stringify({
-            sessionId: '94b3c3',
-            hypothesisId: 'coletar-btn',
-            location: 'historicoWebPage:coletarAgora',
-            message: 'coleta manual ok',
-            data: { gameCount: coleta.gameCount ?? 0, coletaId: coletaRow.id },
-            timestamp: Date.now(),
-            runId: 'post-fix',
-          }),
-        }).catch(() => {});
-        // #endregion
 
         await atualizarStatusMonitor();
         await carregar(true);
