@@ -228,18 +228,18 @@
       padding-top: 8px;
       display: flex;
       flex-direction: column;
-      gap: 8px;
+      gap: 12px;
     }
-    .timeline-item { display: flex; gap: 6px; align-items: flex-start; }
-    .timeline-marcador { color: #c45c00; font-size: 12px; width: 12px; }
-    .timeline-conteudo { flex: 1; }
-    .timeline-linha { display: flex; flex-wrap: wrap; font-size: 12px; color: #ccc; }
-    .timeline-hora {
-      font-family: ui-monospace, monospace;
-      width: 42px;
-      flex-shrink: 0;
+    .timeline-item {
+      padding-bottom: 12px;
+      border-bottom: 1px solid #2a2a2a;
     }
-    .timeline-detalhe { color: #999; font-size: 11px; margin-left: 42px; }
+    .timeline-item:last-child {
+      padding-bottom: 0;
+      border-bottom: none;
+    }
+    .timeline-coleta { width: 100%; }
+    .timeline-hora-linha { padding-right: 0; margin-bottom: 6px; }
     .user-email { font-size: 12px; color: #888; flex: 1; min-width: 120px; }
     .monitor-status { font-size: 11px; color: #7cb342; max-width: 200px; }
     .monitor-status.off { color: #888; }
@@ -529,8 +529,10 @@
       return estado === 'ao_vivo' ? 'Ao Vivo' : 'Finalizado';
     }
 
-    function renderLinhaTime(nome, odd, placar, placarOponente, lado, aoVivo) {
-      const clsBox = aoVivo ? 'card-box ' + lado + ' ao-vivo' : 'card-box finalizado';
+    function renderLinhaTime(nome, odd, placar, placarOponente, lado, aoVivo, forcarCorTime) {
+      const clsBox = forcarCorTime
+        ? 'card-box ' + lado + ' ao-vivo'
+        : (aoVivo ? 'card-box ' + lado + ' ao-vivo' : 'card-box finalizado');
       const vantagem = calcularVantagem(placar, placarOponente);
       const vantagemHtml = vantagem != null
         ? '<span class="card-vantagem">+' + vantagem + '</span>'
@@ -547,17 +549,8 @@
       '</div>';
     }
 
-    function renderCorpoCard(jogo) {
-      const hora = formatarHora(jogo.ultimaColetaEm);
-      const aoVivo = jogo.estado === 'ao_vivo';
-      const blocoPeriodo = blocoPeriodoTempo(jogo.ultimoPeriodo, jogo.ultimoTempoRestante, jogo.estado);
-      return '<div class="card-corpo">' +
-        '<div class="card-hora-linha">' +
-          '<span class="card-hora">' + escapeHtml(hora) + '</span>' +
-          '<span class="card-hora-sep">  -  </span>' +
-          '<span class="card-periodo">' + escapeHtml(blocoPeriodo) + '</span>' +
-        '</div>' +
-        '<div class="card-valores">' +
+    function renderValoresJogo(timeCasa, timeFora, oddCasa, oddFora, placarCasa, placarFora, aoVivo, forcarCorTime) {
+      return '<div class="card-valores">' +
           '<div class="card-colunas">' +
             '<span class="card-col-nome"></span>' +
             '<div class="card-boxes">' +
@@ -565,13 +558,32 @@
               '<span class="card-col-titulo">ODDS</span>' +
             '</div>' +
           '</div>' +
-          renderLinhaTime(
-            jogo.timeCasa, jogo.ultimoOddCasa, jogo.ultimoPlacarCasa, jogo.ultimoPlacarFora, 'casa', aoVivo,
-          ) +
-          renderLinhaTime(
-            jogo.timeFora, jogo.ultimoOddFora, jogo.ultimoPlacarFora, jogo.ultimoPlacarCasa, 'fora', aoVivo,
-          ) +
-        '</div>' +
+          renderLinhaTime(timeCasa, oddCasa, placarCasa, placarFora, 'casa', aoVivo, forcarCorTime) +
+          renderLinhaTime(timeFora, oddFora, placarFora, placarCasa, 'fora', aoVivo, forcarCorTime) +
+        '</div>';
+    }
+
+    function renderHoraPeriodo(hora, blocoPeriodo, extraClass) {
+      const cls = extraClass ? ' card-hora-linha ' + extraClass : ' card-hora-linha';
+      return '<div class="' + cls.trim() + '">' +
+          '<span class="card-hora">' + escapeHtml(hora) + '</span>' +
+          '<span class="card-hora-sep">  -  </span>' +
+          '<span class="card-periodo">' + escapeHtml(blocoPeriodo) + '</span>' +
+        '</div>';
+    }
+
+    function renderCorpoCard(jogo) {
+      const hora = formatarHora(jogo.ultimaColetaEm);
+      const aoVivo = jogo.estado === 'ao_vivo';
+      const blocoPeriodo = blocoPeriodoTempo(jogo.ultimoPeriodo, jogo.ultimoTempoRestante, jogo.estado);
+      return '<div class="card-corpo">' +
+        renderHoraPeriodo(hora, blocoPeriodo, '') +
+        renderValoresJogo(
+          jogo.timeCasa, jogo.timeFora,
+          jogo.ultimoOddCasa, jogo.ultimoOddFora,
+          jogo.ultimoPlacarCasa, jogo.ultimoPlacarFora,
+          aoVivo, false,
+        ) +
         '<div class="card-meta">' + escapeHtml(formatarMeta(jogo)) + '</div>' +
       '</div>';
     }
@@ -580,27 +592,26 @@
       return j.entradas.length + ' coleta(s)';
     }
 
-    function formatarDetalhePeriodo(e) {
-      const estadoEntrada = inferirEstadoEntrada(e.periodo);
-      const periodo = periodoValido(e.periodo) ? e.periodo.trim() : 'Finalizado';
-      const bloco = blocoPeriodoTempo(periodo, e.tempoRestante, estadoEntrada);
-      const odds = formatarOddWeb(e.oddCasa) + ' ' + formatarOddWeb(e.oddFora);
-      if (e.rotuloVantagem && e.rotuloVantagem !== 'empate') {
-        return odds + ' ' + bloco + ' ' + e.rotuloVantagem;
-      }
-      if (e.rotuloVantagem === 'empate') return odds + ' ' + bloco + ' empate';
-      return odds + ' ' + bloco;
+    function renderBlocoColeta(entrada, timeCasa, timeFora) {
+      const estadoEntrada = inferirEstadoEntrada(entrada.periodo);
+      const periodo = periodoValido(entrada.periodo) ? entrada.periodo.trim() : 'Finalizado';
+      const blocoPeriodo = blocoPeriodoTempo(periodo, entrada.tempoRestante, estadoEntrada);
+      const hora = formatarHora(entrada.coletadoEm);
+      return '<div class="timeline-coleta">' +
+        renderHoraPeriodo(hora, blocoPeriodo, 'timeline-hora-linha') +
+        renderValoresJogo(
+          timeCasa, timeFora,
+          entrada.oddCasa, entrada.oddFora,
+          entrada.placarCasa, entrada.placarFora,
+          estadoEntrada === 'ao_vivo', true,
+        ) +
+      '</div>';
     }
 
     function renderTimeline(entrada, timeCasa, timeFora) {
-      const hora = formatarHora(entrada.coletadoEm);
-      const placar = timeCasa + ' ' + entrada.placarCasa + ' x ' + entrada.placarFora + ' ' + timeFora;
       return '<div class="timeline-item">' +
-        '<span class="timeline-marcador">»</span>' +
-        '<div class="timeline-conteudo">' +
-          '<div class="timeline-linha"><span class="timeline-hora">' + hora + '</span><span>' + placar + '</span></div>' +
-          '<div class="timeline-detalhe">(' + escapeHtml(formatarDetalhePeriodo(entrada)) + ')</div>' +
-        '</div></div>';
+        renderBlocoColeta(entrada, timeCasa, timeFora) +
+      '</div>';
     }
 
     function renderCard(jogo) {
