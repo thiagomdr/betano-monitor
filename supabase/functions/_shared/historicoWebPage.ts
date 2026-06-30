@@ -375,6 +375,7 @@ export function buildHistoricoTemplate(): string {
     const LIMITE_COLETAS = 80;
     const AUTO_REFRESH_MS = 45_000;
     const CHAVE_COLETA_ATIVADA = 'betano_coleta_ativada_em';
+    const CHAVE_COLETA_PARADA = 'betano_coleta_parada_em';
 
     const elLogin = document.getElementById('app-login');
     const elMain = document.getElementById('app-main');
@@ -393,6 +394,7 @@ export function buildHistoricoTemplate(): string {
     let monitorAtivo = false;
     let coletando = false;
     let coletaAtivadaEm = null;
+    let coletaParadaEm = null;
 
     function lerAtivacaoLocal() {
       const v = localStorage.getItem(CHAVE_COLETA_ATIVADA);
@@ -401,9 +403,21 @@ export function buildHistoricoTemplate(): string {
       return Number.isFinite(ts) ? ts : null;
     }
 
+    function lerParadaLocal() {
+      const v = localStorage.getItem(CHAVE_COLETA_PARADA);
+      if (!v) return null;
+      const ts = Date.parse(v);
+      return Number.isFinite(ts) ? ts : null;
+    }
+
     function salvarAtivacaoLocal(iso) {
       if (iso) localStorage.setItem(CHAVE_COLETA_ATIVADA, iso);
       else localStorage.removeItem(CHAVE_COLETA_ATIVADA);
+    }
+
+    function salvarParadaLocal(iso) {
+      if (iso) localStorage.setItem(CHAVE_COLETA_PARADA, iso);
+      else localStorage.removeItem(CHAVE_COLETA_PARADA);
     }
 
     function formatarDuracao(ms) {
@@ -419,21 +433,33 @@ export function buildHistoricoTemplate(): string {
     }
 
     function atualizarTextoStatusMonitor() {
-      if (!monitorAtivo) {
-        elMonitorStatus.textContent = 'Coleta: Parada';
-        elMonitorStatus.className = 'menu-status off';
-        return;
-      }
       const inicio = coletaAtivadaEm ?? lerAtivacaoLocal();
-      if (!inicio) {
-        elMonitorStatus.textContent = 'Coleta: Ativa';
+      const parada = coletaParadaEm ?? lerParadaLocal();
+
+      if (monitorAtivo) {
+        if (!inicio) {
+          elMonitorStatus.textContent = 'Coleta: Ativa';
+          elMonitorStatus.className = 'menu-status';
+          return;
+        }
+        coletaAtivadaEm = inicio;
+        const elapsed = formatarDuracao(Date.now() - inicio);
+        elMonitorStatus.textContent = 'Coleta: Ativa (' + elapsed + ')';
         elMonitorStatus.className = 'menu-status';
         return;
       }
-      coletaAtivadaEm = inicio;
-      const elapsed = formatarDuracao(Date.now() - inicio);
-      elMonitorStatus.textContent = 'Coleta: Ativa (' + elapsed + ')';
-      elMonitorStatus.className = 'menu-status';
+
+      if (inicio && parada) {
+        coletaAtivadaEm = inicio;
+        coletaParadaEm = parada;
+        const elapsed = formatarDuracao(parada - inicio);
+        elMonitorStatus.textContent = 'Coleta: Parada (' + elapsed + ')';
+        elMonitorStatus.className = 'menu-status off';
+        return;
+      }
+
+      elMonitorStatus.textContent = 'Coleta: Parada';
+      elMonitorStatus.className = 'menu-status off';
     }
 
     function iniciarTimerStatus() {
@@ -478,7 +504,8 @@ export function buildHistoricoTemplate(): string {
 
       if (error || !data) {
         monitorAtivo = false;
-        coletaAtivadaEm = null;
+        coletaAtivadaEm = lerAtivacaoLocal();
+        coletaParadaEm = lerParadaLocal();
         elBtnMonitor.textContent = 'Iniciar Coleta';
         pararTimerStatus();
         atualizarTextoStatusMonitor();
@@ -492,8 +519,8 @@ export function buildHistoricoTemplate(): string {
         if (coletaAtivadaEm) iniciarTimerStatus();
         else atualizarTextoStatusMonitor();
       } else {
-        coletaAtivadaEm = null;
-        salvarAtivacaoLocal(null);
+        coletaAtivadaEm = lerAtivacaoLocal();
+        coletaParadaEm = lerParadaLocal();
         elBtnMonitor.textContent = 'Iniciar Coleta';
         pararTimerStatus();
         atualizarTextoStatusMonitor();
@@ -514,21 +541,28 @@ export function buildHistoricoTemplate(): string {
       });
 
       if (error) throw error;
+      salvarParadaLocal(null);
+      coletaParadaEm = null;
       salvarAtivacaoLocal(agora);
       coletaAtivadaEm = Date.parse(agora);
       await atualizarStatusMonitor();
     }
 
     async function pararMonitorNuvem() {
+      const agora = new Date().toISOString();
       const { error } = await supabase
         .from('coleta_scheduler')
-        .update({ ativo: false, data_atualizacao: new Date().toISOString() })
+        .update({ ativo: false, data_atualizacao: agora })
         .eq('id', 'default');
 
       if (error) throw error;
-      salvarAtivacaoLocal(null);
-      coletaAtivadaEm = null;
-      await atualizarStatusMonitor();
+      coletaAtivadaEm = lerAtivacaoLocal();
+      coletaParadaEm = Date.parse(agora);
+      salvarParadaLocal(agora);
+      monitorAtivo = false;
+      elBtnMonitor.textContent = 'Iniciar Coleta';
+      pararTimerStatus();
+      atualizarTextoStatusMonitor();
     }
 
     function formatarHora(iso) {
