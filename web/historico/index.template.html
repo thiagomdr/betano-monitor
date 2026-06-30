@@ -941,18 +941,48 @@
 
     async function excluirJogo(gameKey, timeCasa, timeFora) {
       const rotulo = timeCasa + ' x ' + timeFora;
-      if (!confirm('Excluir todas as coletas de ' + rotulo + '?')) return;
+      if (!confirm('Excluir todas as coletas de ' + rotulo + '?')) {
+        // #region agent log
+        fetch('http://127.0.0.1:7904/ingest/86615625-6ae5-4e98-a1da-0a5f0f15fc42',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'94b3c3'},body:JSON.stringify({sessionId:'94b3c3',hypothesisId:'H5',location:'historicoWebPage:excluirJogo',message:'confirm cancelado',data:{gameKey},timestamp:Date.now()})}).catch(()=>{});
+        // #endregion
+        return;
+      }
 
       const usuarioId = await obterUsuarioId();
       if (!usuarioId) {
+        // #region agent log
+        fetch('http://127.0.0.1:7904/ingest/86615625-6ae5-4e98-a1da-0a5f0f15fc42',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'94b3c3'},body:JSON.stringify({sessionId:'94b3c3',hypothesisId:'H5',location:'historicoWebPage:excluirJogo',message:'sem usuarioId',data:{gameKey},timestamp:Date.now()})}).catch(()=>{});
+        // #endregion
         alert('Faca login primeiro');
         return;
       }
 
-      const { error: errJogos } = await supabase
+      const keyClient = buildGameKey(timeCasa, timeFora);
+      const { data: amostraKey } = await supabase
+        .from('jogos_coleta')
+        .select('id, game_key, time_casa, time_fora')
+        .eq('game_key', gameKey)
+        .limit(5);
+      const { data: amostraTimes } = await supabase
+        .from('jogos_coleta')
+        .select('id, game_key, time_casa, time_fora')
+        .eq('time_casa', timeCasa)
+        .eq('time_fora', timeFora)
+        .limit(5);
+
+      // #region agent log
+      fetch('http://127.0.0.1:7904/ingest/86615625-6ae5-4e98-a1da-0a5f0f15fc42',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'94b3c3'},body:JSON.stringify({sessionId:'94b3c3',hypothesisId:'H2',location:'historicoWebPage:excluirJogo',message:'chaves antes do delete',data:{gameKeyDelete:gameKey,keyClient,timeCasa,timeFora,porGameKey:amostraKey?.length??0,porTimes:amostraTimes?.length??0,dbKeysFromTimes:[...new Set((amostraTimes??[]).map((r)=>r.game_key))],keyClientEqualsDb:(amostraTimes??[])[0]?.game_key===gameKey},timestamp:Date.now()})}).catch(()=>{});
+      // #endregion
+
+      const { data: deletados, error: errJogos } = await supabase
         .from('jogos_coleta')
         .delete()
-        .eq('game_key', gameKey);
+        .eq('game_key', gameKey)
+        .select('id');
+
+      // #region agent log
+      fetch('http://127.0.0.1:7904/ingest/86615625-6ae5-4e98-a1da-0a5f0f15fc42',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'94b3c3'},body:JSON.stringify({sessionId:'94b3c3',hypothesisId:'H1',location:'historicoWebPage:excluirJogo',message:'resultado delete jogos_coleta',data:{gameKey,errMsg:errJogos?.message??null,qtdDeletados:deletados?.length??0},timestamp:Date.now()})}).catch(()=>{});
+      // #endregion
 
       if (errJogos) {
         alert(errJogos.message);
@@ -967,7 +997,12 @@
 
       expandidos.delete(gameKey);
       cardMenuAberto = null;
+      const antes = elConteudo.querySelectorAll('.card').length;
       await carregar(true);
+      const depois = elConteudo.querySelectorAll('.card').length;
+      // #region agent log
+      fetch('http://127.0.0.1:7904/ingest/86615625-6ae5-4e98-a1da-0a5f0f15fc42',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'94b3c3'},body:JSON.stringify({sessionId:'94b3c3',hypothesisId:'H4',location:'historicoWebPage:excluirJogo',message:'apos carregar',data:{gameKey,cardsAntes:antes,cardsDepois:depois},timestamp:Date.now()})}).catch(()=>{});
+      // #endregion
     }
 
     function renderLista(jogos) {
@@ -999,6 +1034,9 @@
           e.stopPropagation();
           const key = btn.getAttribute('data-key');
           const jogo = jogos.find((j) => j.gameKey === key);
+          // #region agent log
+          fetch('http://127.0.0.1:7904/ingest/86615625-6ae5-4e98-a1da-0a5f0f15fc42',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'94b3c3'},body:JSON.stringify({sessionId:'94b3c3',hypothesisId:'H3',location:'historicoWebPage:card-btn-excluir',message:'clique excluir',data:{key,jogoFound:Boolean(jogo),timeCasa:jogo?.timeCasa??null},timestamp:Date.now()})}).catch(()=>{});
+          // #endregion
           if (key && jogo) void excluirJogo(key, jogo.timeCasa, jogo.timeFora);
         });
       });
