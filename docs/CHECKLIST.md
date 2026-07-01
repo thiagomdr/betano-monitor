@@ -2,7 +2,7 @@
 
 Progresso do **painel web + Supabase**. O Agent deve marcar `[x]` ao concluir cada item e atualizar a data abaixo.
 
-**Última atualização:** 2026-06-29 (futebol — seção jogos ao vivo colapsável)
+**Última atualização:** 2026-06-29 (cron futebol 15s para intervalo 40–50s)
 
 ---
 

@@ -27,6 +27,7 @@ Config: `web/historico/supabase.config.json` ou secrets `EXPO_PUBLIC_SUPABASE_*`
 | `20260629192000_jogos_url_partida.sql` | `event_id` e `url_partida` (link Betano) |
 | `20260701120000_esporte_futebol.sql` | `esporte` (basquete/futebol) + períodos `1T`/`2T` |
 | `20260702120000_futebol_estatisticas.sql` | `futebol_partidas`, `futebol_leituras`, `futebol_agenda` |
+| `20260704120000_futebol_cron_15s.sql` | Cron tick **15 s** (futebol intensivo 40–50 s) |
 
 `20260629140000_storage_web.sql` — legado (Storage HTML); **não necessário** com GitHub Pages.
 
