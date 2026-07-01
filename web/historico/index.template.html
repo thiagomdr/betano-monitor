@@ -622,7 +622,12 @@
     const CHAVE_COLETA_ATIVADA = 'betano_coleta_ativada_em';
     const CHAVE_COLETA_PARADA = 'betano_coleta_parada_em';
 
-    }
+    // #region agent log
+    window.addEventListener('error', (ev) => {
+      fetch('http://127.0.0.1:7904/ingest/86615625-6ae5-4e98-a1da-0a5f0f15fc42',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'94b3c3'},body:JSON.stringify({sessionId:'94b3c3',hypothesisId:'H1',location:'historicoWebPage:window.error',message:'js runtime error',data:{msg:String(ev.message||''),file:ev.filename,line:ev.lineno},timestamp:Date.now()})}).catch(()=>{});
+    });
+    fetch('http://127.0.0.1:7904/ingest/86615625-6ae5-4e98-a1da-0a5f0f15fc42',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'94b3c3'},body:JSON.stringify({sessionId:'94b3c3',hypothesisId:'H1',location:'historicoWebPage:boot',message:'script module iniciou',data:{href:location.href},timestamp:Date.now(),runId:'post-fix'})}).catch(()=>{});
+    // #endregion
 
     const elLogin = document.getElementById('app-login');
     const elMain = document.getElementById('app-main');
@@ -2000,6 +2005,9 @@
     } else {
       mostrarLogin();
     }
+    // #region agent log
+    fetch('http://127.0.0.1:7904/ingest/86615625-6ae5-4e98-a1da-0a5f0f15fc42',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'94b3c3'},body:JSON.stringify({sessionId:'94b3c3',hypothesisId:'H1',location:'historicoWebPage:init',message:'auth init ok',data:{logado:Boolean(sessao.session?.user?.email),loginHidden:elLogin.classList.contains('hidden')},timestamp:Date.now(),runId:'post-fix'})}).catch(()=>{});
+    // #endregion
 
     supabase.auth.onAuthStateChange((_event, session) => {
       if (session?.user?.email) mostrarApp(session.user.email);
