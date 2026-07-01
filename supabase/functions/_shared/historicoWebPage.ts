@@ -1,6 +1,6 @@
 export const HISTORICO_URL_PLACEHOLDER = '__SUPABASE_URL__';
 export const HISTORICO_ANON_KEY_PLACEHOLDER = '__SUPABASE_ANON_KEY__';
-export const PAINEL_BUILD_ID = 'futebol-placar-final-20260702';
+export const PAINEL_BUILD_ID = 'futebol-excluir-partida-20260706';
 
 export function buildHistoricoTemplate(): string {
   const configJson = `{"url":"${HISTORICO_URL_PLACEHOLDER}","anonKey":"${HISTORICO_ANON_KEY_PLACEHOLDER}"}`;
@@ -733,7 +733,8 @@ export function buildHistoricoTemplate(): string {
     }
     .futebol-historico-toggle {
       cursor: pointer;
-      width: 100%;
+      flex: 1;
+      min-width: 0;
       text-align: left;
       background: transparent;
       border: none;
@@ -741,6 +742,23 @@ export function buildHistoricoTemplate(): string {
       color: inherit;
       font: inherit;
     }
+    .futebol-historico-linha {
+      display: flex;
+      align-items: flex-start;
+      gap: 8px;
+    }
+    .futebol-historico-excluir {
+      flex-shrink: 0;
+      align-self: center;
+      margin-left: auto;
+      padding: 6px 8px;
+      background: transparent;
+      border: none;
+      color: #888;
+      cursor: pointer;
+      line-height: 0;
+    }
+    .futebol-historico-excluir:hover { color: #ef5350; }
     .futebol-historico-resumo {
       display: flex;
       align-items: center;
@@ -1058,6 +1076,11 @@ export function buildHistoricoTemplate(): string {
       '<circle cx="12" cy="5" r="2" fill="currentColor"/>' +
       '<circle cx="12" cy="12" r="2" fill="currentColor"/>' +
       '<circle cx="12" cy="19" r="2" fill="currentColor"/>' +
+      '</svg>';
+
+    const TRASH_SVG = '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true">' +
+      '<path stroke-linecap="round" stroke-linejoin="round" d="M4 7h16M9 7V5a1 1 0 011-1h4a1 1 0 011 1v2m2 0v12a2 2 0 01-2 2H8a2 2 0 01-2-2V7h12z"/>' +
+      '<path stroke-linecap="round" d="M10 11v6M14 11v6"/>' +
       '</svg>';
 
     function lerAtivacaoLocal() {
@@ -2305,13 +2328,16 @@ export function buildHistoricoTemplate(): string {
         (partida.liga ? escapeHtml(partida.liga) + ' · ' : '') +
         escapeHtml(leituras.length + ' coleta(s)') + '</span>';
       return '<article class="futebol-historico-partida ' + resultadoCls + '">' +
-        '<button type="button" class="futebol-historico-toggle" data-partida-id="' + escapeHtml(partida.id) + '" aria-expanded="' + (expandido ? 'true' : 'false') + '">' +
-          '<div class="futebol-historico-resumo">' +
-            '<span class="expand-icon">' + (expandido ? '▼' : '▶') + '</span>' +
-            '<span class="futebol-historico-titulo">' + tituloLinha + '</span>' +
-            resumoMeta +
-          '</div>' +
-        '</button>' +
+        '<div class="futebol-historico-linha">' +
+          '<button type="button" class="futebol-historico-toggle" data-partida-id="' + escapeHtml(partida.id) + '" aria-expanded="' + (expandido ? 'true' : 'false') + '">' +
+            '<div class="futebol-historico-resumo">' +
+              '<span class="expand-icon">' + (expandido ? '▼' : '▶') + '</span>' +
+              '<span class="futebol-historico-titulo">' + tituloLinha + '</span>' +
+              resumoMeta +
+            '</div>' +
+          '</button>' +
+          '<button type="button" class="futebol-historico-excluir" data-partida-id="' + escapeHtml(partida.id) + '" data-time-casa="' + escapeHtml(partida.time_casa) + '" data-time-fora="' + escapeHtml(partida.time_fora) + '" aria-label="Excluir partida">' + TRASH_SVG + '</button>' +
+        '</div>' +
         '<div class="futebol-historico-detalhe' + detalheCls + '">' +
           renderTabelaLeiturasPartida(partida, leituras) +
         '</div>' +
@@ -2370,6 +2396,18 @@ export function buildHistoricoTemplate(): string {
           }).catch(() => {});
           // #endregion
           if (ultimoPayloadFutebol) renderEstatisticasFutebol(ultimoPayloadFutebol);
+        });
+      });
+    }
+
+    function wireFutebolHistoricoExcluir() {
+      elConteudo.querySelectorAll('.futebol-historico-excluir').forEach((btn) => {
+        btn.addEventListener('click', (e) => {
+          e.stopPropagation();
+          const id = btn.getAttribute('data-partida-id');
+          const timeCasa = btn.getAttribute('data-time-casa') ?? '';
+          const timeFora = btn.getAttribute('data-time-fora') ?? '';
+          if (id) void excluirPartidaFutebol(id, timeCasa, timeFora);
         });
       });
     }
@@ -2470,6 +2508,7 @@ export function buildHistoricoTemplate(): string {
       '</div>';
       wireFutebolAoVivoToggle();
       wireFutebolHistoricoToggle();
+      wireFutebolHistoricoExcluir();
       // #region agent log
       requestAnimationFrame(() => {
         const wrap = elConteudo.querySelector('.futebol-stats-wrap');
@@ -2621,6 +2660,36 @@ export function buildHistoricoTemplate(): string {
           }
         });
       });
+    }
+
+    async function excluirPartidaFutebol(partidaId, timeCasa, timeFora) {
+      const rotulo = timeCasa + ' x ' + timeFora;
+      if (!confirm('Excluir ' + rotulo + ' e todas as coletas intensivas?')) return;
+
+      const usuarioId = await obterUsuarioId();
+      if (!usuarioId) {
+        alert('Faca login primeiro');
+        return;
+      }
+
+      const { data: deletados, error } = await supabase
+        .from('futebol_partidas')
+        .delete()
+        .eq('id', partidaId)
+        .select('id');
+
+      if (error) {
+        alert(error.message);
+        return;
+      }
+
+      if (!deletados?.length) {
+        alert('Nenhum registro excluido. Tente atualizar a pagina.');
+        return;
+      }
+
+      futebolHistoricoExpandidos.delete(partidaId);
+      await carregarFutebol(true);
     }
 
     async function excluirAlerta(alertaId, timeCasa, timeFora) {
