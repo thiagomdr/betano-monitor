@@ -1,6 +1,6 @@
 export const HISTORICO_URL_PLACEHOLDER = '__SUPABASE_URL__';
 export const HISTORICO_ANON_KEY_PLACEHOLDER = '__SUPABASE_ANON_KEY__';
-export const PAINEL_BUILD_ID = 'layout-v3-20260701';
+export const PAINEL_BUILD_ID = 'futebol-collapse-v2-20260701';
 
 export function buildHistoricoTemplate(): string {
   const configJson = `{"url":"${HISTORICO_URL_PLACEHOLDER}","anonKey":"${HISTORICO_ANON_KEY_PLACEHOLDER}"}`;
@@ -2222,12 +2222,56 @@ export function buildHistoricoTemplate(): string {
     }
 
     function wireFutebolHistoricoToggle() {
-      elConteudo.querySelectorAll('.futebol-historico-toggle').forEach((btn) => {
+      const toggles = elConteudo.querySelectorAll('.futebol-historico-toggle');
+      const detalhesOcultos = elConteudo.querySelectorAll('.futebol-historico-detalhe.hidden').length;
+      // #region agent log
+      fetch('http://127.0.0.1:7904/ingest/86615625-6ae5-4e98-a1da-0a5f0f15fc42', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'X-Debug-Session-Id': '94b3c3' },
+        body: JSON.stringify({
+          sessionId: '94b3c3',
+          runId: 'futebol-collapse-debug',
+          hypothesisId: 'H1-H2-H4',
+          location: 'historicoWebPage.ts:wireFutebolHistoricoToggle',
+          message: 'toggle wiring',
+          data: {
+            buildId: PAINEL_BUILD_ID,
+            toggleCount: toggles.length,
+            detalhesOcultos,
+            hasPayload: ultimoPayloadFutebol != null,
+            expandidosCount: futebolHistoricoExpandidos.size,
+          },
+          timestamp: Date.now(),
+        }),
+      }).catch(() => {});
+      // #endregion
+      toggles.forEach((btn) => {
         btn.addEventListener('click', () => {
           const id = btn.getAttribute('data-partida-id');
           if (!id) return;
-          if (futebolHistoricoExpandidos.has(id)) futebolHistoricoExpandidos.delete(id);
+          const eraExpandido = futebolHistoricoExpandidos.has(id);
+          if (eraExpandido) futebolHistoricoExpandidos.delete(id);
           else futebolHistoricoExpandidos.add(id);
+          // #region agent log
+          fetch('http://127.0.0.1:7904/ingest/86615625-6ae5-4e98-a1da-0a5f0f15fc42', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json', 'X-Debug-Session-Id': '94b3c3' },
+            body: JSON.stringify({
+              sessionId: '94b3c3',
+              runId: 'futebol-collapse-debug',
+              hypothesisId: 'H3-H5',
+              location: 'historicoWebPage.ts:wireFutebolHistoricoToggle:click',
+              message: 'toggle click',
+              data: {
+                partidaId: id,
+                eraExpandido,
+                agoraExpandido: futebolHistoricoExpandidos.has(id),
+                hasPayload: ultimoPayloadFutebol != null,
+              },
+              timestamp: Date.now(),
+            }),
+          }).catch(() => {});
+          // #endregion
           if (ultimoPayloadFutebol) renderEstatisticasFutebol(ultimoPayloadFutebol);
         });
       });
@@ -2273,6 +2317,7 @@ export function buildHistoricoTemplate(): string {
         stats.finalizadas + ' finalizada(s) · ' + stats.comGol + ' com gol · ' + stats.semGol + ' sem gol</p>' +
         '<p style="color:#888;margin-top:8px">' + escapeHtml(agendaTxt) + '</p>' +
         '<p style="color:#888;margin-top:4px">Intensivo em lote (40–50 s) só na janela final. Estatística abaixo.</p>' +
+        '<p style="color:#555;font-size:10px;margin-top:4px">Build: ' + escapeHtml(PAINEL_BUILD_ID) + '</p>' +
       '</div>';
 
       elConteudo.innerHTML = '<div class="futebol-stats-wrap">' + resumo +

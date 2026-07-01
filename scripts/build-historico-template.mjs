@@ -29,7 +29,12 @@ if (!returnMatch) {
   process.exit(1);
 }
 
-const html = returnMatch[1].replace(/\$\{configJson\}/g, configJson);
+const buildIdMatch = src.match(/export const PAINEL_BUILD_ID = '([^']+)'/);
+const buildId = buildIdMatch?.[1] ?? 'unknown';
+
+const html = returnMatch[1]
+  .replace(/\$\{configJson\}/g, configJson)
+  .replace(/\$\{PAINEL_BUILD_ID\}/g, buildId);
 
 mkdirSync(outDir, { recursive: true });
 writeFileSync(outPath, html, 'utf8');
