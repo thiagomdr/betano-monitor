@@ -601,6 +601,10 @@ export function buildHistoricoTemplate(): string {
         </div>
       </div>
     </header>
+    <nav id="abas-historico" class="abas-historico hidden" role="tablist" aria-label="Histórico">
+      <button id="aba-coletas" type="button" class="aba ativa" role="tab" aria-selected="true" aria-controls="conteudo">Coletas</button>
+      <button id="aba-alertas" type="button" class="aba" role="tab" aria-selected="false" aria-controls="conteudo">Alertas</button>
+    </nav>
     <div id="historico-stats-bar" class="historico-stats-bar hidden">
       <span id="historico-stats" class="historico-stats-text" aria-live="polite"></span>
       <div class="regras-gear-wrap">
@@ -612,10 +616,6 @@ export function buildHistoricoTemplate(): string {
         </div>
       </div>
     </div>
-    <nav id="abas-historico" class="abas-historico hidden" role="tablist" aria-label="Histórico">
-      <button id="aba-coletas" type="button" class="aba ativa" role="tab" aria-selected="true" aria-controls="conteudo">Coletas</button>
-      <button id="aba-alertas" type="button" class="aba" role="tab" aria-selected="false" aria-controls="conteudo">Alertas</button>
-    </nav>
     <div id="conteudo"></div>
   </div>
 
