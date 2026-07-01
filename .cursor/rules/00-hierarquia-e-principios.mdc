@@ -9,10 +9,11 @@ alwaysApply: true
 ## Precedência
 
 1. **00-hierarquia-e-principios.mdc**
-2. **03-supabase-coletas.mdc**
-3. **01-stack-web.mdc**
-4. **02-arquitetura-web.mdc**
-5. **04-checklist-projeto.mdc**
+2. **05-git-commit-push.mdc**
+3. **03-supabase-coletas.mdc**
+4. **01-stack-web.mdc**
+5. **02-arquitetura-web.mdc**
+6. **04-checklist-projeto.mdc**
 
 Regra mais específica prevalece no mesmo nível.
 
@@ -29,6 +30,7 @@ Não há app mobile neste repositório.
 - Mudanças pequenas e reversíveis.
 - Fonte única da UI: `supabase/functions/_shared/historicoWebPage.ts` → build → GitHub Pages.
 - Atualizar `docs/CHECKLIST.md` ao concluir item do checklist.
+- Ao concluir tarefa com alterações: **commit + push** (ver `05-git-commit-push.mdc`).
 - Supabase para histórico, alertas e coleta automática (`pg_cron`).
 
 ### PROIBIDO

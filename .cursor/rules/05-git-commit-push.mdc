@@ -1,0 +1,30 @@
+---
+description: Commit e push automáticos ao concluir tarefas com alterações
+globs: **/*
+alwaysApply: true
+---
+
+# Git — commit e push ao finalizar
+
+## OBRIGATÓRIO
+
+Ao **concluir uma tarefa** que alterou arquivos no repositório:
+
+1. **Commit e push sem perguntar** — não oferecer nem pedir confirmação.
+2. Incluir no commit **somente** arquivos da tarefa (nunca `.env`, secrets, `supabase/.temp/`, logs de debug).
+3. Se alterou `historicoWebPage.ts`, rodar `npm run build:historico-web` e commitar o `index.template.html` gerado.
+4. Mensagem de commit concisa (1–2 frases), foco no *porquê*.
+5. Push para `origin` na branch atual (`git push origin HEAD`).
+6. Informar ao usuário: hash curto, mensagem e que o push foi feito.
+
+## Protocolo de segurança
+
+- Nunca `git push --force` em `main`/`master`.
+- Nunca alterar `git config`.
+- Nunca `--no-verify` salvo pedido explícito do usuário.
+- Se não houver mudanças para commitar, não criar commit vazio.
+
+## Exceções
+
+- Tarefa **somente leitura** (pergunta, revisão, explicação) — sem commit.
+- Usuário pedir explicitamente **não** commitar ou **não** fazer push.

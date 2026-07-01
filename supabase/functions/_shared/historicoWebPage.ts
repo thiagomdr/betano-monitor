@@ -170,7 +170,7 @@ export function buildHistoricoTemplate(): string {
       animation: spin 0.8s linear infinite;
     }
     @keyframes spin { to { transform: rotate(360deg); } }
-    .lista { padding: 12px; padding-bottom: 32px; max-width: 720px; margin: 0 auto; }
+    .lista { padding: 12px; padding-bottom: 32px; max-width: 520px; margin: 0 auto; }
     .card {
       background: #1a1a1a;
       border-radius: 10px;
@@ -226,15 +226,16 @@ export function buildHistoricoTemplate(): string {
     .card-valores { width: 100%; }
     .card-colunas,
     .card-linha-time {
-      display: flex;
+      display: grid;
+      grid-template-columns: minmax(0, 1fr) 52px 52px;
+      column-gap: 10px;
       align-items: center;
-      gap: 8px;
       width: 100%;
     }
     .card-colunas { margin-bottom: 4px; }
-    .card-col-nome,
+    .card-col-nome { display: none; }
     .card-nome-time {
-      flex: 1;
+      grid-column: 1;
       font-size: 13px;
       font-weight: 600;
       color: #fff;
@@ -254,12 +255,8 @@ export function buildHistoricoTemplate(): string {
       font-weight: 700;
       flex-shrink: 0;
     }
-    .card-col-nome { flex: 1; }
     .card-boxes {
-      display: flex;
-      gap: 8px;
-      margin-left: auto;
-      flex-shrink: 0;
+      display: contents;
     }
     .card-col-titulo {
       font-size: 9px;
@@ -268,19 +265,21 @@ export function buildHistoricoTemplate(): string {
       text-align: center;
       text-transform: uppercase;
       letter-spacing: 0.04em;
-      min-width: 44px;
+      justify-self: center;
+      width: 52px;
     }
     .card-linha-time { margin-bottom: 6px; }
     .card.finalizado .card-nome-time { color: #888; }
     .card-box {
-      min-width: 44px;
-      padding: 4px 8px;
+      width: 52px;
+      padding: 4px 6px;
       border-radius: 8px;
       font-size: 12px;
       font-weight: 700;
       text-align: center;
       font-family: ui-monospace, monospace;
-      flex-shrink: 0;
+      justify-self: center;
+      box-sizing: border-box;
     }
     .card-box.casa.ao-vivo { background: #1a73e8; color: #fff; }
     .card-box.fora.ao-vivo { background: #c62828; color: #fff; }
@@ -512,7 +511,7 @@ export function buildHistoricoTemplate(): string {
       gap: 0;
       padding: 0 12px;
       border-bottom: 1px solid #222;
-      max-width: 720px;
+      max-width: 520px;
       margin: 0 auto;
     }
     .aba {
@@ -627,13 +626,6 @@ export function buildHistoricoTemplate(): string {
     const AUTO_REFRESH_MS = 45_000;
     const CHAVE_COLETA_ATIVADA = 'betano_coleta_ativada_em';
     const CHAVE_COLETA_PARADA = 'betano_coleta_parada_em';
-
-    // #region agent log
-    window.addEventListener('error', (ev) => {
-      fetch('http://127.0.0.1:7904/ingest/86615625-6ae5-4e98-a1da-0a5f0f15fc42',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'94b3c3'},body:JSON.stringify({sessionId:'94b3c3',hypothesisId:'H1',location:'historicoWebPage:window.error',message:'js runtime error',data:{msg:String(ev.message||''),file:ev.filename,line:ev.lineno},timestamp:Date.now()})}).catch(()=>{});
-    });
-    fetch('http://127.0.0.1:7904/ingest/86615625-6ae5-4e98-a1da-0a5f0f15fc42',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'94b3c3'},body:JSON.stringify({sessionId:'94b3c3',hypothesisId:'H1',location:'historicoWebPage:boot',message:'script module iniciou',data:{href:location.href},timestamp:Date.now(),runId:'post-fix'})}).catch(()=>{});
-    // #endregion
 
     const elLogin = document.getElementById('app-login');
     const elMain = document.getElementById('app-main');
@@ -2011,9 +2003,6 @@ export function buildHistoricoTemplate(): string {
     } else {
       mostrarLogin();
     }
-    // #region agent log
-    fetch('http://127.0.0.1:7904/ingest/86615625-6ae5-4e98-a1da-0a5f0f15fc42',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'94b3c3'},body:JSON.stringify({sessionId:'94b3c3',hypothesisId:'H1',location:'historicoWebPage:init',message:'auth init ok',data:{logado:Boolean(sessao.session?.user?.email),loginHidden:elLogin.classList.contains('hidden')},timestamp:Date.now(),runId:'post-fix'})}).catch(()=>{});
-    // #endregion
 
     supabase.auth.onAuthStateChange((_event, session) => {
       if (session?.user?.email) mostrarApp(session.user.email);
