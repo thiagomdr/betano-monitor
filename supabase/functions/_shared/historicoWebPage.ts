@@ -1025,8 +1025,8 @@ export function buildHistoricoTemplate(): string {
       };
     }
 
-    function alertaParaCardView(alerta, jogoColeta) {
-      const estado = inferirEstadoAlerta(alerta);
+    function alertaParaCardView(alerta, jogoColeta, estadoJogoGrupo) {
+      const estado = inferirEstadoAlerta(alerta, estadoJogoGrupo);
       const odds = oddsDoAlerta(alerta, jogoColeta);
       const betanoUrl = alerta.url_partida ?? jogoColeta?.url_partida ?? null;
       return {
@@ -1308,8 +1308,15 @@ export function buildHistoricoTemplate(): string {
       return PERIODOS_AO_VIVO.has(periodo.trim()) ? 'ao_vivo' : 'finalizado';
     }
 
-    /** Alertas são eventos passados: Q2 no disparo não implica jogo ainda ao vivo. */
-    function inferirEstadoAlerta(alerta) {
+    /** Alertas são eventos passados; segue estado do jogo nas coletas quando disponível. */
+    function inferirEstadoAlerta(alerta, estadoJogoGrupo) {
+      if (estadoJogoGrupo === 'finalizado') {
+        // #region agent log
+        fetch('http://127.0.0.1:7904/ingest/86615625-6ae5-4e98-a1da-0a5f0f15fc42',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'94b3c3'},body:JSON.stringify({sessionId:'94b3c3',hypothesisId:'H1',location:'inferirEstadoAlerta',message:'finalizado via grupo coletas',data:{gameKey:alerta.game_key,periodo:alerta.periodo_atual},timestamp:Date.now(),runId:'post-fix-alertas'})}).catch(()=>{});
+        // #endregion
+        return 'finalizado';
+      }
+
       const periodo = String(alerta.periodo_atual ?? '').trim();
       if (/final|fim|ft|encerrado/i.test(periodo)) {
         return 'finalizado';
@@ -1324,9 +1331,14 @@ export function buildHistoricoTemplate(): string {
       }
 
       const idadeMs = Date.now() - disparado;
-      const JANELA_AO_VIVO_MS = 90 * 60 * 1000;
-      let estado = 'finalizado';
-      if (idadeMs <= JANELA_AO_VIVO_MS && PERIODOS_AO_VIVO.has(periodo)) estado = 'ao_vivo';
+      if (idadeMs > JANELA_SEM_ENTRADA_MS) {
+        // #region agent log
+        fetch('http://127.0.0.1:7904/ingest/86615625-6ae5-4e98-a1da-0a5f0f15fc42',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'94b3c3'},body:JSON.stringify({sessionId:'94b3c3',hypothesisId:'H2',location:'inferirEstadoAlerta',message:'finalizado alerta antigo',data:{gameKey:alerta.game_key,periodo,idadeMs},timestamp:Date.now(),runId:'post-fix-alertas'})}).catch(()=>{});
+        // #endregion
+        return 'finalizado';
+      }
+
+      const estado = PERIODOS_AO_VIVO.has(periodo) ? 'ao_vivo' : 'finalizado';
       return estado;
     }
 
@@ -1604,9 +1616,10 @@ export function buildHistoricoTemplate(): string {
       '</div>';
     }
 
-    function renderAlertaCard(item) {
+    function renderAlertaCard(item, estadoPorGameKey) {
       const { alerta, jogo } = item;
-      const base = alertaParaCardView(alerta, jogo);
+      const estadoGrupo = estadoPorGameKey?.get(alerta.game_key) ?? null;
+      const base = alertaParaCardView(alerta, jogo, estadoGrupo);
       const periodoAtual = periodoValido(alerta.periodo_atual)
         ? String(alerta.periodo_atual).trim()
         : 'Finalizado';
@@ -1620,8 +1633,8 @@ export function buildHistoricoTemplate(): string {
       '</article>';
     }
 
-    function renderListaAlertas(alertas) {
-      elConteudo.innerHTML = '<div class="lista">' + alertas.map(renderAlertaCard).join('') + '</div>';
+    function renderListaAlertas(alertas, estadoPorGameKey) {
+      elConteudo.innerHTML = '<div class="lista">' + alertas.map((item) => renderAlertaCard(item, estadoPorGameKey)).join('') + '</div>';
 
       elConteudo.querySelectorAll('.card-menu-kebab').forEach((btn) => {
         btn.addEventListener('click', (e) => {
@@ -1975,10 +1988,14 @@ export function buildHistoricoTemplate(): string {
       if (!silencioso) renderLoading();
       try {
         if (abaAtiva === 'alertas') {
-          const alertas = await buscarDadosAlertas();
+          const [alertas, grupos] = await Promise.all([
+            buscarDadosAlertas(),
+            buscarDados(),
+          ]);
+          const estadoPorGameKey = new Map(grupos.map((g) => [g.gameKey, g.estado]));
           atualizarStatsHistorico({ total: alertas.length });
           if (alertas.length === 0) renderVazioAlertas();
-          else renderListaAlertas(alertas);
+          else renderListaAlertas(alertas, estadoPorGameKey);
           return;
         }
 
