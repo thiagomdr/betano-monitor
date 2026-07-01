@@ -28,11 +28,14 @@ if (-not $env:SUPABASE_ACCESS_TOKEN) {
   exit 1
 }
 
-Write-Host "Deploy betano-coleta + betano-coleta-cron + betano-probe -> projeto $ProjectRef ..." -ForegroundColor Cyan
+Write-Host "Deploy betano-coleta + betano-coleta-cron + betano-alertas-avaliar + betano-probe -> projeto $ProjectRef ..." -ForegroundColor Cyan
 npx supabase functions deploy betano-coleta --project-ref $ProjectRef
 if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
 
 npx supabase functions deploy betano-coleta-cron --project-ref $ProjectRef
+if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+
+npx supabase functions deploy betano-alertas-avaliar --project-ref $ProjectRef
 if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
 
 npx supabase functions deploy betano-probe --project-ref $ProjectRef

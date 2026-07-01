@@ -7,7 +7,9 @@
     "build:historico-web": "node scripts/build-historico-template.mjs",
     "build:historico-html": "node scripts/build-historico-template.mjs && node scripts/fill-historico-html.mjs",
     "deploy:probe": "powershell -ExecutionPolicy Bypass -File scripts/deploy-betano-probe.ps1",
-    "deploy:coleta": "powershell -ExecutionPolicy Bypass -File scripts/deploy-betano-coleta.ps1"
+    "deploy:coleta": "powershell -ExecutionPolicy Bypass -File scripts/deploy-betano-coleta.ps1",
+    "deploy:supabase": "powershell -ExecutionPolicy Bypass -File scripts/deploy-supabase-remote.ps1",
+    "validate:betano-link": "node scripts/validate-betano-link.mjs"
   },
   "devDependencies": {
     "typescript": "5.9.2"

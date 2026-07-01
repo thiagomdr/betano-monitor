@@ -16,4 +16,4 @@ GitHub Pages (`historicoWebPage.ts`), Supabase Auth/DB/Realtime, Edge Functions 
 
 ## Regras
 
-`.cursor/rules/` — hierarquia, stack web, arquitetura, Supabase, checklist.
+`.cursor/rules/` — hierarquia, **agent executa tudo**, git, stack web, arquitetura, Supabase, checklist.

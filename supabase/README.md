@@ -34,6 +34,18 @@ Config: `web/historico/supabase.config.json` ou secrets `EXPO_PUBLIC_SUPABASE_*`
 
 API Betano `danae-webapi/api/live/overview/latest`, filtro basquete (BASK).
 
+### Deploy completo (migration + functions + validação)
+
+```powershell
+# Token: https://supabase.com/dashboard/account/tokens
+$env:SUPABASE_ACCESS_TOKEN = "seu-token"
+npm run deploy:supabase
+```
+
+Ou GitHub Actions → **Deploy Supabase** (secret `SUPABASE_ACCESS_TOKEN` no repositório).
+
+### Deploy só functions
+
 ```powershell
 npm run deploy:coleta
 ```
