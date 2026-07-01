@@ -24,7 +24,7 @@ if (-not $env:SUPABASE_ACCESS_TOKEN) {
   exit 1
 }
 
-Write-Host 'Aplicando migration esporte_futebol...' -ForegroundColor Cyan
+Write-Host 'Aplicando migration futebol_estatisticas...' -ForegroundColor Cyan
 node scripts/apply-migration-remote.mjs
 if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
 

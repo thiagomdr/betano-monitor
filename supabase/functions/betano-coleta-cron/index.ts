@@ -1,5 +1,9 @@
 import { executarColetaBetanoJson } from '../_shared/betanoCollect.ts';
 import {
+  isFutebolFetchDue,
+  processarFutebolEstatisticas,
+} from '../_shared/futebolEstatisticasService.ts';
+import {
   formatDelayHuman,
   isCronAuthorized,
   loadScheduler,
@@ -46,7 +50,6 @@ Deno.serve(async (req) => {
         skipped: true,
         summary: 'Monitor na nuvem parado',
         ativo: false,
-        debug: { hypothesisId: 'H3', ativo: false, usuarioId: scheduler.usuario_id ?? null },
       });
     }
 
@@ -55,19 +58,23 @@ Deno.serve(async (req) => {
         ok: false,
         skipped: true,
         summary: 'Sem usuário vinculado — faça login no app e toque Iniciar',
-        debug: { hypothesisId: 'H4', ativo: scheduler.ativo, usuarioId: null },
       });
     }
 
     const now = new Date();
+    const usuarioId = scheduler.usuario_id;
     const nextRunAt = scheduler.next_run_at ? new Date(scheduler.next_run_at) : null;
-    if (nextRunAt && nextRunAt.getTime() > now.getTime()) {
+    const basketballDue = !nextRunAt || nextRunAt.getTime() <= now.getTime();
+    const footballDue = await isFutebolFetchDue(usuarioId, now);
+
+    if (!basketballDue && !footballDue) {
       return jsonResponse({
         ok: true,
         skipped: true,
-        summary: 'Aguardando próximo horário',
+        summary: 'Aguardando próximo horário (basquete ou futebol)',
         nextRunAt: scheduler.next_run_at,
-        secondsUntil: Math.ceil((nextRunAt.getTime() - now.getTime()) / 1000),
+        basketballDue: false,
+        footballDue: false,
       });
     }
 
@@ -75,8 +82,18 @@ Deno.serve(async (req) => {
     const ranAt = new Date();
 
     let persist: { coletaId: string; alertas: number } | null = null;
-    if (coleta.games.length > 0) {
-      persist = await persistColetaComJogos(scheduler.usuario_id, {
+    let futebolStats = null;
+
+    if (coleta.ok && coleta.payload) {
+      const ranRadar = basketballDue;
+      futebolStats = await processarFutebolEstatisticas(usuarioId, coleta.payload, {
+        footballFetchDue: footballDue,
+        ranRadar,
+      }, ranAt);
+    }
+
+    if (basketballDue && coleta.games.length > 0) {
+      persist = await persistColetaComJogos(usuarioId, {
         resumoJson: coleta.resumoJson,
         sucesso: coleta.ok,
         erroMensagem: null,
@@ -84,12 +101,18 @@ Deno.serve(async (req) => {
       });
     }
 
-    await saveSchedulerPatch({
-      id: scheduler.id,
-      last_run_at: ranAt.toISOString(),
-    });
+    let proximo: string | null = scheduler.next_run_at;
+    let intervalMs: number | null = null;
 
-    const { nextRunAt: proximo, intervalMs } = await scheduleNextRun(scheduler, ranAt);
+    if (basketballDue) {
+      await saveSchedulerPatch({
+        id: scheduler.id,
+        last_run_at: ranAt.toISOString(),
+      });
+      const next = await scheduleNextRun(scheduler, ranAt);
+      proximo = next.nextRunAt;
+      intervalMs = next.intervalMs;
+    }
 
     return jsonResponse({
       collectedAt: ranAt.toISOString(),
@@ -100,9 +123,12 @@ Deno.serve(async (req) => {
       alertas: persist?.alertas ?? 0,
       coletaId: persist?.coletaId ?? null,
       fetch: coleta.fetch,
+      basketballDue,
+      footballDue,
+      futebol: futebolStats,
       nextRunAt: proximo,
       nextDelayMs: intervalMs,
-      nextDelayHuman: formatDelayHuman(intervalMs),
+      nextDelayHuman: intervalMs != null ? formatDelayHuman(intervalMs) : null,
       preview: coleta.games.slice(0, 5).map(
         (g) => `${g.homeTeam} ${g.homeScore}–${g.awayScore} ${g.awayTeam} · ${g.period}`,
       ),

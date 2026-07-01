@@ -2,7 +2,7 @@
 
 Progresso do **painel web + Supabase**. O Agent deve marcar `[x]` ao concluir cada item e atualizar a data abaixo.
 
-**Última atualização:** 2026-06-29 (futebol + coleta últimos 5 min + UI por esporte)
+**Última atualização:** 2026-06-29 (estatísticas futebol — radar + coleta 40–50 s)
 
 ---
 
@@ -30,6 +30,7 @@ Progresso do **painel web + Supabase**. O Agent deve marcar `[x]` ao concluir ca
 - [x] Título e barra de stats alinhados à margem esquerda dos cards (desktop)
 - [x] Link Betano nos cards (Coletas e Alertas) — `url` da API overview
 - [x] Seletor **Basquete** | **Futebol** — cards, alertas e regras separados por esporte
+- [x] Aba Futebol **Estatísticas** — tabela `futebol_partidas` + % gol nos últimos 5 min
 - [ ] Paginação completa `jogos_coleta` (limite 1000 por batch)
 
 ---
@@ -39,6 +40,7 @@ Progresso do **painel web + Supabase**. O Agent deve marcar `[x]` ao concluir ca
 - [x] Migrations: `coletas_betano`, `jogos_coleta`, `alertas_betano`
 - [x] `regras_alerta`, `coleta_scheduler`, `jogos_estado_monitor`
 - [x] Coluna `esporte` (basquete/futebol) + períodos futebol `1T`/`2T` em regras
+- [x] Tabelas estatística futebol: `futebol_partidas`, `futebol_leituras`, `futebol_agenda`
 - [x] RLS por `auth.uid()`
 - [x] Realtime: coletas, jogos, alertas, scheduler
 - [x] Delete RLS: jogos e alertas (painel)
@@ -49,8 +51,8 @@ Progresso do **painel web + Supabase**. O Agent deve marcar `[x]` ao concluir ca
 
 ## 4. Edge Functions e coleta automática
 
-- [x] `betano-coleta` — API Betano overview/latest + BASK (todos ao vivo) + FOOT (últimos 5 min do 2º tempo)
-- [x] `betano-coleta-cron` — scheduler 4–8 min + persistência
+- [x] `betano-coleta` — API Betano overview/latest (basquete nos cards)
+- [x] `betano-coleta-cron` — basquete 4–8 min + radar futebol + intensivo 40–50 s em lote
 - [x] `betano-alertas-avaliar` — regras configuráveis
 - [x] `betano-probe` — diagnóstico Betano na nuvem
 - [x] Migration `pg_cron` aplicada

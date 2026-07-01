@@ -34,7 +34,6 @@ Deno.serve(async (req) => {
         fetch: coleta.fetch,
         games: coleta.games,
         gamesBasquete: coleta.gamesBasquete,
-        gamesFutebol: coleta.gamesFutebol,
         futebolAoVivoTotal: coleta.futebolAoVivoTotal,
         gameCount: coleta.gameCount,
         preview: coleta.games.slice(0, 5).map(formatGameLine),

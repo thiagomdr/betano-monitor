@@ -1,8 +1,6 @@
 import { fetchBetanoLiveOverviewAsChrome } from './betanoFetch.ts';
 import {
   type BetanoOverviewPayload,
-  combinarJogosColeta,
-  filtrarFutebolElegivelColeta,
   type ParsedGame,
   parseBasketballFromOverview,
   parseFootballFromOverview,
@@ -14,9 +12,9 @@ export interface BetanoCollectResult {
   summary: string;
   games: ParsedGame[];
   gamesBasquete: ParsedGame[];
-  gamesFutebol: ParsedGame[];
   futebolAoVivoTotal: number;
   gameCount: number;
+  payload: BetanoOverviewPayload | null;
   resumoJson: string;
   fetch: {
     httpStatus: number;
@@ -33,7 +31,6 @@ export interface BetanoCollectResult {
 
 function montarResumo(
   gamesBasquete: ParsedGame[],
-  gamesFutebol: ParsedGame[],
   futebolAoVivoTotal: number,
   baskLeagueIds: number[],
   footLeagueIds: number[],
@@ -42,12 +39,8 @@ function montarResumo(
   if (gamesBasquete.length > 0) {
     partes.push(`${gamesBasquete.length} basquete`);
   }
-  if (gamesFutebol.length > 0) {
-    partes.push(`${gamesFutebol.length} futebol (últimos 5 min)`);
-  } else if (futebolAoVivoTotal > 0) {
-    partes.push(
-      `${futebolAoVivoTotal} futebol ao vivo fora da janela de coleta (só 2º tempo, últimos 5 min)`,
-    );
+  if (futebolAoVivoTotal > 0) {
+    partes.push(`${futebolAoVivoTotal} futebol ao vivo (estatísticas)`);
   }
 
   if (partes.length > 0) return partes.join(' · ');
@@ -55,7 +48,7 @@ function montarResumo(
   if (baskLeagueIds.length === 0 && footLeagueIds.length === 0) {
     return 'JSON OK, mas sem ligas BASK/FOOT no momento';
   }
-  return 'JSON OK, sem jogos elegíveis para coleta (basquete ao vivo ou futebol nos últimos 5 min do 2º tempo)';
+  return 'JSON OK, sem jogos de basquete ao vivo no momento';
 }
 
 export async function executarColetaBetanoJson(): Promise<BetanoCollectResult> {
@@ -82,9 +75,9 @@ export async function executarColetaBetanoJson(): Promise<BetanoCollectResult> {
       summary,
       games: [],
       gamesBasquete: [],
-      gamesFutebol: [],
       futebolAoVivoTotal: 0,
       gameCount: 0,
+      payload: null,
       resumoJson: JSON.stringify({ summary, fetch: fetchMeta }),
       fetch: fetchMeta,
       blockReason: fetchResult.blockReason,
@@ -100,9 +93,9 @@ export async function executarColetaBetanoJson(): Promise<BetanoCollectResult> {
       summary,
       games: [],
       gamesBasquete: [],
-      gamesFutebol: [],
       futebolAoVivoTotal: 0,
       gameCount: 0,
+      payload: null,
       resumoJson: JSON.stringify({ summary, fetch: fetchMeta }),
       fetch: fetchMeta,
       blockReason: null,
@@ -112,11 +105,8 @@ export async function executarColetaBetanoJson(): Promise<BetanoCollectResult> {
   const payload = fetchResult.payload as BetanoOverviewPayload;
   const gamesBasquete = parseBasketballFromOverview(payload);
   const futebolAoVivo = parseFootballFromOverview(payload);
-  const gamesFutebol = filtrarFutebolElegivelColeta(payload);
-  const games = combinarJogosColeta(gamesBasquete, gamesFutebol);
   const summary = montarResumo(
     gamesBasquete,
-    gamesFutebol,
     futebolAoVivo.length,
     fetchMeta.baskLeagueIds,
     footLeagueIds,
@@ -126,16 +116,15 @@ export async function executarColetaBetanoJson(): Promise<BetanoCollectResult> {
     ok: true,
     blocked: false,
     summary,
-    games,
+    games: gamesBasquete,
     gamesBasquete,
-    gamesFutebol,
     futebolAoVivoTotal: futebolAoVivo.length,
-    gameCount: games.length,
+    gameCount: gamesBasquete.length,
+    payload,
     resumoJson: JSON.stringify({
       summary,
-      gameCount: games.length,
+      gameCount: gamesBasquete.length,
       gamesBasquete: gamesBasquete.length,
-      gamesFutebol: gamesFutebol.length,
       futebolAoVivoTotal: futebolAoVivo.length,
       fetch: fetchMeta,
     }),

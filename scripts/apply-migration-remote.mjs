@@ -15,7 +15,7 @@ if (!token) {
   process.exit(1);
 }
 
-const sqlPath = join(root, 'supabase/migrations/20260701120000_esporte_futebol.sql');
+const sqlPath = join(root, 'supabase/migrations/20260702120000_futebol_estatisticas.sql');
 const query = readFileSync(sqlPath, 'utf8');
 
 const res = await fetch(`https://api.supabase.com/v1/projects/${projectRef}/database/query`, {
