@@ -2,6 +2,7 @@ import type { SupabaseClient } from 'https://esm.sh/@supabase/supabase-js@2.49.1
 
 import {
   addMs,
+  FOOT_INTENSIVE_MIN_MS,
   FOOT_RADAR_MARGEM_MIN,
   pickFootballIntensiveDelayMs,
 } from './betanoFootballDelay.ts';
@@ -51,6 +52,13 @@ export interface ProcessarFutebolResult {
   partidasFinalizadas: number;
   nextFetchAt: string | null;
   modo: 'radar' | 'intenso';
+  debug?: {
+    footballFetchDue: boolean;
+    intensivoDue: boolean;
+    skippedIntervalo: boolean;
+    emJanela: number;
+    lastIntensiveAt: string | null;
+  };
 }
 
 function db(): SupabaseClient {
@@ -70,8 +78,27 @@ export async function loadFutebolAgenda(usuarioId: string): Promise<FutebolAgend
 
 export async function isFutebolFetchDue(usuarioId: string, now: Date): Promise<boolean> {
   const agenda = await loadFutebolAgenda(usuarioId);
-  if (!agenda?.next_fetch_at) return false;
+  if (!agenda) return false;
+  if (agenda.modo === 'intenso' && !agenda.next_fetch_at) return true;
+  if (!agenda.next_fetch_at) return false;
   return new Date(agenda.next_fetch_at).getTime() <= now.getTime();
+}
+
+function intensivoIntervaloOk(agenda: FutebolAgendaRow | null, now: Date): boolean {
+  if (!agenda?.last_intensive_at) return true;
+  const elapsed = now.getTime() - new Date(agenda.last_intensive_at).getTime();
+  return elapsed >= FOOT_INTENSIVE_MIN_MS - 3_000;
+}
+
+function resolverIntensivoDue(
+  optsFootballDue: boolean,
+  emJanelaCount: number,
+  agenda: FutebolAgendaRow | null,
+): boolean {
+  if (optsFootballDue) return true;
+  if (emJanelaCount === 0) return false;
+  if (!agenda?.last_intensive_at) return true;
+  return false;
 }
 
 async function upsertAgenda(
@@ -250,6 +277,7 @@ async function processarLeiturasLote(
   usuarioId: string,
   snapshots: FootballScoutSnapshot[],
   now: Date,
+  opts: { gravarLeituras: boolean },
 ): Promise<{ leituras: number; finalizadas: number; aindaEmJanela: number }> {
   const emJanela = snapshotsEmJanelaFinal(snapshots);
   const snapPorEvent = new Map(snapshots.map((s) => [s.eventId, s]));
@@ -259,7 +287,8 @@ async function processarLeiturasLote(
 
   const ativos = await loadPartidasAtivas(usuarioId);
 
-  for (const snap of emJanela) {
+  if (opts.gravarLeituras) {
+    for (const snap of emJanela) {
     let partida = await loadPartidaPorEventId(usuarioId, snap.eventId);
 
     if (!partida) {
@@ -310,6 +339,7 @@ async function processarLeiturasLote(
     });
     if (errLeitura) throw new Error(errLeitura.message);
     leituras += 1;
+    }
   }
 
   for (const p of ativos.filter((x) => x.status === 'em_janela')) {
@@ -360,25 +390,34 @@ export async function processarFutebolEstatisticas(
   now: Date = new Date(),
 ): Promise<ProcessarFutebolResult> {
   const snapshots = parseFootballScoutFromOverview(payload, now);
+  const agenda = await loadFutebolAgenda(usuarioId);
   const { nextFetchAt: radarNext, emJanela } = await atualizarRadar(usuarioId, snapshots, now);
 
   let leiturasGravadas = 0;
   let partidasFinalizadas = 0;
   let aindaEmJanela = emJanela.length;
-  let modo: 'radar' | 'intenso' = 'radar';
-  let nextFetchAt = radarNext;
+  let modo: 'radar' | 'intenso' = emJanela.length > 0 ? 'intenso' : 'radar';
+  let nextFetchAt = emJanela.length > 0
+    ? (agenda?.next_fetch_at ?? addMs(now, pickFootballIntensiveDelayMs()))
+    : radarNext;
 
-  const deveIntensivo = opts.footballFetchDue || emJanela.length > 0;
+  const intensivoDue = resolverIntensivoDue(opts.footballFetchDue, emJanela.length, agenda);
+  const skippedIntervalo = intensivoDue && !intensivoIntervaloOk(agenda, now);
+  const gravarLeituras = intensivoDue && !skippedIntervalo;
 
-  if (deveIntensivo) {
-    const res = await processarLeiturasLote(usuarioId, snapshots, now);
+  if (intensivoDue || emJanela.length > 0) {
+    const res = await processarLeiturasLote(usuarioId, snapshots, now, { gravarLeituras });
     leiturasGravadas = res.leituras;
     partidasFinalizadas = res.finalizadas;
     aindaEmJanela = res.aindaEmJanela;
 
     if (aindaEmJanela > 0) {
       modo = 'intenso';
-      nextFetchAt = addMs(now, pickFootballIntensiveDelayMs());
+      if (gravarLeituras) {
+        nextFetchAt = addMs(now, pickFootballIntensiveDelayMs());
+      } else if (agenda?.next_fetch_at) {
+        nextFetchAt = agenda.next_fetch_at;
+      }
     } else {
       modo = 'radar';
       nextFetchAt = radarNext;
@@ -406,6 +445,13 @@ export async function processarFutebolEstatisticas(
     partidasFinalizadas,
     nextFetchAt,
     modo,
+    debug: {
+      footballFetchDue: opts.footballFetchDue,
+      intensivoDue,
+      skippedIntervalo,
+      emJanela: emJanela.length,
+      lastIntensiveAt: agenda?.last_intensive_at ?? null,
+    },
   };
 }
 
@@ -424,8 +470,10 @@ export async function sincronizarFutebolRadarImediato(
   const snapshots = parseFootballScoutFromOverview(payload, now);
   const localizadosJson = snapshots.filter((s) => !s.isFinished).length;
 
+  const footballDue = await isFutebolFetchDue(usuarioId, now);
+
   const processamento = await processarFutebolEstatisticas(usuarioId, payload, {
-    footballFetchDue: true,
+    footballFetchDue: footballDue,
     ranRadar: true,
   }, now);
 

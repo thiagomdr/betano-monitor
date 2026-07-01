@@ -1,6 +1,6 @@
 export const HISTORICO_URL_PLACEHOLDER = '__SUPABASE_URL__';
 export const HISTORICO_ANON_KEY_PLACEHOLDER = '__SUPABASE_ANON_KEY__';
-export const PAINEL_BUILD_ID = 'futebol-collapse-v2-20260701';
+export const PAINEL_BUILD_ID = 'futebol-intervalo-v1-20260701';
 
 export function buildHistoricoTemplate(): string {
   const configJson = `{"url":"${HISTORICO_URL_PLACEHOLDER}","anonKey":"${HISTORICO_ANON_KEY_PLACEHOLDER}"}`;
@@ -991,6 +991,7 @@ export function buildHistoricoTemplate(): string {
     let expandidos = new Set();
     let futebolHistoricoExpandidos = new Set();
     let ultimoPayloadFutebol = null;
+    let futebolCarregando = false;
     let refreshTimer = null;
     let statusTimer = null;
     let realtimeChannel = null;
@@ -2052,6 +2053,17 @@ export function buildHistoricoTemplate(): string {
       }
     }
 
+    function formatarDataComSegundos(iso) {
+      if (!iso) return '—';
+      try {
+        return new Date(iso).toLocaleString('pt-BR', {
+          day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit', second: '2-digit',
+        });
+      } catch {
+        return iso;
+      }
+    }
+
     function normalizarJogoAoVivoJson(j) {
       return {
         time_casa: j.homeTeam,
@@ -2169,7 +2181,7 @@ export function buildHistoricoTemplate(): string {
         const clsGol = String(maisGols).startsWith('+') ? ' class="futebol-mais-gols-sim"' : '';
         const placar = l.placar_casa + '–' + l.placar_fora;
         return '<tr>' +
-          '<td>' + escapeHtml(formatarDataCurta(l.coletado_em)) + '</td>' +
+          '<td>' + escapeHtml(formatarDataComSegundos(l.coletado_em)) + '</td>' +
           '<td>' + escapeHtml(l.minuto_relogio?.trim() || '—') + ' <span style="color:#666">(' + escapeHtml(placar) + ')</span></td>' +
           '<td' + clsGol + '>' + escapeHtml(maisGols) + '</td>' +
           '<td>' + escapeHtml(formatarOddManter(l.odd_manter_placar)) + '</td>' +
@@ -2290,6 +2302,53 @@ export function buildHistoricoTemplate(): string {
       return '<h3 class="futebol-secao-titulo">Histórico — janela final (85\' até o fim)</h3>' +
         '<p style="color:#888;font-size:12px;margin:0 0 8px">Clique no jogo para ver as coletas. Verde = sem gol nos 5 min · Vermelho = com gol.</p>' +
         '<div class="futebol-historico-lista">' + blocos + '</div>';
+    }
+
+    async function aplicarPainelFutebol(dados, aoVivoJson) {
+      atualizarStatsHistorico({
+        futebolFinalizadas: dados.stats.finalizadas,
+        futebolPctGol: dados.stats.pctComGol,
+        futebolAoVivo: aoVivoJson.length,
+      });
+      ultimoPayloadFutebol = { ...dados, aoVivoJson };
+      renderEstatisticasFutebol(ultimoPayloadFutebol);
+    }
+
+    async function carregarFutebol(silencioso) {
+      if (futebolCarregando) return;
+      futebolCarregando = true;
+      try {
+        let aoVivoJson = ultimoPayloadFutebol?.aoVivoJson ?? [];
+        if (!silencioso) {
+          const coleta = await executarColetaFutebolRadar();
+          aoVivoJson = Array.isArray(coleta.footballRadar) ? coleta.footballRadar : [];
+        }
+        const dados = await buscarEstatisticasFutebol();
+        // #region agent log
+        fetch('http://127.0.0.1:7904/ingest/86615625-6ae5-4e98-a1da-0a5f0f15fc42', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', 'X-Debug-Session-Id': '94b3c3' },
+          body: JSON.stringify({
+            sessionId: '94b3c3',
+            runId: 'futebol-intervalo-debug',
+            hypothesisId: 'H1-H3',
+            location: 'historicoWebPage.ts:carregarFutebol',
+            message: 'futebol load path',
+            data: {
+              buildId: PAINEL_BUILD_ID,
+              silencioso,
+              chamouColeta: !silencioso,
+              aoVivoCount: aoVivoJson.length,
+              futebolSync: !silencioso ? 'betano-coleta' : 'db-only',
+            },
+            timestamp: Date.now(),
+          }),
+        }).catch(() => {});
+        // #endregion
+        await aplicarPainelFutebol(dados, aoVivoJson);
+      } finally {
+        futebolCarregando = false;
+      }
     }
 
     function renderEstatisticasFutebol(payload) {
@@ -2735,8 +2794,10 @@ export function buildHistoricoTemplate(): string {
         elBtnColetar.disabled = true;
         elBtnColetar.textContent = 'Coletando...';
         try {
-          await executarColetaFutebolRadar();
-          await carregar(true);
+          const coleta = await executarColetaFutebolRadar();
+          const dados = await buscarEstatisticasFutebol();
+          const aoVivoJson = Array.isArray(coleta.footballRadar) ? coleta.footballRadar : [];
+          await aplicarPainelFutebol(dados, aoVivoJson);
         } catch (e) {
           alert(e instanceof Error ? e.message : 'Falha na coleta de futebol');
         } finally {
@@ -2840,37 +2901,7 @@ export function buildHistoricoTemplate(): string {
         }
 
         if (esporteAtivo === 'futebol') {
-          const coleta = await executarColetaFutebolRadar();
-          const dados = await buscarEstatisticasFutebol();
-          const aoVivoJson = Array.isArray(coleta.footballRadar) ? coleta.footballRadar : [];
-          // #region agent log
-          fetch('http://127.0.0.1:7904/ingest/86615625-6ae5-4e98-a1da-0a5f0f15fc42', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json', 'X-Debug-Session-Id': '94b3c3' },
-            body: JSON.stringify({
-              sessionId: '94b3c3',
-              runId: 'football-time-debug',
-              hypothesisId: 'H1-H4',
-              location: 'historicoWebPage.ts:carregar:futebol',
-              message: 'footballRadar sample from coleta',
-              data: {
-                buildId: PAINEL_BUILD_ID,
-                count: aoVivoJson.length,
-                sample: aoVivoJson[0] ?? null,
-                hasTempoDecorrido: aoVivoJson[0]?.tempoDecorrido != null,
-                minutesUntil85: aoVivoJson[0]?.minutesUntil85 ?? null,
-              },
-              timestamp: Date.now(),
-            }),
-          }).catch(() => {});
-          // #endregion
-          atualizarStatsHistorico({
-            futebolFinalizadas: dados.stats.finalizadas,
-            futebolPctGol: dados.stats.pctComGol,
-            futebolAoVivo: aoVivoJson.length,
-          });
-          ultimoPayloadFutebol = { ...dados, aoVivoJson };
-          renderEstatisticasFutebol(ultimoPayloadFutebol);
+          await carregarFutebol(silencioso);
           return;
         }
 
