@@ -1,6 +1,6 @@
 export const HISTORICO_URL_PLACEHOLDER = '__SUPABASE_URL__';
 export const HISTORICO_ANON_KEY_PLACEHOLDER = '__SUPABASE_ANON_KEY__';
-export const PAINEL_BUILD_ID = 'futebol-intervalo-v1-20260701';
+export const PAINEL_BUILD_ID = 'futebol-ao-vivo-collapse-20260701';
 
 export function buildHistoricoTemplate(): string {
   const configJson = `{"url":"${HISTORICO_URL_PLACEHOLDER}","anonKey":"${HISTORICO_ANON_KEY_PLACEHOLDER}"}`;
@@ -761,6 +761,41 @@ export function buildHistoricoTemplate(): string {
     .futebol-historico-detalhe {
       margin-top: 10px;
     }
+    .futebol-ao-vivo-secao {
+      background: #1a1a1a;
+      border-radius: 10px;
+      padding: 12px;
+      border: 1px solid #2a2a2a;
+      margin-bottom: 16px;
+    }
+    .futebol-ao-vivo-toggle {
+      cursor: pointer;
+      width: 100%;
+      text-align: left;
+      background: transparent;
+      border: none;
+      padding: 0;
+      color: inherit;
+      font: inherit;
+    }
+    .futebol-ao-vivo-cabecalho {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      flex-wrap: wrap;
+      font-size: 13px;
+      line-height: 1.5;
+      color: #ccc;
+    }
+    .futebol-ao-vivo-cabecalho strong { color: #fff; font-size: 15px; }
+    .futebol-ao-vivo-resumo {
+      font-size: 12px;
+      color: #888;
+      flex: 1 1 auto;
+    }
+    .futebol-ao-vivo-detalhe {
+      margin-top: 10px;
+    }
     .futebol-historico-cabecalho {
       font-size: 13px;
       line-height: 1.5;
@@ -990,6 +1025,7 @@ export function buildHistoricoTemplate(): string {
     let regraEmEdicaoId = null;
     let expandidos = new Set();
     let futebolHistoricoExpandidos = new Set();
+    let futebolAoVivoSecaoAberta = true;
     let ultimoPayloadFutebol = null;
     let futebolCarregando = false;
     let refreshTimer = null;
@@ -2110,10 +2146,18 @@ export function buildHistoricoTemplate(): string {
       });
     }
 
-    function renderTabelaAoVivoFutebol(aoVivo) {
+    function renderTabelaAoVivoFutebol(aoVivo, secaoAberta) {
       if (!aoVivo.length) {
-        return '<p class="aviso">Nenhum jogo de futebol ao vivo no JSON neste momento.</p>';
+        return '<section class="futebol-ao-vivo-secao">' +
+          '<div class="futebol-ao-vivo-cabecalho"><strong>Jogos ao vivo</strong>' +
+          '<span class="futebol-ao-vivo-resumo">Nenhum jogo FOOT no JSON</span></div>' +
+        '</section>';
       }
+      const emJanela = aoVivo.filter((p) => p.em_janela).length;
+      const resumoTxt = aoVivo.length + ' jogo(s)' +
+        (emJanela > 0 ? ' · ' + emJanela + ' em janela' : '') +
+        ' · clique para ' + (secaoAberta ? 'recolher' : 'expandir');
+      const detalheCls = secaoAberta ? '' : ' hidden';
       const linhas = aoVivo.map((p) => {
         const placar = (p.placar_casa_atual != null && p.placar_fora_atual != null)
           ? p.placar_casa_atual + '–' + p.placar_fora_atual
@@ -2129,11 +2173,30 @@ export function buildHistoricoTemplate(): string {
           '<td>' + escapeHtml(status) + '</td>' +
         '</tr>';
       }).join('');
-      return '<h3 class="futebol-secao-titulo">Jogos ao vivo</h3>' +
-        '<p style="color:#888;font-size:12px;margin:0 0 8px">Todos os jogos FOOT do JSON Betano, em qualquer minuto. Coleta ao abrir Futebol ou Coletar Agora.</p>' +
-        '<div class="futebol-tabela-wrap"><table class="futebol-tabela"><thead><tr>' +
-        '<th>Partida</th><th>Liga</th><th>Tempo de jogo</th><th>Placar</th><th>Restante até 85\'</th><th>ETA ~85\'</th><th>Status</th>' +
-        '</tr></thead><tbody>' + linhas + '</tbody></table></div>';
+      return '<section class="futebol-ao-vivo-secao">' +
+        '<button type="button" class="futebol-ao-vivo-toggle" aria-expanded="' + (secaoAberta ? 'true' : 'false') + '">' +
+          '<div class="futebol-ao-vivo-cabecalho">' +
+            '<span class="expand-icon">' + (secaoAberta ? '▼' : '▶') + '</span>' +
+            '<strong>Jogos ao vivo</strong>' +
+            '<span class="futebol-ao-vivo-resumo">' + escapeHtml(resumoTxt) + '</span>' +
+          '</div>' +
+        '</button>' +
+        '<div class="futebol-ao-vivo-detalhe' + detalheCls + '">' +
+          '<p style="color:#888;font-size:12px;margin:0 0 8px">Todos os jogos FOOT do JSON Betano, em qualquer minuto. Coleta ao abrir Futebol ou Coletar Agora.</p>' +
+          '<div class="futebol-tabela-wrap"><table class="futebol-tabela"><thead><tr>' +
+          '<th>Partida</th><th>Liga</th><th>Tempo de jogo</th><th>Placar</th><th>Restante até 85\'</th><th>ETA ~85\'</th><th>Status</th>' +
+          '</tr></thead><tbody>' + linhas + '</tbody></table></div>' +
+        '</div>' +
+      '</section>';
+    }
+
+    function wireFutebolAoVivoToggle() {
+      elConteudo.querySelectorAll('.futebol-ao-vivo-toggle').forEach((btn) => {
+        btn.addEventListener('click', () => {
+          futebolAoVivoSecaoAberta = !futebolAoVivoSecaoAberta;
+          if (ultimoPayloadFutebol) renderEstatisticasFutebol(ultimoPayloadFutebol);
+        });
+      });
     }
 
     function totalGolsPartida(casa, fora) {
@@ -2380,9 +2443,10 @@ export function buildHistoricoTemplate(): string {
       '</div>';
 
       elConteudo.innerHTML = '<div class="futebol-stats-wrap">' + resumo +
-        renderTabelaAoVivoFutebol(aoVivo) +
+        renderTabelaAoVivoFutebol(aoVivo, futebolAoVivoSecaoAberta) +
         renderTabelaHistoricoFutebol(historico, leiturasMap) +
       '</div>';
+      wireFutebolAoVivoToggle();
       wireFutebolHistoricoToggle();
       // #region agent log
       requestAnimationFrame(() => {
