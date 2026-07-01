@@ -2,7 +2,7 @@
 
 Progresso do **painel web + Supabase**. O Agent deve marcar `[x]` ao concluir cada item e atualizar a data abaixo.
 
-**Última atualização:** 2026-06-29 (reverte grid cards; alinha título e stats à coluna dos cards)
+**Última atualização:** 2026-06-29 (tela Regras + lógica quarto a partir de / ODD ≥)
 
 ---
 
@@ -23,7 +23,7 @@ Progresso do **painel web + Supabase**. O Agent deve marcar `[x]` ao concluir ca
 - [x] Abas **Coletas** | **Alertas**
 - [x] Cards por jogo (`game_key`) + timeline ao expandir
 - [x] Coletar Agora + Iniciar/Parar monitor (scheduler nuvem)
-- [x] Regras de alerta (ícone config na aba Alertas)
+- [x] Regras de alerta — aba Regras (listar, criar, editar, excluir)
 - [x] Menu ⋮ excluir jogo (Coletas) e excluir alerta (Alertas)
 - [x] Status alertas: finalizado para disparos antigos
 - [x] Supabase Realtime + polling 45s
@@ -59,7 +59,7 @@ Progresso do **painel web + Supabase**. O Agent deve marcar `[x]` ao concluir ca
 
 ## 5. Alertas
 
-- [x] Motor `evaluateAlertRules` na nuvem
+- [x] Motor `evaluateAlertRules` na nuvem (quarto ≥ regra, diff ≥ pontos, odd líder ≥ mínimo)
 - [x] `alertas_betano` + join `regras_alerta` no painel
 - [x] Excluir alerta não afeta coletas; excluir jogo não afeta alertas
 - [ ] Telegram (`telegram_config` + Edge Function)

@@ -373,72 +373,94 @@ export function buildHistoricoTemplate(): string {
       box-sizing: border-box;
     }
     .timeline-hora-linha { padding-right: 0; margin-bottom: 6px; }
-    .painel-regras {
-      position: fixed;
-      inset: 0;
-      background: rgba(0, 0, 0, 0.65);
-      z-index: 300;
-      display: flex;
-      align-items: flex-start;
-      justify-content: center;
-      padding: 16px 12px 32px;
-      overflow-y: auto;
+    .tela-regras {
+      padding: 12px 12px 32px;
+      max-width: 720px;
+      margin: 0 auto;
     }
-    .painel-regras-box {
-      width: 100%;
-      max-width: 420px;
-      background: #1a1a1a;
-      border: 1px solid #333;
-      border-radius: 12px;
-      padding: 16px;
-      margin-top: 8px;
-    }
-    .painel-regras-topo {
-      display: flex;
-      align-items: center;
-      justify-content: space-between;
-      margin-bottom: 12px;
-    }
-    .painel-regras-topo h2 { font-size: 16px; color: #fff; }
-    .btn-fechar-regras {
-      background: transparent;
-      border: none;
+    .regras-intro {
+      font-size: 13px;
       color: #aaa;
-      font-size: 22px;
-      line-height: 1;
-      padding: 4px 8px;
-      cursor: pointer;
+      line-height: 1.55;
+      margin-bottom: 20px;
+      padding: 12px;
+      background: #141414;
+      border: 1px solid #2a2a2a;
+      border-radius: 8px;
+    }
+    .regras-secao { margin-bottom: 24px; }
+    .regras-secao-titulo {
+      font-size: 14px;
+      font-weight: 700;
+      color: #fff;
+      margin-bottom: 10px;
     }
     .regra-item {
       display: flex;
-      align-items: center;
+      flex-wrap: wrap;
+      align-items: flex-start;
       gap: 8px;
-      padding: 10px;
+      padding: 12px;
       background: #141414;
       border: 1px solid #2a2a2a;
       border-radius: 8px;
       margin-bottom: 8px;
       font-size: 13px;
     }
-    .regra-item-texto { flex: 1; color: #eee; line-height: 1.4; }
+    .regra-item-corpo { flex: 1; min-width: 0; }
+    .regra-item-nome {
+      font-weight: 700;
+      color: #fff;
+      margin-bottom: 4px;
+      line-height: 1.3;
+    }
+    .regra-item-detalhe { color: #aaa; line-height: 1.45; }
     .regra-item.inativa { opacity: 0.45; }
+    .regra-item-acoes {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 6px;
+      width: 100%;
+    }
+    @media (min-width: 480px) {
+      .regra-item-acoes { width: auto; margin-left: auto; flex-wrap: nowrap; }
+    }
     .regra-btn {
       background: transparent;
       border: 1px solid #444;
       border-radius: 6px;
       color: #ccc;
       font-size: 11px;
-      padding: 4px 8px;
+      padding: 6px 10px;
       cursor: pointer;
+      white-space: nowrap;
     }
+    .regra-btn.editar { color: #c45c00; border-color: #55331a; }
     .regra-btn.excluir { color: #ff6b6b; border-color: #553333; }
     .form-regra {
-      display: grid;
-      grid-template-columns: 1fr 1fr;
-      gap: 8px;
-      margin-top: 12px;
-      padding-top: 12px;
-      border-top: 1px solid #333;
+      display: flex;
+      flex-direction: column;
+      gap: 14px;
+      padding: 16px;
+      background: #141414;
+      border: 1px solid #2a2a2a;
+      border-radius: 10px;
+    }
+    .form-regra-campo label {
+      display: block;
+      font-size: 12px;
+      font-weight: 600;
+      color: #ccc;
+      margin-bottom: 6px;
+      line-height: 1.4;
+    }
+    .form-regra-campo .campo-dica {
+      display: block;
+      font-size: 11px;
+      font-weight: 400;
+      color: #777;
+      margin-top: 4px;
+      line-height: 1.4;
     }
     .form-regra select,
     .form-regra input {
@@ -446,12 +468,19 @@ export function buildHistoricoTemplate(): string {
       background: #111;
       border: 1px solid #333;
       border-radius: 8px;
-      padding: 10px;
+      padding: 10px 12px;
       color: #fff;
       font-size: 14px;
     }
-    .form-regra button[type="submit"] {
-      grid-column: 1 / -1;
+    .form-regra-acoes {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+      margin-top: 4px;
+    }
+    .form-regra-acoes button[type="submit"] {
+      flex: 1;
+      min-width: 140px;
       background: #c45c00;
       color: #fff;
       border: none;
@@ -460,8 +489,14 @@ export function buildHistoricoTemplate(): string {
       font-weight: 600;
       cursor: pointer;
     }
-    .form-regra-nome {
-      grid-column: 1 / -1;
+    .btn-cancelar-edicao {
+      background: transparent;
+      color: #aaa;
+      border: 1px solid #444;
+      border-radius: 8px;
+      padding: 12px 16px;
+      font-size: 13px;
+      cursor: pointer;
     }
     .card-meta-regra {
       color: #c45c00;
@@ -486,35 +521,6 @@ export function buildHistoricoTemplate(): string {
       flex: 1;
       min-width: 0;
       line-height: 1.4;
-    }
-    .regras-gear-wrap {
-      position: relative;
-      flex-shrink: 0;
-    }
-    .regras-gear-btn {
-      padding: 2px;
-      color: #fff;
-    }
-    .regras-gear-btn:hover,
-    .regras-gear-btn:active {
-      color: #c45c00;
-    }
-    .regras-gear-icon {
-      display: block;
-      width: 24px;
-      height: 24px;
-    }
-    .regras-popover {
-      position: absolute;
-      top: calc(100% + 6px);
-      right: 0;
-      min-width: 168px;
-      background: #1a1a1a;
-      border: 1px solid #333;
-      border-radius: 10px;
-      padding: 6px;
-      box-shadow: 0 8px 24px rgba(0, 0, 0, 0.45);
-      z-index: 200;
     }
     .abas-historico {
       display: flex;
@@ -579,41 +585,56 @@ export function buildHistoricoTemplate(): string {
     <nav id="abas-historico" class="abas-historico hidden" role="tablist" aria-label="Histórico">
       <button id="aba-coletas" type="button" class="aba ativa" role="tab" aria-selected="true" aria-controls="conteudo">Coletas</button>
       <button id="aba-alertas" type="button" class="aba" role="tab" aria-selected="false" aria-controls="conteudo">Alertas</button>
+      <button id="aba-regras" type="button" class="aba" role="tab" aria-selected="false" aria-controls="tela-regras">Regras</button>
     </nav>
     <div id="historico-stats-bar" class="historico-stats-bar hidden">
       <span id="historico-stats" class="historico-stats-text" aria-live="polite"></span>
-      <div class="regras-gear-wrap hidden">
-        <button id="btn-regras-gear" type="button" class="menu-kebab regras-gear-btn" aria-label="Configurações" aria-expanded="false" aria-haspopup="true">
-          <svg class="regras-gear-icon" xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path stroke="none" d="M0 0h24v24H0z" fill="none"/><path d="M10.325 4.317c.426 -1.756 2.924 -1.756 3.35 0a1.724 1.724 0 0 0 2.573 1.066c1.543 -.94 3.31 .826 2.37 2.37a1.724 1.724 0 0 0 1.065 2.572c1.756 .426 1.756 2.924 0 3.35a1.724 1.724 0 0 0 -1.066 2.573c.94 1.543 -.826 3.31 -2.37 2.37a1.724 1.724 0 0 0 -2.572 1.065c-.426 1.756 -2.924 1.756 -3.35 0a1.724 1.724 0 0 0 -2.573 -1.066c-1.543 .94 -3.31 -.826 -2.37 -2.37a1.724 1.724 0 0 0 -1.065 -2.572c-1.756 -.426 -1.756 -2.924 0 -3.35a1.724 1.724 0 0 0 1.066 -2.573c-.94 -1.543 .826 -3.31 2.37 -2.37c1 .608 2.296 .07 2.572 -1.065"/><path d="M9 12a3 3 0 1 0 6 0a3 3 0 0 0 -6 0"/></svg>
-        </button>
-        <div id="regras-popover" class="regras-popover hidden" role="menu">
-          <button id="btn-regras" class="menu-item" type="button" role="menuitem">Regras de Alerta</button>
-        </div>
-      </div>
     </div>
     <div id="conteudo"></div>
-  </div>
-
-  <div id="painel-regras" class="painel-regras hidden" role="dialog" aria-label="Regras de alerta">
-    <div class="painel-regras-box">
-      <div class="painel-regras-topo">
-        <h2>Regras de Alerta</h2>
-        <button type="button" id="btn-fechar-regras" class="btn-fechar-regras" aria-label="Fechar">×</button>
-      </div>
-      <p class="regras-vazio" id="regras-ajuda">Alerta quando o jogo estiver no Q escolhido, com a vantagem em pontos e odd do líder acima dos limites. Uma vez por jogo, por regra.</p>
-      <div id="lista-regras"></div>
-      <form id="form-regra" class="form-regra">
-        <input id="regra-nome" class="form-regra-nome" type="text" maxlength="80" placeholder="Nome da regra" aria-label="Nome da regra" required />
-        <select id="regra-periodo" aria-label="Periodo">
-          <option value="Q1">Q1</option>
-          <option value="Q2">Q2</option>
-          <option value="Q3">Q3</option>
-          <option value="Q4">Q4</option>
-        </select>
-        <input id="regra-pontos" type="number" min="1" step="1" placeholder="+ pontos" required />
-        <input id="regra-odd" type="number" min="0" step="0.1" placeholder="Odd líder &gt;" required />
-        <button type="submit">Adicionar regra</button>
-      </form>
+    <div id="tela-regras" class="tela-regras hidden" role="tabpanel" aria-labelledby="aba-regras">
+      <p class="regras-intro" id="regras-ajuda">
+        Cada regra combina <strong>três critérios</strong> para sugerir aposta no <strong>time líder em pontos</strong>:
+        a partir de qual quarto vale, vantagem mínima em pontos e odd mínima do líder para vencer.
+        Ex.: Q4, +15 pts e ODD ≥ 1,10 — dispara se o líder tiver 15+ de vantagem no Q4 com odd ≥ 1,10.
+        Uma vez por jogo, por regra.
+      </p>
+      <section class="regras-secao" aria-labelledby="titulo-lista-regras">
+        <h3 class="regras-secao-titulo" id="titulo-lista-regras">Minhas regras</h3>
+        <div id="lista-regras"></div>
+      </section>
+      <section class="regras-secao" aria-labelledby="form-regra-titulo">
+        <h3 class="regras-secao-titulo" id="form-regra-titulo">Nova regra</h3>
+        <form id="form-regra" class="form-regra">
+          <div class="form-regra-campo">
+            <label for="regra-nome">Nome da regra</label>
+            <input id="regra-nome" type="text" maxlength="80" placeholder="Ex.: Líder Q4 confortável" required />
+          </div>
+          <div class="form-regra-campo">
+            <label for="regra-periodo">A partir do quarto</label>
+            <select id="regra-periodo" required>
+              <option value="Q1">Q1 — desde o 1º quarto</option>
+              <option value="Q2">Q2 — a partir do 2º quarto</option>
+              <option value="Q3">Q3 — a partir do 3º quarto</option>
+              <option value="Q4">Q4 — a partir do 4º quarto</option>
+            </select>
+            <span class="campo-dica">A regra vale neste quarto e nos seguintes (ex.: Q2 inclui Q3 e Q4).</span>
+          </div>
+          <div class="form-regra-campo">
+            <label for="regra-pontos">+ Pontos (vantagem mínima)</label>
+            <input id="regra-pontos" type="number" min="1" step="1" placeholder="Ex.: 15" required />
+            <span class="campo-dica">Diferença de placar entre líder e adversário deve ser ≥ este valor.</span>
+          </div>
+          <div class="form-regra-campo">
+            <label for="regra-odd">ODD mínima do líder</label>
+            <input id="regra-odd" type="number" min="0" step="0.01" placeholder="Ex.: 1.10" required />
+            <span class="campo-dica">Odd para o time que está na frente vencer a partida (≥ este valor).</span>
+          </div>
+          <div class="form-regra-acoes">
+            <button type="submit" id="btn-salvar-regra">Adicionar regra</button>
+            <button type="button" id="btn-cancelar-edicao-regra" class="btn-cancelar-edicao hidden">Cancelar edição</button>
+          </div>
+        </form>
+      </section>
     </div>
   </div>
 
@@ -642,9 +663,6 @@ export function buildHistoricoTemplate(): string {
     const elConteudo = document.getElementById('conteudo');
     const elHistoricoStatsBar = document.getElementById('historico-stats-bar');
     const elHistoricoStats = document.getElementById('historico-stats');
-    const elBtnRegrasGear = document.getElementById('btn-regras-gear');
-    const elRegrasPopover = document.getElementById('regras-popover');
-    const elRegrasGearWrap = document.querySelector('.regras-gear-wrap');
     const elLoginErro = document.getElementById('login-erro');
     const elUserEmail = document.getElementById('user-email');
     const elMonitorStatus = document.getElementById('monitor-status');
@@ -652,14 +670,19 @@ export function buildHistoricoTemplate(): string {
     const elBtnColetar = document.getElementById('btn-coletar');
     const elBtnMenu = document.getElementById('btn-menu');
     const elMenuPopover = document.getElementById('menu-popover');
-    const elPainelRegras = document.getElementById('painel-regras');
+    const elPainelRegras = document.getElementById('tela-regras');
     const elListaRegras = document.getElementById('lista-regras');
     const elFormRegra = document.getElementById('form-regra');
+    const elFormRegraTitulo = document.getElementById('form-regra-titulo');
+    const elBtnSalvarRegra = document.getElementById('btn-salvar-regra');
+    const elBtnCancelarEdicaoRegra = document.getElementById('btn-cancelar-edicao-regra');
     const elAbasHistorico = document.getElementById('abas-historico');
     const elAbaColetas = document.getElementById('aba-coletas');
     const elAbaAlertas = document.getElementById('aba-alertas');
+    const elAbaRegras = document.getElementById('aba-regras');
 
     let abaAtiva = 'coletas';
+    let regraEmEdicaoId = null;
     let expandidos = new Set();
     let refreshTimer = null;
     let statusTimer = null;
@@ -761,22 +784,10 @@ export function buildHistoricoTemplate(): string {
       elBtnMenu.setAttribute('aria-expanded', 'false');
     }
 
-    function fecharRegrasPopover() {
-      if (!elRegrasPopover) return;
-      elRegrasPopover.classList.add('hidden');
-      elBtnRegrasGear?.setAttribute('aria-expanded', 'false');
-    }
-
-    function toggleRegrasPopover() {
-      const aberto = !elRegrasPopover.classList.contains('hidden');
-      if (aberto) {
-        fecharRegrasPopover();
-      } else {
-        fecharMenu();
-        fecharCardMenu();
-        elRegrasPopover.classList.remove('hidden');
-        elBtnRegrasGear.setAttribute('aria-expanded', 'true');
-      }
+    function toggleCardMenu(key) {
+      fecharMenu();
+      cardMenuAberto = cardMenuAberto === key ? null : key;
+      atualizarCardMenusDom();
     }
 
     function fecharCardMenu() {
@@ -798,7 +809,6 @@ export function buildHistoricoTemplate(): string {
 
     function toggleCardMenu(key) {
       fecharMenu();
-      fecharRegrasPopover();
       cardMenuAberto = cardMenuAberto === key ? null : key;
       atualizarCardMenusDom();
     }
@@ -808,7 +818,6 @@ export function buildHistoricoTemplate(): string {
       if (aberto) fecharMenu();
       else {
         fecharCardMenu();
-        fecharRegrasPopover();
         if (monitorAtivo) atualizarTextoStatusMonitor();
         elMenuPopover.classList.remove('hidden');
         elBtnMenu.setAttribute('aria-expanded', 'true');
@@ -821,8 +830,114 @@ export function buildHistoricoTemplate(): string {
     }
 
     function formatarTextoRegra(r) {
-      const nome = r.nome ? r.nome + ' — ' : '';
-      return nome + r.periodo + ', +' + r.min_pontos + ' pts, odd líder &gt; ' + Number(r.min_odd).toFixed(1);
+      const odd = Number(r.min_odd).toFixed(2);
+      return 'A partir de ' + r.periodo + ' · +' + r.min_pontos + ' pts · ODD líder ≥ ' + odd;
+    }
+
+    function formatarNomeRegraLista(r) {
+      return r.nome?.trim() || 'Regra sem nome';
+    }
+
+    function atualizarVisibilidadeTelas() {
+      const regras = abaAtiva === 'regras';
+      elConteudo.classList.toggle('hidden', regras);
+      elPainelRegras?.classList.toggle('hidden', !regras);
+      elHistoricoStatsBar?.classList.toggle('hidden', regras);
+    }
+
+    function atualizarAbasUi() {
+      elAbaColetas?.classList.toggle('ativa', abaAtiva === 'coletas');
+      elAbaAlertas?.classList.toggle('ativa', abaAtiva === 'alertas');
+      elAbaRegras?.classList.toggle('ativa', abaAtiva === 'regras');
+      elAbaColetas?.setAttribute('aria-selected', abaAtiva === 'coletas' ? 'true' : 'false');
+      elAbaAlertas?.setAttribute('aria-selected', abaAtiva === 'alertas' ? 'true' : 'false');
+      elAbaRegras?.setAttribute('aria-selected', abaAtiva === 'regras' ? 'true' : 'false');
+      atualizarVisibilidadeTelas();
+    }
+
+    function trocarAba(aba) {
+      if (aba !== 'coletas' && aba !== 'alertas' && aba !== 'regras') return;
+      if (abaAtiva === aba) return;
+      abaAtiva = aba;
+      fecharCardMenu();
+      atualizarAbasUi();
+      if (aba === 'regras') {
+        limparFormRegra();
+        void carregarRegras();
+      } else {
+        void carregar();
+      }
+    }
+
+    function atualizarUiFormRegra() {
+      const editando = Boolean(regraEmEdicaoId);
+      if (elFormRegraTitulo) {
+        elFormRegraTitulo.textContent = editando ? 'Editar regra' : 'Nova regra';
+      }
+      if (elBtnSalvarRegra) {
+        elBtnSalvarRegra.textContent = editando ? 'Salvar alterações' : 'Adicionar regra';
+      }
+      elBtnCancelarEdicaoRegra?.classList.toggle('hidden', !editando);
+    }
+
+    function limparFormRegra() {
+      regraEmEdicaoId = null;
+      elFormRegra?.reset();
+      atualizarUiFormRegra();
+    }
+
+    function iniciarEdicaoRegra(regra) {
+      regraEmEdicaoId = regra.id;
+      document.getElementById('regra-nome').value = regra.nome || '';
+      document.getElementById('regra-periodo').value = regra.periodo;
+      document.getElementById('regra-pontos').value = String(regra.min_pontos);
+      document.getElementById('regra-odd').value = String(regra.min_odd);
+      atualizarUiFormRegra();
+      elFormRegraTitulo?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    }
+
+    function renderListaRegras(regras) {
+      if (!regras.length) {
+        elListaRegras.innerHTML = '<p class="regras-vazio">Nenhuma regra cadastrada. Use o formulário abaixo para criar a primeira.</p>';
+        return;
+      }
+      elListaRegras.innerHTML = regras.map((r) => {
+        const cls = r.ativo ? 'regra-item' : 'regra-item inativa';
+        return '<div class="' + cls + '" data-id="' + escapeHtml(r.id) + '">' +
+          '<div class="regra-item-corpo">' +
+            '<div class="regra-item-nome">' + escapeHtml(formatarNomeRegraLista(r)) + '</div>' +
+            '<div class="regra-item-detalhe">' + formatarTextoRegra(r) + '</div>' +
+          '</div>' +
+          '<div class="regra-item-acoes">' +
+            '<button type="button" class="regra-btn editar btn-editar-regra" data-id="' + escapeHtml(r.id) + '">Editar</button>' +
+            '<button type="button" class="regra-btn btn-toggle-regra" data-id="' + escapeHtml(r.id) + '">' +
+              (r.ativo ? 'Desativar' : 'Ativar') +
+            '</button>' +
+            '<button type="button" class="regra-btn excluir btn-excluir-regra" data-id="' + escapeHtml(r.id) + '">Excluir</button>' +
+          '</div>' +
+        '</div>';
+      }).join('');
+
+      elListaRegras.querySelectorAll('.btn-editar-regra').forEach((btn) => {
+        btn.addEventListener('click', () => {
+          const id = btn.getAttribute('data-id');
+          const regra = regras.find((x) => x.id === id);
+          if (regra) iniciarEdicaoRegra(regra);
+        });
+      });
+      elListaRegras.querySelectorAll('.btn-toggle-regra').forEach((btn) => {
+        btn.addEventListener('click', () => {
+          const id = btn.getAttribute('data-id');
+          const regra = regras.find((x) => x.id === id);
+          if (id && regra) void toggleRegra(id, !regra.ativo);
+        });
+      });
+      elListaRegras.querySelectorAll('.btn-excluir-regra').forEach((btn) => {
+        btn.addEventListener('click', () => {
+          const id = btn.getAttribute('data-id');
+          if (id) void excluirRegra(id);
+        });
+      });
     }
 
     function regraEmbedFromAlerta(alerta) {
@@ -876,62 +991,6 @@ export function buildHistoricoTemplate(): string {
       };
     }
 
-    function atualizarVisibilidadeConfigAlertas() {
-      if (!elRegrasGearWrap) return;
-      const mostrar = abaAtiva === 'alertas';
-      elRegrasGearWrap.classList.toggle('hidden', !mostrar);
-      if (!mostrar) fecharRegrasPopover();
-    }
-
-    function atualizarAbasUi() {
-      const coletasAtiva = abaAtiva === 'coletas';
-      elAbaColetas?.classList.toggle('ativa', coletasAtiva);
-      elAbaAlertas?.classList.toggle('ativa', !coletasAtiva);
-      elAbaColetas?.setAttribute('aria-selected', coletasAtiva ? 'true' : 'false');
-      elAbaAlertas?.setAttribute('aria-selected', coletasAtiva ? 'false' : 'true');
-      atualizarVisibilidadeConfigAlertas();
-    }
-
-    function trocarAba(aba) {
-      if (aba !== 'coletas' && aba !== 'alertas') return;
-      if (abaAtiva === aba) return;
-      abaAtiva = aba;
-      fecharCardMenu();
-      atualizarAbasUi();
-      void carregar();
-    }
-
-    function renderListaRegras(regras) {
-      if (!regras.length) {
-        elListaRegras.innerHTML = '<p class="regras-vazio">Nenhuma regra cadastrada.</p>';
-        return;
-      }
-      elListaRegras.innerHTML = regras.map((r) => {
-        const cls = r.ativo ? 'regra-item' : 'regra-item inativa';
-        return '<div class="' + cls + '" data-id="' + escapeHtml(r.id) + '">' +
-          '<div class="regra-item-texto">' + formatarTextoRegra(r) + '</div>' +
-          '<button type="button" class="regra-btn btn-toggle-regra" data-id="' + escapeHtml(r.id) + '">' +
-            (r.ativo ? 'Desativar' : 'Ativar') +
-          '</button>' +
-          '<button type="button" class="regra-btn excluir btn-excluir-regra" data-id="' + escapeHtml(r.id) + '">Excluir</button>' +
-        '</div>';
-      }).join('');
-
-      elListaRegras.querySelectorAll('.btn-toggle-regra').forEach((btn) => {
-        btn.addEventListener('click', () => {
-          const id = btn.getAttribute('data-id');
-          const regra = regras.find((x) => x.id === id);
-          if (id && regra) void toggleRegra(id, !regra.ativo);
-        });
-      });
-      elListaRegras.querySelectorAll('.btn-excluir-regra').forEach((btn) => {
-        btn.addEventListener('click', () => {
-          const id = btn.getAttribute('data-id');
-          if (id) void excluirRegra(id);
-        });
-      });
-    }
-
     async function carregarRegras() {
       const usuarioId = await obterUsuarioId();
       if (!usuarioId) return;
@@ -948,30 +1007,33 @@ export function buildHistoricoTemplate(): string {
       renderListaRegras(data ?? []);
     }
 
-    function abrirPainelRegras() {
-      fecharRegrasPopover();
-      elPainelRegras.classList.remove('hidden');
-      void carregarRegras();
-    }
-
-    function fecharPainelRegras() {
-      elPainelRegras.classList.add('hidden');
-    }
-
-    async function adicionarRegra(nome, periodo, minPontos, minOdd) {
+    async function salvarRegra(nome, periodo, minPontos, minOdd) {
       const usuarioId = await obterUsuarioId();
       if (!usuarioId) throw new Error('Faca login primeiro');
       const nomeTrim = nome?.trim();
       if (!nomeTrim) throw new Error('Informe o nome da regra');
-      const { error } = await supabase.from('regras_alerta').insert({
-        usuario_id: usuarioId,
+      const payload = {
         nome: nomeTrim,
         periodo,
         min_pontos: minPontos,
         min_odd: minOdd,
-        ativo: true,
-      });
-      if (error) throw error;
+        data_atualizacao: new Date().toISOString(),
+      };
+      if (regraEmEdicaoId) {
+        const { error } = await supabase
+          .from('regras_alerta')
+          .update(payload)
+          .eq('id', regraEmEdicaoId);
+        if (error) throw error;
+      } else {
+        const { error } = await supabase.from('regras_alerta').insert({
+          usuario_id: usuarioId,
+          ...payload,
+          ativo: true,
+        });
+        if (error) throw error;
+      }
+      limparFormRegra();
       await carregarRegras();
     }
 
@@ -988,7 +1050,10 @@ export function buildHistoricoTemplate(): string {
       if (!confirm('Excluir esta regra de alerta?')) return;
       const { error } = await supabase.from('regras_alerta').delete().eq('id', id);
       if (error) alert(error.message);
-      else await carregarRegras();
+      else {
+        if (regraEmEdicaoId === id) limparFormRegra();
+        await carregarRegras();
+      }
     }
 
     async function avaliarAlertasColeta(coletaId) {
@@ -1413,7 +1478,7 @@ export function buildHistoricoTemplate(): string {
     }
 
     function renderVazioAlertas() {
-      elConteudo.innerHTML = '<div class="centro"><p class="aviso">Nenhum alerta disparado ainda. Configure regras em Configurações e aguarde um jogo que atenda aos critérios.</p></div>';
+      elConteudo.innerHTML = '<div class="centro"><p class="aviso">Nenhum alerta disparado ainda. Configure regras na aba Regras e aguarde um jogo que atenda aos critérios.</p></div>';
     }
 
     function renderAlertaCardTopo(estado, menuKey) {
@@ -1607,8 +1672,8 @@ export function buildHistoricoTemplate(): string {
 
     function atualizarStatsHistorico(stats) {
       if (!elHistoricoStatsBar || !elHistoricoStats) return;
+      if (abaAtiva === 'regras') return;
       elHistoricoStatsBar.classList.remove('hidden');
-      atualizarVisibilidadeConfigAlertas();
       if (abaAtiva === 'alertas') {
         const total = stats?.total ?? 0;
         elHistoricoStats.textContent = total + ' alerta(s) no histórico';
@@ -1816,6 +1881,11 @@ export function buildHistoricoTemplate(): string {
     }
 
     async function carregar(silencioso = false) {
+      if (abaAtiva === 'regras') {
+        atualizarAbasUi();
+        void carregarRegras();
+        return;
+      }
       if (!silencioso) renderLoading();
       try {
         if (abaAtiva === 'alertas') {
@@ -1847,7 +1917,7 @@ export function buildHistoricoTemplate(): string {
       elMain.classList.add('hidden');
       elHistoricoStatsBar?.classList.add('hidden');
       elAbasHistorico?.classList.add('hidden');
-      fecharRegrasPopover();
+      elPainelRegras?.classList.add('hidden');
       pararAutoRefresh();
       pararRealtime();
       pararTimerStatus();
@@ -1947,28 +2017,14 @@ export function buildHistoricoTemplate(): string {
 
     elAbaColetas?.addEventListener('click', () => trocarAba('coletas'));
     elAbaAlertas?.addEventListener('click', () => trocarAba('alertas'));
+    elAbaRegras?.addEventListener('click', () => trocarAba('regras'));
 
     elBtnColetar.addEventListener('click', () => {
       void coletarAgora();
     });
 
-    elBtnRegrasGear.addEventListener('click', (e) => {
-      e.stopPropagation();
-      toggleRegrasPopover();
-    });
-
-    elRegrasPopover.addEventListener('click', (e) => e.stopPropagation());
-
-    document.getElementById('btn-regras').addEventListener('click', () => {
-      abrirPainelRegras();
-    });
-
-    document.getElementById('btn-fechar-regras').addEventListener('click', () => {
-      fecharPainelRegras();
-    });
-
-    elPainelRegras.addEventListener('click', (e) => {
-      if (e.target === elPainelRegras) fecharPainelRegras();
+    elBtnCancelarEdicaoRegra?.addEventListener('click', () => {
+      limparFormRegra();
     });
 
     elFormRegra.addEventListener('submit', (e) => {
@@ -1982,17 +2038,14 @@ export function buildHistoricoTemplate(): string {
         return;
       }
       if (!periodo || !Number.isFinite(minPontos) || minPontos < 1) {
-        alert('Informe o período e os pontos (mínimo 1).');
+        alert('Informe o quarto e a vantagem mínima em pontos (mínimo 1).');
         return;
       }
-      if (!Number.isFinite(minOdd) || minOdd < 0) {
-        alert('Informe a odd mínima (0 ou mais).');
+      if (!Number.isFinite(minOdd) || minOdd <= 0) {
+        alert('Informe a odd mínima do líder (maior que 0).');
         return;
       }
-      void adicionarRegra(nome, periodo, minPontos, minOdd)
-        .then(() => {
-          elFormRegra.reset();
-        })
+      void salvarRegra(nome, periodo, minPontos, minOdd)
         .catch((err) => alert(err instanceof Error ? err.message : 'Erro ao salvar regra'));
     });
 
@@ -2014,8 +2067,9 @@ export function buildHistoricoTemplate(): string {
     document.addEventListener('click', () => {
       fecharMenu();
       fecharCardMenu();
-      fecharRegrasPopover();
     });
+
+    atualizarUiFormRegra();
 
     document.getElementById('senha').addEventListener('keydown', (e) => {
       if (e.key === 'Enter') document.getElementById('btn-login').click();

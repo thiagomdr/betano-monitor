@@ -22,6 +22,13 @@ export interface AlertCandidate {
 
 const PERIODOS_REGRA = new Set<RegraPeriodo>(['Q1', 'Q2', 'Q3', 'Q4']);
 
+const ORDEM_Q: Record<RegraPeriodo, number> = {
+  Q1: 1,
+  Q2: 2,
+  Q3: 3,
+  Q4: 4,
+};
+
 export function buildGameKey(homeTeam: string, awayTeam: string): string {
   const teams = [homeTeam, awayTeam]
     .map((nome) => nome.trim().toLowerCase().replace(/\s+/g, ' '))
@@ -31,6 +38,13 @@ export function buildGameKey(homeTeam: string, awayTeam: string): string {
 
 export function buildGameKeyFromGame(game: ParsedGame): string {
   return buildGameKey(game.homeTeam, game.awayTeam);
+}
+
+function quartoAtingeRegra(periodoAtual: string, periodoRegra: RegraPeriodo): boolean {
+  const atual = ORDEM_Q[periodoAtual as RegraPeriodo];
+  const minimo = ORDEM_Q[periodoRegra];
+  if (atual == null || minimo == null) return false;
+  return atual >= minimo;
 }
 
 function liderDoJogo(game: ParsedGame): { team: string; odd: number; diff: number } | null {
@@ -61,9 +75,9 @@ export function evaluateAlertRules(
   for (const regra of rules) {
     if (!regra.ativo) continue;
     if (firedRuleIds.has(regra.id)) continue;
-    if (periodo !== regra.periodo) continue;
+    if (!quartoAtingeRegra(periodo, regra.periodo)) continue;
     if (lider.diff < regra.minPontos) continue;
-    if (lider.odd <= regra.minOdd) continue;
+    if (lider.odd < regra.minOdd) continue;
 
     candidatos.push({
       gameKey,
