@@ -1,7 +1,7 @@
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.49.1';
 
 import { executarColetaBetanoJson } from '../_shared/betanoCollect.ts';
-import { parseFootballScoutFromOverview } from '../_shared/betanoFootballParse.ts';
+import { parseFootballScoutFromOverview, probeFootballLiveDataFromPayload } from '../_shared/betanoFootballParse.ts';
 import { sincronizarFutebolRadarImediato } from '../_shared/futebolEstatisticasService.ts';
 
 const corsHeaders = {
@@ -48,6 +48,14 @@ Deno.serve(async (req) => {
   }
 
   try {
+    let debugFootball = false;
+    try {
+      const body = await req.json();
+      debugFootball = body?.debugFootball === true;
+    } catch {
+      // body vazio
+    }
+
     const coleta = await executarColetaBetanoJson();
     const now = new Date();
 
@@ -75,6 +83,17 @@ Deno.serve(async (req) => {
       }
     }
 
+    let footballLiveProbe = null;
+    if (coleta.payload && debugFootball) {
+      footballLiveProbe = probeFootballLiveDataFromPayload(coleta.payload, 3);
+    }
+
+    const footballTimeStats = {
+      total: footballRadar.length,
+      withTempo: footballRadar.filter((g) => Boolean(g.tempoDecorrido)).length,
+      withUntil85: footballRadar.filter((g) => g.minutesUntil85 != null).length,
+    };
+
     return new Response(
       JSON.stringify({
         collectedAt: now.toISOString(),
@@ -87,6 +106,8 @@ Deno.serve(async (req) => {
         futebolAoVivoTotal: coleta.futebolAoVivoTotal,
         gameCount: coleta.gameCount,
         footballRadar,
+        footballTimeStats,
+        footballLiveProbe,
         futebolSync,
         preview: coleta.games.slice(0, 5).map(formatGameLine),
       }),

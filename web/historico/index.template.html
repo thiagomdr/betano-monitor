@@ -2564,6 +2564,27 @@
           const coleta = await executarColetaFutebolRadar();
           const dados = await buscarEstatisticasFutebol();
           const aoVivoJson = Array.isArray(coleta.footballRadar) ? coleta.footballRadar : [];
+          // #region agent log
+          fetch('http://127.0.0.1:7904/ingest/86615625-6ae5-4e98-a1da-0a5f0f15fc42', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json', 'X-Debug-Session-Id': '94b3c3' },
+            body: JSON.stringify({
+              sessionId: '94b3c3',
+              runId: 'football-time-debug',
+              hypothesisId: 'H1-H4',
+              location: 'historicoWebPage.ts:carregar:futebol',
+              message: 'footballRadar sample from coleta',
+              data: {
+                buildId: PAINEL_BUILD_ID,
+                count: aoVivoJson.length,
+                sample: aoVivoJson[0] ?? null,
+                hasTempoDecorrido: aoVivoJson[0]?.tempoDecorrido != null,
+                minutesUntil85: aoVivoJson[0]?.minutesUntil85 ?? null,
+              },
+              timestamp: Date.now(),
+            }),
+          }).catch(() => {});
+          // #endregion
           atualizarStatsHistorico({
             futebolFinalizadas: dados.stats.finalizadas,
             futebolPctGol: dados.stats.pctComGol,

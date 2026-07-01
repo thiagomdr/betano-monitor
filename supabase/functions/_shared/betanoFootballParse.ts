@@ -48,11 +48,15 @@ interface OverviewEvent {
   marketIdList?: number[];
   participants?: OverviewParticipant[];
   isLive?: boolean;
-  liveData?: {
+  liveData?: Record<string, unknown> & {
     score?: { home?: string; away?: string };
     periodDescription?: string;
+    period?: string;
+    minute?: number;
     clock?: {
       secondsSinceStart?: number;
+      elapsed?: number;
+      elapsedSeconds?: number;
       clockStopped?: boolean;
     };
   };
@@ -89,6 +93,61 @@ function parseScore(value: string | undefined, max: number): number | null {
 function parseOdd(value: number | undefined): number {
   if (value == null || !Number.isFinite(value) || value <= 0) return 0;
   return Math.round(value * 100) / 100;
+}
+
+function extractClockSeconds(liveData: OverviewEvent['liveData']): number | null {
+  if (!liveData) return null;
+  const clock = liveData.clock;
+  if (clock) {
+    for (const key of ['secondsSinceStart', 'elapsed', 'elapsedSeconds', 'seconds'] as const) {
+      const v = clock[key];
+      if (typeof v === 'number' && Number.isFinite(v) && v >= 0) return Math.floor(v);
+    }
+  }
+  for (const key of ['secondsSinceStart', 'elapsedSeconds', 'elapsed', 'gameTime'] as const) {
+    const v = liveData[key];
+    if (typeof v === 'number' && Number.isFinite(v) && v >= 0) return Math.floor(v);
+  }
+  if (typeof liveData.minute === 'number' && liveData.minute >= 0) {
+    return Math.floor(liveData.minute) * 60;
+  }
+  return null;
+}
+
+function inferPeriodFromMinute(minute: number | null, period: GamePeriod): GamePeriod {
+  if (period !== 'unknown') return period;
+  if (minute == null) return period;
+  if (minute <= 45) return '1T';
+  return '2T';
+}
+
+/** Amostra liveData bruto para diagnóstico (debug). */
+export function probeFootballLiveDataFromPayload(
+  payload: BetanoOverviewPayload,
+  limit = 3,
+): { rootTimeKeys: string[]; samples: Record<string, unknown>[] } {
+  const leagueIds = payload.sports?.byIdLeagueIdList?.FOOT ?? [];
+  const leagueSet = new Set(leagueIds);
+  const rootTimeKeys = Object.keys(payload).filter((k) => /clock|time|timer|score|live/i.test(k));
+  const samples: Record<string, unknown>[] = [];
+
+  for (const event of Object.values(payload.events ?? {})) {
+    if (!event.leagueId || !leagueSet.has(event.leagueId)) continue;
+    const ev = event as Record<string, unknown>;
+    const extra: Record<string, unknown> = {};
+    for (const [k, v] of Object.entries(ev)) {
+      if (/live|time|clock|period|minute|score|elapsed/i.test(k)) extra[k] = v;
+    }
+    samples.push({
+      eventId: ev.id,
+      sportId: ev.sportId,
+      liveData: ev.liveData ?? null,
+      extra,
+    });
+    if (samples.length >= limit) break;
+  }
+
+  return { rootTimeKeys, samples };
 }
 
 function isSimulatedFootballContext(
@@ -243,10 +302,13 @@ function eventToFootballScout(
 
   if (isSimulatedFootballContext(leagueName, home.name, away.name)) return null;
 
-  const periodDesc = event.liveData?.periodDescription ?? null;
-  const period = normalizeFootballPeriod(periodDesc ?? undefined);
-  const clockSeconds = event.liveData?.clock?.secondsSinceStart;
-  const matchMinute = getMatchMinute(periodDesc ?? undefined, period, clockSeconds);
+  const periodDesc = event.liveData?.periodDescription
+    ?? (typeof event.liveData?.period === 'string' ? event.liveData.period : null);
+  let period = normalizeFootballPeriod(periodDesc ?? undefined);
+  const clockSeconds = extractClockSeconds(event.liveData);
+  let matchMinute = getMatchMinute(periodDesc ?? undefined, period, clockSeconds);
+  period = inferPeriodFromMinute(matchMinute, period);
+  matchMinute = getMatchMinute(periodDesc ?? undefined, period, clockSeconds);
   const tempoDecorrido = formatarTempoDecorrido(periodDesc, period, matchMinute, clockSeconds);
   const minutesUntil85 = estimarMinutosAte85(period, matchMinute);
   const eta85 = minutesUntil85 != null
