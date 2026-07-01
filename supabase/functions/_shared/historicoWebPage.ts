@@ -300,6 +300,7 @@ export function buildHistoricoTemplate(): string {
     .card-box.casa.ao-vivo { background: #1a73e8; color: #fff; }
     .card-box.fora.ao-vivo { background: #c62828; color: #fff; }
     .card-box.finalizado { background: #454545; color: #fff; }
+    .card-box.card-box-odd-regra { background: #f5c518; color: #000; }
     .card.finalizado .expand-icon { color: #888; }
     .card-meta { color: #888; font-size: 11px; }
     .card-meta-linha {
@@ -1060,6 +1061,7 @@ export function buildHistoricoTemplate(): string {
         oddCasa: odds.oddCasa,
         oddFora: odds.oddFora,
         tempoRestante: odds.tempoRestante,
+        timeLider: alerta.time_lider ?? null,
         estado,
         nomeRegra: rotuloNomeRegraNoCard(alerta),
         betanoUrl,
@@ -1447,10 +1449,11 @@ export function buildHistoricoTemplate(): string {
       return estado === 'ao_vivo' ? 'Ao Vivo' : 'Finalizado';
     }
 
-    function renderLinhaTime(nome, odd, placar, placarOponente, lado, aoVivo, forcarCorTime) {
+    function renderLinhaTime(nome, odd, placar, placarOponente, lado, aoVivo, forcarCorTime, destacarOddRegra) {
       const clsBox = forcarCorTime
         ? 'card-box ' + lado + ' ao-vivo'
         : (aoVivo ? 'card-box ' + lado + ' ao-vivo' : 'card-box finalizado');
+      const clsOdd = destacarOddRegra ? 'card-box card-box-odd-regra' : clsBox;
       const vantagem = calcularVantagem(placar, placarOponente);
       const vantagemHtml = vantagem != null
         ? '<span class="card-vantagem">+' + vantagem + '</span>'
@@ -1462,12 +1465,20 @@ export function buildHistoricoTemplate(): string {
         '</span>' +
         '<div class="card-boxes">' +
           '<span class="' + clsBox + '">' + escapeHtml(String(placar)) + '</span>' +
-          '<span class="' + clsBox + '">' + escapeHtml(formatarOddWeb(odd)) + '</span>' +
+          '<span class="' + clsOdd + '">' + escapeHtml(formatarOddWeb(odd)) + '</span>' +
         '</div>' +
       '</div>';
     }
 
-    function renderValoresJogo(timeCasa, timeFora, oddCasa, oddFora, placarCasa, placarFora, aoVivo, forcarCorTime) {
+    function ladoLiderOddDoAlerta(view) {
+      const lider = (view.timeLider ?? '').trim();
+      if (!lider) return null;
+      if (lider === view.timeCasa) return 'casa';
+      if (lider === view.timeFora) return 'fora';
+      return null;
+    }
+
+    function renderValoresJogo(timeCasa, timeFora, oddCasa, oddFora, placarCasa, placarFora, aoVivo, forcarCorTime, ladoLiderOdd) {
       return '<div class="card-valores">' +
           '<div class="card-colunas">' +
             '<span class="card-col-nome"></span>' +
@@ -1476,8 +1487,8 @@ export function buildHistoricoTemplate(): string {
               '<span class="card-col-titulo">ODDS</span>' +
             '</div>' +
           '</div>' +
-          renderLinhaTime(timeCasa, oddCasa, placarCasa, placarFora, 'casa', aoVivo, forcarCorTime) +
-          renderLinhaTime(timeFora, oddFora, placarFora, placarCasa, 'fora', aoVivo, forcarCorTime) +
+          renderLinhaTime(timeCasa, oddCasa, placarCasa, placarFora, 'casa', aoVivo, forcarCorTime, ladoLiderOdd === 'casa') +
+          renderLinhaTime(timeFora, oddFora, placarFora, placarCasa, 'fora', aoVivo, forcarCorTime, ladoLiderOdd === 'fora') +
         '</div>';
     }
 
@@ -1624,13 +1635,14 @@ export function buildHistoricoTemplate(): string {
       const aoVivo = view.estado === 'ao_vivo';
       const periodoRaw = view.periodoAtual;
       const blocoPeriodo = blocoPeriodoTempo(periodoRaw, view.tempoRestante, view.estado);
+      const ladoLiderOdd = ladoLiderOddDoAlerta(view);
       return '<div class="card-corpo">' +
         renderHoraPeriodo(hora, blocoPeriodo, '') +
         renderValoresJogo(
           view.timeCasa, view.timeFora,
           view.oddCasa, view.oddFora,
           view.placarCasa, view.placarFora,
-          aoVivo, false,
+          aoVivo, false, ladoLiderOdd,
         ) +
         '<div class="card-meta-linha">' +
           '<span class="card-meta card-meta-regra">' + escapeHtml(view.nomeRegra) + '</span>' +
