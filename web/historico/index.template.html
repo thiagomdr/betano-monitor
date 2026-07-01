@@ -688,6 +688,8 @@
     });
 
     const PERIODOS_AO_VIVO = new Set(['Q1', 'Q2', 'Q3', 'Q4', 'Intervalo', 'INT', 'HT', 'OT']);
+    /** Sem nova leitura deste jogo: marca Finalizado (cron não grava coleta com 0 jogos). */
+    const JANELA_SEM_ENTRADA_MS = 20 * 60 * 1000;
     const TEXTO_INVALIDO = /não existem mercados|mercados disponíveis|de momento|^unknown$/i;
     const HISTORICO_COLETAS_PAGE = 100;
     const HISTORICO_ALERTAS_PAGE = 100;
@@ -1250,14 +1252,36 @@
     }
 
     function inferirEstadoGrupo(entradas, ultimaColetaGlobalEm) {
-      if (ultimaColetaGlobalEm && entradas.length) {
+      if (!entradas.length) return 'finalizado';
+      const ultima = entradaMaisRecente(entradas);
+      const idadeEntradaMs = Date.now() - new Date(ultima.coletadoEm).getTime();
+
+      if (ultimaColetaGlobalEm) {
         const tsGlobal = new Date(ultimaColetaGlobalEm).getTime();
-        const ultima = entradaMaisRecente(entradas);
-        if (new Date(ultima.coletadoEm).getTime() < tsGlobal) return 'finalizado';
+        const tsUltima = new Date(ultima.coletadoEm).getTime();
+        if (tsUltima < tsGlobal) {
+          // #region agent log
+          fetch('http://127.0.0.1:7904/ingest/86615625-6ae5-4e98-a1da-0a5f0f15fc42',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'94b3c3'},body:JSON.stringify({sessionId:'94b3c3',hypothesisId:'H1',location:'inferirEstadoGrupo',message:'finalizado coleta global mais nova',data:{periodo:ultima.periodo,idadeEntradaMs,tsUltima,tsGlobal},timestamp:Date.now(),runId:'post-fix'})}).catch(()=>{});
+          // #endregion
+          return 'finalizado';
+        }
       }
-      const ref = ultimaEntradaPeriodoValido(entradas)?.periodo ?? entradaMaisRecente(entradas).periodo;
+
+      if (idadeEntradaMs > JANELA_SEM_ENTRADA_MS) {
+        // #region agent log
+        fetch('http://127.0.0.1:7904/ingest/86615625-6ae5-4e98-a1da-0a5f0f15fc42',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'94b3c3'},body:JSON.stringify({sessionId:'94b3c3',hypothesisId:'H4',location:'inferirEstadoGrupo',message:'finalizado sem entrada recente',data:{periodo:ultima.periodo,idadeEntradaMs,janelaMs:JANELA_SEM_ENTRADA_MS},timestamp:Date.now(),runId:'post-fix'})}).catch(()=>{});
+        // #endregion
+        return 'finalizado';
+      }
+
+      const ref = ultimaEntradaPeriodoValido(entradas)?.periodo ?? ultima.periodo;
       if (!periodoValido(ref)) return 'finalizado';
-      return PERIODOS_AO_VIVO.has(ref.trim()) ? 'ao_vivo' : 'finalizado';
+      if (/final|fim|ft|encerrado/i.test(String(ref).trim())) return 'finalizado';
+      const estado = PERIODOS_AO_VIVO.has(ref.trim()) ? 'ao_vivo' : 'finalizado';
+      // #region agent log
+      if (estado === 'ao_vivo') fetch('http://127.0.0.1:7904/ingest/86615625-6ae5-4e98-a1da-0a5f0f15fc42',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'94b3c3'},body:JSON.stringify({sessionId:'94b3c3',hypothesisId:'H2-H3',location:'inferirEstadoGrupo',message:'estado ao_vivo',data:{periodo:ref,idadeEntradaMs},timestamp:Date.now(),runId:'post-fix'})}).catch(()=>{});
+      // #endregion
+      return estado;
     }
 
     function formatarPeriodoCard(periodo, estado) {
