@@ -169,8 +169,6 @@ async function atualizarRadar(
     const campos = camposPartidaDoSnapshot(snap, now);
 
     if (!existente) {
-      if (snap.minutesUntil85 == null && !snap.inFinalWindow) continue;
-
       const status = snap.inFinalWindow ? 'em_janela' : 'observado';
       const insertRow: Record<string, unknown> = {
         usuario_id: usuarioId,

@@ -1890,16 +1890,60 @@ export function buildHistoricoTemplate(): string {
       }
     }
 
-    function renderTabelaRadarFutebol(radar) {
-      if (!radar.length) {
+    function normalizarJogoAoVivoJson(j) {
+      return {
+        time_casa: j.homeTeam,
+        time_fora: j.awayTeam,
+        liga: j.league,
+        placar_casa_atual: j.homeScore,
+        placar_fora_atual: j.awayScore,
+        minuto_relogio: j.periodDescription || (j.matchMinute != null ? j.matchMinute + "'" : null),
+        periodo_atual: j.period,
+        minutos_ate_85: j.minutesUntil85,
+        eta_85: j.eta85,
+        em_janela: Boolean(j.inFinalWindow),
+      };
+    }
+
+    function normalizarJogoAoVivoDb(p) {
+      return {
+        time_casa: p.time_casa,
+        time_fora: p.time_fora,
+        liga: p.liga,
+        placar_casa_atual: p.placar_casa_atual,
+        placar_fora_atual: p.placar_fora_atual,
+        minuto_relogio: p.minuto_relogio,
+        periodo_atual: p.periodo_atual,
+        minutos_ate_85: p.minutos_ate_85,
+        eta_85: p.eta_85,
+        em_janela: p.status === 'em_janela',
+      };
+    }
+
+    function ordenarJogosAoVivo(lista) {
+      return [...lista].sort((a, b) => {
+        const ja = a.em_janela ? 0 : 1;
+        const jb = b.em_janela ? 0 : 1;
+        if (ja !== jb) return ja - jb;
+        const ma = Number(a.minutos_ate_85);
+        const mb = Number(b.minutos_ate_85);
+        if (Number.isFinite(ma) && Number.isFinite(mb) && ma !== mb) return ma - mb;
+        if (Number.isFinite(ma) && !Number.isFinite(mb)) return -1;
+        if (!Number.isFinite(ma) && Number.isFinite(mb)) return 1;
+        return (a.time_casa + a.time_fora).localeCompare(b.time_casa + b.time_fora, 'pt-BR');
+      });
+    }
+
+    function renderTabelaAoVivoFutebol(aoVivo) {
+      if (!aoVivo.length) {
         return '<p class="aviso">Nenhum jogo de futebol ao vivo no JSON neste momento.</p>';
       }
-      const linhas = radar.map((p) => {
+      const linhas = aoVivo.map((p) => {
         const placar = (p.placar_casa_atual != null && p.placar_fora_atual != null)
           ? p.placar_casa_atual + '–' + p.placar_fora_atual
           : '—';
         const minuto = p.minuto_relogio?.trim() || p.periodo_atual || '—';
-        const status = p.status === 'em_janela' ? 'Em janela (≥85\')' : 'Radar';
+        const status = p.em_janela ? 'Em janela (≥85\')' : 'Ao vivo';
         return '<tr>' +
           '<td>' + escapeHtml(p.time_casa) + ' x ' + escapeHtml(p.time_fora) + '</td>' +
           '<td>' + escapeHtml(p.liga || '—') + '</td>' +
@@ -1910,8 +1954,8 @@ export function buildHistoricoTemplate(): string {
           '<td>' + escapeHtml(status) + '</td>' +
         '</tr>';
       }).join('');
-      return '<h3 class="futebol-secao-titulo">Jogos localizados no JSON (antes dos 85 min)</h3>' +
-        '<p style="color:#888;font-size:12px;margin:0 0 8px">Atualizado a cada coleta. Dados prévios; placar 85\' e estatística final vêm depois.</p>' +
+      return '<h3 class="futebol-secao-titulo">Jogos ao vivo</h3>' +
+        '<p style="color:#888;font-size:12px;margin:0 0 8px">Todos os jogos FOOT do JSON Betano, em qualquer minuto. Coleta ao abrir Futebol ou Coletar Agora.</p>' +
         '<table class="futebol-tabela"><thead><tr>' +
         '<th>Partida</th><th>Liga</th><th>Minuto</th><th>Placar</th><th>Até 85\'</th><th>ETA ~85\'</th><th>Status</th>' +
         '</tr></thead><tbody>' + linhas + '</tbody></table>';
@@ -1943,10 +1987,14 @@ export function buildHistoricoTemplate(): string {
     }
 
     function renderEstatisticasFutebol(payload) {
-      const { partidas, agenda, stats } = payload;
-      const radar = partidas
-        .filter((p) => p.status === 'observado' || p.status === 'em_janela')
-        .sort((a, b) => Number(a.minutos_ate_85 ?? 9999) - Number(b.minutos_ate_85 ?? 9999));
+      const { partidas, agenda, stats, aoVivoJson } = payload;
+      const aoVivo = ordenarJogosAoVivo(
+        Array.isArray(aoVivoJson) && aoVivoJson.length
+          ? aoVivoJson.map(normalizarJogoAoVivoJson)
+          : partidas
+            .filter((p) => p.status === 'observado' || p.status === 'em_janela')
+            .map(normalizarJogoAoVivoDb),
+      );
       const historico = partidas.filter((p) => p.status === 'finalizado');
       const pct = stats.pctComGol != null
         ? stats.pctComGol + '% das partidas finalizadas tiveram gol nos últimos 5 min'
@@ -1958,14 +2006,14 @@ export function buildHistoricoTemplate(): string {
       const resumo = '<div class="futebol-stats-resumo">' +
         '<p><strong>Pesquisa:</strong> aposta em <em>não ter gol</em> nos últimos 5 minutos (85\' até o fim, com acréscimos).</p>' +
         '<p class="destaque">' + escapeHtml(pct) + '</p>' +
-        '<p>' + stats.finalizadas + ' finalizada(s) · ' + stats.comGol + ' com gol · ' + stats.semGol + ' sem gol · ' +
-        stats.emJanela + ' em janela agora · ' + stats.observadas + ' no radar</p>' +
+        '<p>' + aoVivo.length + ' ao vivo · ' + stats.emJanela + ' em janela · ' +
+        stats.finalizadas + ' finalizada(s) · ' + stats.comGol + ' com gol · ' + stats.semGol + ' sem gol</p>' +
         '<p style="color:#888;margin-top:8px">' + escapeHtml(agendaTxt) + '</p>' +
-        '<p style="color:#888;margin-top:4px">Coleta imediata ao abrir Futebol ou Coletar Agora. Intensivo em lote: 40–50 s na janela.</p>' +
+        '<p style="color:#888;margin-top:4px">Intensivo em lote (40–50 s) só na janela final. Estatística abaixo.</p>' +
       '</div>';
 
       elConteudo.innerHTML = '<div class="futebol-stats-wrap">' + resumo +
-        renderTabelaRadarFutebol(radar) +
+        renderTabelaAoVivoFutebol(aoVivo) +
         renderTabelaHistoricoFutebol(historico) +
       '</div>';
     }
@@ -2205,9 +2253,9 @@ export function buildHistoricoTemplate(): string {
       }
       if (esporteAtivo === 'futebol') {
         const n = stats?.futebolFinalizadas ?? 0;
-        const radar = stats?.futebolRadar ?? 0;
+        const aoVivo = stats?.futebolAoVivo ?? 0;
         const pct = stats?.futebolPctGol;
-        const base = radar + ' no radar';
+        const base = aoVivo + ' ao vivo';
         elHistoricoStats.textContent = pct != null
           ? base + ' · ' + n + ' finalizada(s) · ' + pct + '% com gol nos 5 min'
           : base + ' · ' + n + ' finalizada(s)';
@@ -2451,14 +2499,15 @@ export function buildHistoricoTemplate(): string {
         }
 
         if (esporteAtivo === 'futebol') {
-          await executarColetaFutebolRadar();
+          const coleta = await executarColetaFutebolRadar();
           const dados = await buscarEstatisticasFutebol();
+          const aoVivoJson = Array.isArray(coleta.footballRadar) ? coleta.footballRadar : [];
           atualizarStatsHistorico({
             futebolFinalizadas: dados.stats.finalizadas,
             futebolPctGol: dados.stats.pctComGol,
-            futebolRadar: dados.stats.observadas + dados.stats.emJanela,
+            futebolAoVivo: aoVivoJson.length,
           });
-          renderEstatisticasFutebol(dados);
+          renderEstatisticasFutebol({ ...dados, aoVivoJson });
           return;
         }
 
