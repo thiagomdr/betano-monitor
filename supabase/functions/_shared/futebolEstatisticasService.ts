@@ -140,6 +140,22 @@ async function loadPartidasAtivas(usuarioId: string): Promise<FutebolPartidaRow[
   return (data ?? []) as FutebolPartidaRow[];
 }
 
+async function loadUltimaLeituraPlacar(
+  partidaId: string,
+): Promise<{ placar_casa: number; placar_fora: number } | null> {
+  const { data, error } = await db()
+    .from('futebol_leituras')
+    .select('placar_casa, placar_fora')
+    .eq('partida_id', partidaId)
+    .order('coletado_em', { ascending: false })
+    .limit(1)
+    .maybeSingle();
+
+  if (error) throw new Error(error.message);
+  if (data?.placar_casa == null || data?.placar_fora == null) return null;
+  return { placar_casa: data.placar_casa, placar_fora: data.placar_fora };
+}
+
 async function loadPartidaPorEventId(
   usuarioId: string,
   eventId: number,
@@ -351,14 +367,23 @@ async function processarLeiturasLote(
   for (const p of ativos.filter((x) => x.status === 'em_janela')) {
     const snap = snapPorEvent.get(Number(p.event_id));
     if (!snap) {
-      await db()
-        .from('futebol_partidas')
-        .update({
-          status: 'finalizado',
-          finalizado_em: now.toISOString(),
-          data_atualizacao: now.toISOString(),
-        })
-        .eq('id', p.id);
+      const ult = await loadUltimaLeituraPlacar(p.id);
+      const patch: Record<string, unknown> = {
+        status: 'finalizado',
+        finalizado_em: now.toISOString(),
+        data_atualizacao: now.toISOString(),
+      };
+      if (ult) {
+        patch.placar_casa_final = ult.placar_casa;
+        patch.placar_fora_final = ult.placar_fora;
+        patch.gol_nos_ultimos_5_min = calcularGolUltimos5Min(
+          p.placar_casa_inicio,
+          p.placar_fora_inicio,
+          ult.placar_casa,
+          ult.placar_fora,
+        );
+      }
+      await db().from('futebol_partidas').update(patch).eq('id', p.id);
       finalizadas += 1;
       continue;
     }

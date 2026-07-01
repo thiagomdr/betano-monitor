@@ -1,6 +1,6 @@
 export const HISTORICO_URL_PLACEHOLDER = '__SUPABASE_URL__';
 export const HISTORICO_ANON_KEY_PLACEHOLDER = '__SUPABASE_ANON_KEY__';
-export const PAINEL_BUILD_ID = 'monitor-home-link-20260701';
+export const PAINEL_BUILD_ID = 'futebol-placar-final-20260702';
 
 export function buildHistoricoTemplate(): string {
   const configJson = `{"url":"${HISTORICO_URL_PLACEHOLDER}","anonKey":"${HISTORICO_ANON_KEY_PLACEHOLDER}"}`;
@@ -2289,7 +2289,7 @@ export function buildHistoricoTemplate(): string {
       const badgeTxt = emJanela ? 'Em janela' : 'Finalizado';
       const placarI = formatarPlacarIxF(partida.placar_casa_inicio, partida.placar_fora_inicio);
       let placarF = formatarPlacarIxF(partida.placar_casa_final, partida.placar_fora_final);
-      if (emJanela && placarF === '—' && leituras.length > 0) {
+      if (placarF === '—' && leituras.length > 0) {
         const ult = leituras[leituras.length - 1];
         placarF = formatarPlacarIxF(ult.placar_casa, ult.placar_fora);
       }

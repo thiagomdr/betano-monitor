@@ -4,7 +4,7 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1" />
   <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate" />
-  <meta name="painel-build" content="monitor-home-link-20260701" />
+  <meta name="painel-build" content="futebol-placar-final-20260702" />
   <title>Monitor Betano</title>
   <style>
     * { box-sizing: border-box; margin: 0; padding: 0; }
@@ -982,7 +982,7 @@
     const CHAVE_COLETA_ATIVADA = 'betano_coleta_ativada_em';
     const CHAVE_COLETA_PARADA = 'betano_coleta_parada_em';
     const CHAVE_ESPORTE_ATIVO = 'betano_esporte_ativo';
-    const PAINEL_BUILD_ID = 'monitor-home-link-20260701';
+    const PAINEL_BUILD_ID = 'futebol-placar-final-20260702';
 
     const OPCOES_PERIODO_BASQUETE = [
       { value: 'Q1', label: 'Q1 — desde o 1º quarto' },
@@ -2282,7 +2282,7 @@
       const badgeTxt = emJanela ? 'Em janela' : 'Finalizado';
       const placarI = formatarPlacarIxF(partida.placar_casa_inicio, partida.placar_fora_inicio);
       let placarF = formatarPlacarIxF(partida.placar_casa_final, partida.placar_fora_final);
-      if (emJanela && placarF === '—' && leituras.length > 0) {
+      if (placarF === '—' && leituras.length > 0) {
         const ult = leituras[leituras.length - 1];
         placarF = formatarPlacarIxF(ult.placar_casa, ult.placar_fora);
       }
