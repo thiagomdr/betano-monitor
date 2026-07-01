@@ -1,5 +1,6 @@
 export const HISTORICO_URL_PLACEHOLDER = '__SUPABASE_URL__';
 export const HISTORICO_ANON_KEY_PLACEHOLDER = '__SUPABASE_ANON_KEY__';
+export const PAINEL_BUILD_ID = 'layout-v3-20260701';
 
 export function buildHistoricoTemplate(): string {
   const configJson = `{"url":"${HISTORICO_URL_PLACEHOLDER}","anonKey":"${HISTORICO_ANON_KEY_PLACEHOLDER}"}`;
@@ -9,6 +10,8 @@ export function buildHistoricoTemplate(): string {
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1" />
+  <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate" />
+  <meta name="painel-build" content="${PAINEL_BUILD_ID}" />
   <title>Monitor Betano</title>
   <style>
     * { box-sizing: border-box; margin: 0; padding: 0; }
@@ -192,6 +195,10 @@ export function buildHistoricoTemplate(): string {
       display: flex;
       flex-direction: column;
       gap: 10px;
+    }
+    #conteudo {
+      width: 100%;
+      box-sizing: border-box;
     }
     .card {
       background: #1a1a1a;
@@ -648,8 +655,11 @@ export function buildHistoricoTemplate(): string {
     }
     .futebol-stats-wrap {
       padding: 12px;
+      padding-bottom: 32px;
       max-width: 720px;
       margin: 0 auto;
+      width: 100%;
+      box-sizing: border-box;
       display: flex;
       flex-direction: column;
       gap: 12px;
@@ -664,6 +674,9 @@ export function buildHistoricoTemplate(): string {
     }
     .futebol-stats-resumo strong { color: #fff; }
     .futebol-stats-resumo .destaque { color: #c45c00; font-weight: 600; }
+    .futebol-tabela-wrap {
+      width: 100%;
+    }
     .futebol-tabela {
       width: 100%;
       border-collapse: collapse;
@@ -824,6 +837,7 @@ export function buildHistoricoTemplate(): string {
     const CHAVE_COLETA_ATIVADA = 'betano_coleta_ativada_em';
     const CHAVE_COLETA_PARADA = 'betano_coleta_parada_em';
     const CHAVE_ESPORTE_ATIVO = 'betano_esporte_ativo';
+    const PAINEL_BUILD_ID = '${PAINEL_BUILD_ID}';
 
     const OPCOES_PERIODO_BASQUETE = [
       { value: 'Q1', label: 'Q1 — desde o 1º quarto' },
@@ -1979,9 +1993,9 @@ export function buildHistoricoTemplate(): string {
       }).join('');
       return '<h3 class="futebol-secao-titulo">Jogos ao vivo</h3>' +
         '<p style="color:#888;font-size:12px;margin:0 0 8px">Todos os jogos FOOT do JSON Betano, em qualquer minuto. Coleta ao abrir Futebol ou Coletar Agora.</p>' +
-        '<table class="futebol-tabela"><thead><tr>' +
+        '<div class="futebol-tabela-wrap"><table class="futebol-tabela"><thead><tr>' +
         '<th>Partida</th><th>Liga</th><th>Tempo de jogo</th><th>Placar</th><th>Restante até 85\'</th><th>ETA ~85\'</th><th>Status</th>' +
-        '</tr></thead><tbody>' + linhas + '</tbody></table>';
+        '</tr></thead><tbody>' + linhas + '</tbody></table></div>';
     }
 
     function renderTabelaHistoricoFutebol(historico) {
@@ -2039,6 +2053,38 @@ export function buildHistoricoTemplate(): string {
         renderTabelaAoVivoFutebol(aoVivo) +
         renderTabelaHistoricoFutebol(historico) +
       '</div>';
+      // #region agent log
+      requestAnimationFrame(() => {
+        const wrap = elConteudo.querySelector('.futebol-stats-wrap');
+        const table = elConteudo.querySelector('.futebol-tabela');
+        const abas = document.getElementById('abas-esporte');
+        const abasRect = abas?.getBoundingClientRect();
+        const wrapRect = wrap?.getBoundingClientRect();
+        const tableRect = table?.getBoundingClientRect();
+        const payload = {
+          sessionId: '94b3c3',
+          runId: 'layout-debug',
+          hypothesisId: 'H1-H4',
+          location: 'historicoWebPage.ts:renderEstatisticasFutebol',
+          message: 'futebol layout metrics',
+          data: {
+            buildId: PAINEL_BUILD_ID,
+            viewportW: window.innerWidth,
+            abasW: abasRect?.width ?? null,
+            wrapW: wrapRect?.width ?? null,
+            tableW: tableRect?.width ?? null,
+            colHeaders: table ? Array.from(table.querySelectorAll('th')).map((th) => th.textContent) : [],
+            aoVivoCount: aoVivo.length,
+          },
+          timestamp: Date.now(),
+        };
+        fetch('http://127.0.0.1:7904/ingest/86615625-6ae5-4e98-a1da-0a5f0f15fc42', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', 'X-Debug-Session-Id': '94b3c3' },
+          body: JSON.stringify(payload),
+        }).catch(() => {});
+      });
+      // #endregion
     }
 
     function renderLoading() {
