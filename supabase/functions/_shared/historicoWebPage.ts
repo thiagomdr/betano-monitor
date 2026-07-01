@@ -455,6 +455,13 @@ export function buildHistoricoTemplate(): string {
       font-weight: 600;
       cursor: pointer;
     }
+    .form-regra-nome {
+      grid-column: 1 / -1;
+    }
+    .card-meta-regra {
+      color: #c45c00;
+      font-weight: 600;
+    }
     .regras-vazio { color: #888; font-size: 13px; padding: 8px 0; line-height: 1.5; }
     .historico-stats-bar {
       display: flex;
@@ -525,47 +532,6 @@ export function buildHistoricoTemplate(): string {
       color: #fff;
       border-bottom-color: #c45c00;
     }
-    .alerta-card {
-      background: #1a1a1a;
-      border: 1px solid #2a2a2a;
-      border-radius: 12px;
-      padding: 12px;
-      margin-bottom: 10px;
-    }
-    .alerta-topo {
-      display: flex;
-      justify-content: space-between;
-      align-items: center;
-      gap: 8px;
-      margin-bottom: 8px;
-    }
-    .alerta-hora { font-size: 12px; color: #888; }
-    .alerta-periodo {
-      font-size: 11px;
-      font-weight: 700;
-      color: #c45c00;
-      background: rgba(196, 92, 0, 0.15);
-      padding: 2px 8px;
-      border-radius: 6px;
-    }
-    .alerta-jogo {
-      font-size: 15px;
-      font-weight: 700;
-      color: #fff;
-      margin-bottom: 4px;
-    }
-    .alerta-placar {
-      font-size: 14px;
-      color: #ddd;
-      margin-bottom: 8px;
-    }
-    .alerta-diff { color: #7cb342; font-weight: 600; }
-    .alerta-meta {
-      font-size: 12px;
-      color: #999;
-      line-height: 1.5;
-    }
-    .alerta-meta strong { color: #bbb; font-weight: 600; }
     .hidden { display: none !important; }
   </style>
 </head>
@@ -628,6 +594,7 @@ export function buildHistoricoTemplate(): string {
       <p class="regras-vazio" id="regras-ajuda">Alerta quando o jogo estiver no Q escolhido, com a vantagem em pontos e odd do líder acima dos limites. Uma vez por jogo, por regra.</p>
       <div id="lista-regras"></div>
       <form id="form-regra" class="form-regra">
+        <input id="regra-nome" class="form-regra-nome" type="text" maxlength="80" placeholder="Nome da regra" aria-label="Nome da regra" required />
         <select id="regra-periodo" aria-label="Periodo">
           <option value="Q1">Q1</option>
           <option value="Q2">Q2</option>
@@ -879,6 +846,45 @@ export function buildHistoricoTemplate(): string {
       return formatarTextoRegra(regra);
     }
 
+    function rotuloNomeRegraNoCard(alerta) {
+      const regra = regraEmbedFromAlerta(alerta);
+      if (regra?.nome?.trim()) return regra.nome.trim();
+      return formatarRegraAlertaResumo(alerta);
+    }
+
+    function oddsDoAlerta(alerta, jogoColeta) {
+      if (jogoColeta) {
+        return {
+          oddCasa: Number(jogoColeta.odd_casa ?? 0),
+          oddFora: Number(jogoColeta.odd_fora ?? 0),
+          tempoRestante: jogoColeta.tempo_restante ?? null,
+        };
+      }
+      const oddLider = Number(alerta.odd_lider ?? 0);
+      return {
+        oddCasa: alerta.time_lider === alerta.time_casa ? oddLider : 0,
+        oddFora: alerta.time_lider === alerta.time_fora ? oddLider : 0,
+        tempoRestante: null,
+      };
+    }
+
+    function alertaParaCardView(alerta, jogoColeta) {
+      const estado = inferirEstadoEntrada(alerta.periodo_atual);
+      const odds = oddsDoAlerta(alerta, jogoColeta);
+      return {
+        disparadoEm: alerta.disparado_em,
+        timeCasa: alerta.time_casa,
+        timeFora: alerta.time_fora,
+        placarCasa: alerta.placar_casa,
+        placarFora: alerta.placar_fora,
+        oddCasa: odds.oddCasa,
+        oddFora: odds.oddFora,
+        tempoRestante: odds.tempoRestante,
+        estado,
+        nomeRegra: rotuloNomeRegraNoCard(alerta),
+      };
+    }
+
     function atualizarVisibilidadeConfigAlertas() {
       if (!elRegrasGearWrap) return;
       const mostrar = abaAtiva === 'alertas';
@@ -961,11 +967,14 @@ export function buildHistoricoTemplate(): string {
       elPainelRegras.classList.add('hidden');
     }
 
-    async function adicionarRegra(periodo, minPontos, minOdd) {
+    async function adicionarRegra(nome, periodo, minPontos, minOdd) {
       const usuarioId = await obterUsuarioId();
       if (!usuarioId) throw new Error('Faca login primeiro');
+      const nomeTrim = nome?.trim();
+      if (!nomeTrim) throw new Error('Informe o nome da regra');
       const { error } = await supabase.from('regras_alerta').insert({
         usuario_id: usuarioId,
+        nome: nomeTrim,
         periodo,
         min_pontos: minPontos,
         min_odd: minOdd,
@@ -1405,28 +1414,44 @@ export function buildHistoricoTemplate(): string {
       elConteudo.innerHTML = '<div class="centro"><p class="aviso">Nenhum alerta disparado ainda. Configure regras em Configurações e aguarde um jogo que atenda aos critérios.</p></div>';
     }
 
-    function renderAlertaCard(alerta) {
-      const hora = formatarHora(alerta.disparado_em);
-      const periodo = String(alerta.periodo_atual || '—').trim();
-      const diff = Number(alerta.diferenca_pontos ?? 0);
-      const lider = alerta.time_lider
-        ? escapeHtml(alerta.time_lider) + ' · odd ' + escapeHtml(formatarOddWeb(alerta.odd_lider))
-        : '—';
-      const liga = alerta.liga ? '<div class="alerta-meta">' + escapeHtml(alerta.liga) + '</div>' : '';
+    function renderAlertaCardTopo(estado) {
+      const badgeCls = estado === 'ao_vivo' ? 'ao-vivo' : 'finalizado';
+      return '<div class="card-topo">' +
+        '<span class="status-badge ' + badgeCls + '">' + escapeHtml(rotuloEstado(estado)) + '</span>' +
+      '</div>';
+    }
 
-      return '<article class="alerta-card">' +
-        '<div class="alerta-topo">' +
-          '<span class="alerta-hora">' + escapeHtml(hora) + '</span>' +
-          '<span class="alerta-periodo">' + escapeHtml(periodo) + '</span>' +
+    function renderCorpoCardAlerta(view) {
+      const hora = formatarHora(view.disparadoEm);
+      const aoVivo = view.estado === 'ao_vivo';
+      const periodoRaw = view.periodoAtual;
+      const blocoPeriodo = blocoPeriodoTempo(periodoRaw, view.tempoRestante, view.estado);
+      return '<div class="card-corpo">' +
+        renderHoraPeriodo(hora, blocoPeriodo, '') +
+        renderValoresJogo(
+          view.timeCasa, view.timeFora,
+          view.oddCasa, view.oddFora,
+          view.placarCasa, view.placarFora,
+          aoVivo, false,
+        ) +
+        '<div class="card-meta-linha">' +
+          '<span class="card-meta card-meta-regra">' + escapeHtml(view.nomeRegra) + '</span>' +
         '</div>' +
-        '<div class="alerta-jogo">' + escapeHtml(alerta.time_casa) + ' x ' + escapeHtml(alerta.time_fora) + '</div>' +
-        '<div class="alerta-placar">' +
-          escapeHtml(String(alerta.placar_casa)) + ' – ' + escapeHtml(String(alerta.placar_fora)) +
-          ' <span class="alerta-diff">(+' + diff + ')</span>' +
-        '</div>' +
-        '<div class="alerta-meta"><strong>Regra:</strong> ' + formatarRegraAlertaResumo(alerta) + '</div>' +
-        '<div class="alerta-meta"><strong>Líder:</strong> ' + lider + '</div>' +
-        liga +
+      '</div>';
+    }
+
+    function renderAlertaCard(item) {
+      const { alerta, jogo } = item;
+      const base = alertaParaCardView(alerta, jogo);
+      const periodoAtual = periodoValido(alerta.periodo_atual)
+        ? String(alerta.periodo_atual).trim()
+        : 'Finalizado';
+      const view = { ...base, periodoAtual };
+      const clsFinalizado = view.estado === 'finalizado' ? ' finalizado' : '';
+
+      return '<article class="card' + clsFinalizado + '">' +
+        renderAlertaCardTopo(view.estado) +
+        renderCorpoCardAlerta(view) +
       '</article>';
     }
 
@@ -1611,9 +1636,36 @@ export function buildHistoricoTemplate(): string {
       return todos;
     }
 
+    async function enriquecerAlertasComJogos(alertas) {
+      const coletaIds = [...new Set(alertas.map((a) => a.coleta_id).filter(Boolean))];
+      const jogoPorChave = new Map();
+
+      for (let i = 0; i < coletaIds.length; i += HISTORICO_COLETAS_PAGE) {
+        const lote = coletaIds.slice(i, i + HISTORICO_COLETAS_PAGE);
+        const { data: jogos, error } = await supabase
+          .from('jogos_coleta')
+          .select('coleta_id, game_key, odd_casa, odd_fora, tempo_restante')
+          .in('coleta_id', lote);
+
+        if (error) throw new Error(error.message);
+
+        for (const jogo of jogos ?? []) {
+          jogoPorChave.set(jogo.coleta_id + '|' + jogo.game_key, jogo);
+        }
+      }
+
+      return alertas.map((alerta) => {
+        const chave = alerta.coleta_id ? alerta.coleta_id + '|' + alerta.game_key : null;
+        return {
+          alerta,
+          jogo: chave ? jogoPorChave.get(chave) ?? null : null,
+        };
+      });
+    }
+
     async function buscarDadosAlertas() {
       const alertas = await buscarTodosAlertas();
-      return alertas;
+      return enriquecerAlertasComJogos(alertas);
     }
 
     async function buscarTodosJogos() {

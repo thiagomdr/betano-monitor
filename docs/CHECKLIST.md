@@ -88,7 +88,7 @@ Progresso do **projeto inteiro**. O Agent deve marcar `[x]` ao concluir cada ite
 - [x] Serviço `historicoColetasSupabase.ts` (`listarHistoricoPorJogo`)
 - [x] Painel web histórico — **GitHub Pages** (`thiagomdr.github.io/betano-monitor`)
 - [x] Painel web — **Supabase Realtime** (coletas + scheduler; fallback polling 45s)
-- [x] Painel web — abas **Coletas | Alertas** (histórico `alertas_betano` + Realtime)
+- [x] Painel web — cards de alerta unificados com coletas + nome da regra
 - [~] Edge Function `betano-historico` (legado; Chrome bloqueia redirect — usar Pages)
 
 ### Nuvem — fazer depois
