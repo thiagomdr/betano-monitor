@@ -709,10 +709,57 @@ export function buildHistoricoTemplate(): string {
       margin-top: 8px;
     }
     .futebol-historico-partida {
-      background: #1a1a1a;
       border-radius: 10px;
       padding: 12px;
       border: 1px solid #2a2a2a;
+    }
+    .futebol-historico-partida.sem-gol {
+      background: #1a2e1a;
+      border-color: #2d4a2d;
+    }
+    .futebol-historico-partida.com-gol {
+      background: #2e1a1a;
+      border-color: #4a2d2d;
+    }
+    .futebol-historico-partida.janela,
+    .futebol-historico-partida.neutro {
+      background: #1a1a1a;
+      border-color: #2a2a2a;
+    }
+    .futebol-historico-toggle {
+      cursor: pointer;
+      width: 100%;
+      text-align: left;
+      background: transparent;
+      border: none;
+      padding: 0;
+      color: inherit;
+      font: inherit;
+    }
+    .futebol-historico-resumo {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      flex-wrap: wrap;
+      font-size: 13px;
+      line-height: 1.5;
+      color: #ccc;
+    }
+    .futebol-historico-resumo strong { color: #fff; }
+    .futebol-historico-resumo-meta {
+      font-size: 12px;
+      color: #aaa;
+      flex: 1 1 100%;
+      padding-left: 22px;
+    }
+    @media (min-width: 600px) {
+      .futebol-historico-resumo-meta {
+        flex: 1 1 auto;
+        padding-left: 0;
+      }
+    }
+    .futebol-historico-detalhe {
+      margin-top: 10px;
     }
     .futebol-historico-cabecalho {
       font-size: 13px;
@@ -942,6 +989,8 @@ export function buildHistoricoTemplate(): string {
     let telaRegrasAberta = false;
     let regraEmEdicaoId = null;
     let expandidos = new Set();
+    let futebolHistoricoExpandidos = new Set();
+    let ultimoPayloadFutebol = null;
     let refreshTimer = null;
     let statusTimer = null;
     let realtimeChannel = null;
@@ -2131,7 +2180,14 @@ export function buildHistoricoTemplate(): string {
         '</tr></thead><tbody>' + linhas + '</tbody></table></div>';
     }
 
-    function renderBlocoPartidaHistorico(partida, leituras) {
+    function classeResultadoFutebol(partida) {
+      if (partida.status === 'em_janela') return 'janela';
+      if (partida.gol_nos_ultimos_5_min === true) return 'com-gol';
+      if (partida.gol_nos_ultimos_5_min === false) return 'sem-gol';
+      return 'neutro';
+    }
+
+    function renderBlocoPartidaHistorico(partida, leituras, expandido) {
       const placarInicio = (partida.placar_casa_inicio != null && partida.placar_fora_inicio != null)
         ? partida.placar_casa_inicio + '–' + partida.placar_fora_inicio
         : '—';
@@ -2142,19 +2198,39 @@ export function buildHistoricoTemplate(): string {
       const badgeCls = emJanela ? 'janela' : 'final';
       const badgeTxt = emJanela ? 'Em janela' : 'Finalizado';
       const golTxt = emJanela ? '—' : rotuloGolUltimos5(partida.gol_nos_ultimos_5_min);
-      const leiturasTxt = leituras.length + ' coleta(s) intensiva(s)';
-      return '<article class="futebol-historico-partida">' +
-        '<div class="futebol-historico-cabecalho">' +
-          '<strong>' + escapeHtml(partida.time_casa) + ' x ' + escapeHtml(partida.time_fora) + '</strong>' +
-          '<span class="futebol-historico-badge ' + badgeCls + '">' + badgeTxt + '</span>' +
-          '<div class="futebol-historico-meta">' +
-            escapeHtml(partida.liga || '—') + ' · Placar 85\': ' + escapeHtml(placarInicio) +
-            ' · Final: ' + escapeHtml(placarFinal) + ' · Gol 5 min: ' + golTxt +
-            ' · ' + escapeHtml(leiturasTxt) +
+      const leiturasTxt = leituras.length + ' coleta(s)';
+      const resultadoCls = classeResultadoFutebol(partida);
+      const detalheCls = expandido ? '' : ' hidden';
+      const resumoMeta = escapeHtml(partida.liga || '—') +
+        ' · 85\': ' + escapeHtml(placarInicio) +
+        ' → ' + escapeHtml(placarFinal) +
+        ' · Gol 5 min: ' + golTxt +
+        ' · ' + escapeHtml(leiturasTxt);
+      return '<article class="futebol-historico-partida ' + resultadoCls + '">' +
+        '<button type="button" class="futebol-historico-toggle" data-partida-id="' + escapeHtml(partida.id) + '" aria-expanded="' + (expandido ? 'true' : 'false') + '">' +
+          '<div class="futebol-historico-resumo">' +
+            '<span class="expand-icon">' + (expandido ? '▼' : '▶') + '</span>' +
+            '<strong>' + escapeHtml(partida.time_casa) + ' x ' + escapeHtml(partida.time_fora) + '</strong>' +
+            '<span class="futebol-historico-badge ' + badgeCls + '">' + badgeTxt + '</span>' +
+            '<span class="futebol-historico-resumo-meta">' + resumoMeta + '</span>' +
           '</div>' +
+        '</button>' +
+        '<div class="futebol-historico-detalhe' + detalheCls + '">' +
+          renderTabelaLeiturasPartida(partida, leituras) +
         '</div>' +
-        renderTabelaLeiturasPartida(partida, leituras) +
       '</article>';
+    }
+
+    function wireFutebolHistoricoToggle() {
+      elConteudo.querySelectorAll('.futebol-historico-toggle').forEach((btn) => {
+        btn.addEventListener('click', () => {
+          const id = btn.getAttribute('data-partida-id');
+          if (!id) return;
+          if (futebolHistoricoExpandidos.has(id)) futebolHistoricoExpandidos.delete(id);
+          else futebolHistoricoExpandidos.add(id);
+          if (ultimoPayloadFutebol) renderEstatisticasFutebol(ultimoPayloadFutebol);
+        });
+      });
     }
 
     function renderTabelaHistoricoFutebol(historicoJanela, leiturasPorPartida) {
@@ -2164,10 +2240,11 @@ export function buildHistoricoTemplate(): string {
       }
       const blocos = lista.map((p) => {
         const leituras = leiturasPorPartida[p.id] ?? [];
-        return renderBlocoPartidaHistorico(p, leituras);
+        const expandido = futebolHistoricoExpandidos.has(p.id);
+        return renderBlocoPartidaHistorico(p, leituras, expandido);
       }).join('');
       return '<h3 class="futebol-secao-titulo">Histórico — janela final (85\' até o fim)</h3>' +
-        '<p style="color:#888;font-size:12px;margin:0 0 8px">Coletas intensivas na janela final. +Gols = gols desde a coleta anterior (ou desde o placar no 85\' na primeira linha).</p>' +
+        '<p style="color:#888;font-size:12px;margin:0 0 8px">Clique no jogo para ver as coletas. Verde = sem gol nos 5 min · Vermelho = com gol.</p>' +
         '<div class="futebol-historico-lista">' + blocos + '</div>';
     }
 
@@ -2202,6 +2279,7 @@ export function buildHistoricoTemplate(): string {
         renderTabelaAoVivoFutebol(aoVivo) +
         renderTabelaHistoricoFutebol(historico, leiturasMap) +
       '</div>';
+      wireFutebolHistoricoToggle();
       // #region agent log
       requestAnimationFrame(() => {
         const wrap = elConteudo.querySelector('.futebol-stats-wrap');
@@ -2746,7 +2824,8 @@ export function buildHistoricoTemplate(): string {
             futebolPctGol: dados.stats.pctComGol,
             futebolAoVivo: aoVivoJson.length,
           });
-          renderEstatisticasFutebol({ ...dados, aoVivoJson });
+          ultimoPayloadFutebol = { ...dados, aoVivoJson };
+          renderEstatisticasFutebol(ultimoPayloadFutebol);
           return;
         }
 

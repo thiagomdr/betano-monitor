@@ -2,7 +2,7 @@
 
 Progresso do **painel web + Supabase**. O Agent deve marcar `[x]` ao concluir cada item e atualizar a data abaixo.
 
-**Última atualização:** 2026-06-29 (futebol — histórico janela com leituras intensivas)
+**Última atualização:** 2026-06-29 (futebol — histórico colapsável com cores por resultado)
 
 ---
 
