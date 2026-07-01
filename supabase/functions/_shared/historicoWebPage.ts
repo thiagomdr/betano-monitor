@@ -607,7 +607,7 @@ export function buildHistoricoTemplate(): string {
     </nav>
     <div id="historico-stats-bar" class="historico-stats-bar hidden">
       <span id="historico-stats" class="historico-stats-text" aria-live="polite"></span>
-      <div class="regras-gear-wrap">
+      <div class="regras-gear-wrap hidden">
         <button id="btn-regras-gear" type="button" class="menu-kebab regras-gear-btn" aria-label="Configurações" aria-expanded="false" aria-haspopup="true">
           <svg class="regras-gear-icon" xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path stroke="none" d="M0 0h24v24H0z" fill="none"/><path d="M10.325 4.317c.426 -1.756 2.924 -1.756 3.35 0a1.724 1.724 0 0 0 2.573 1.066c1.543 -.94 3.31 .826 2.37 2.37a1.724 1.724 0 0 0 1.065 2.572c1.756 .426 1.756 2.924 0 3.35a1.724 1.724 0 0 0 -1.066 2.573c.94 1.543 -.826 3.31 -2.37 2.37a1.724 1.724 0 0 0 -2.572 1.065c-.426 1.756 -2.924 1.756 -3.35 0a1.724 1.724 0 0 0 -2.573 -1.066c-1.543 .94 -3.31 -.826 -2.37 -2.37a1.724 1.724 0 0 0 -1.065 -2.572c-1.756 -.426 -1.756 -2.924 0 -3.35a1.724 1.724 0 0 0 1.066 -2.573c-.94 -1.543 .826 -3.31 2.37 -2.37c1 .608 2.296 .07 2.572 -1.065"/><path d="M9 12a3 3 0 1 0 6 0a3 3 0 0 0 -6 0"/></svg>
         </button>
@@ -686,6 +686,7 @@ export function buildHistoricoTemplate(): string {
     const elHistoricoStats = document.getElementById('historico-stats');
     const elBtnRegrasGear = document.getElementById('btn-regras-gear');
     const elRegrasPopover = document.getElementById('regras-popover');
+    const elRegrasGearWrap = document.querySelector('.regras-gear-wrap');
     const elLoginErro = document.getElementById('login-erro');
     const elUserEmail = document.getElementById('user-email');
     const elMonitorStatus = document.getElementById('monitor-status');
@@ -878,12 +879,20 @@ export function buildHistoricoTemplate(): string {
       return formatarTextoRegra(regra);
     }
 
+    function atualizarVisibilidadeConfigAlertas() {
+      if (!elRegrasGearWrap) return;
+      const mostrar = abaAtiva === 'alertas';
+      elRegrasGearWrap.classList.toggle('hidden', !mostrar);
+      if (!mostrar) fecharRegrasPopover();
+    }
+
     function atualizarAbasUi() {
       const coletasAtiva = abaAtiva === 'coletas';
       elAbaColetas?.classList.toggle('ativa', coletasAtiva);
       elAbaAlertas?.classList.toggle('ativa', !coletasAtiva);
       elAbaColetas?.setAttribute('aria-selected', coletasAtiva ? 'true' : 'false');
       elAbaAlertas?.setAttribute('aria-selected', coletasAtiva ? 'false' : 'true');
+      atualizarVisibilidadeConfigAlertas();
     }
 
     function trocarAba(aba) {
@@ -1568,6 +1577,7 @@ export function buildHistoricoTemplate(): string {
     function atualizarStatsHistorico(stats) {
       if (!elHistoricoStatsBar || !elHistoricoStats) return;
       elHistoricoStatsBar.classList.remove('hidden');
+      atualizarVisibilidadeConfigAlertas();
       if (abaAtiva === 'alertas') {
         const total = stats?.total ?? 0;
         elHistoricoStats.textContent = total + ' alerta(s) no histórico';
