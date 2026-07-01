@@ -2,7 +2,7 @@
 
 Progresso do **projeto inteiro**. O Agent deve marcar `[x]` ao concluir cada item e atualizar a data abaixo.
 
-**Última atualização:** 2026-06-29 (abas Coletas | Alertas no painel web)
+**Última atualização:** 2026-06-29 (menu excluir alertas + status finalizado)
 
 ---
 
@@ -89,6 +89,7 @@ Progresso do **projeto inteiro**. O Agent deve marcar `[x]` ao concluir cada ite
 - [x] Painel web histórico — **GitHub Pages** (`thiagomdr.github.io/betano-monitor`)
 - [x] Painel web — **Supabase Realtime** (coletas + scheduler; fallback polling 45s)
 - [x] Painel web — cards de alerta unificados com coletas + nome da regra
+- [x] Painel web — menu ⋮ excluir alerta (aba Alertas) + status finalizado em alertas antigos
 - [~] Edge Function `betano-historico` (legado; Chrome bloqueia redirect — usar Pages)
 
 ### Nuvem — fazer depois

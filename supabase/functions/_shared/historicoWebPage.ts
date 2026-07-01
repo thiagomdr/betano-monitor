@@ -624,6 +624,7 @@ export function buildHistoricoTemplate(): string {
     const TEXTO_INVALIDO = /não existem mercados|mercados disponíveis|de momento|^unknown$/i;
     const HISTORICO_COLETAS_PAGE = 100;
     const HISTORICO_ALERTAS_PAGE = 100;
+    const PAINEL_BUILD_MARK = 'alertas-v2-kebab-estado';
     const AUTO_REFRESH_MS = 45_000;
     const CHAVE_COLETA_ATIVADA = 'betano_coleta_ativada_em';
     const CHAVE_COLETA_PARADA = 'betano_coleta_parada_em';
@@ -869,7 +870,7 @@ export function buildHistoricoTemplate(): string {
     }
 
     function alertaParaCardView(alerta, jogoColeta) {
-      const estado = inferirEstadoEntrada(alerta.periodo_atual);
+      const estado = inferirEstadoAlerta(alerta);
       const odds = oddsDoAlerta(alerta, jogoColeta);
       return {
         disparadoEm: alerta.disparado_em,
@@ -1178,6 +1179,44 @@ export function buildHistoricoTemplate(): string {
       return PERIODOS_AO_VIVO.has(periodo.trim()) ? 'ao_vivo' : 'finalizado';
     }
 
+    /** Alertas são eventos passados: Q2 no disparo não implica jogo ainda ao vivo. */
+    function inferirEstadoAlerta(alerta) {
+      const periodo = String(alerta.periodo_atual ?? '').trim();
+      if (/final|fim|ft|encerrado/i.test(periodo)) {
+        // #region agent log
+        fetch('http://127.0.0.1:7904/ingest/86615625-6ae5-4e98-a1da-0a5f0f15fc42',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'94b3c3'},body:JSON.stringify({sessionId:'94b3c3',hypothesisId:'H2',location:'historicoWebPage:inferirEstadoAlerta',message:'finalizado por texto periodo',data:{periodo,estado:'finalizado'},timestamp:Date.now()})}).catch(()=>{});
+        // #endregion
+        return 'finalizado';
+      }
+      if (!periodoValido(periodo)) {
+        // #region agent log
+        fetch('http://127.0.0.1:7904/ingest/86615625-6ae5-4e98-a1da-0a5f0f15fc42',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'94b3c3'},body:JSON.stringify({sessionId:'94b3c3',hypothesisId:'H2',location:'historicoWebPage:inferirEstadoAlerta',message:'finalizado periodo invalido',data:{periodo,estado:'finalizado'},timestamp:Date.now()})}).catch(()=>{});
+        // #endregion
+        return 'finalizado';
+      }
+
+      const disparado = Date.parse(alerta.disparado_em ?? '');
+      if (!Number.isFinite(disparado)) {
+        // #region agent log
+        fetch('http://127.0.0.1:7904/ingest/86615625-6ae5-4e98-a1da-0a5f0f15fc42',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'94b3c3'},body:JSON.stringify({sessionId:'94b3c3',hypothesisId:'H2',location:'historicoWebPage:inferirEstadoAlerta',message:'finalizado disparado invalido',data:{disparadoEm:alerta.disparado_em,estado:'finalizado'},timestamp:Date.now()})}).catch(()=>{});
+        // #endregion
+        return 'finalizado';
+      }
+
+      const idadeMs = Date.now() - disparado;
+      const JANELA_AO_VIVO_MS = 90 * 60 * 1000;
+      let estado = 'finalizado';
+      if (idadeMs <= JANELA_AO_VIVO_MS && PERIODOS_AO_VIVO.has(periodo)) estado = 'ao_vivo';
+      // #region agent log
+      fetch('http://127.0.0.1:7904/ingest/86615625-6ae5-4e98-a1da-0a5f0f15fc42',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'94b3c3'},body:JSON.stringify({sessionId:'94b3c3',hypothesisId:'H2-H4',location:'historicoWebPage:inferirEstadoAlerta',message:'estado calculado',data:{periodo,disparadoEm:alerta.disparado_em,idadeMs,idadeMin:Math.round(idadeMs/60000),janelaMin:90,estado,timeCasa:alerta.time_casa,timeFora:alerta.time_fora},timestamp:Date.now()})}).catch(()=>{});
+      // #endregion
+      return estado;
+    }
+
+    function menuKeyAlerta(alertaId) {
+      return 'alerta:' + alertaId;
+    }
+
     function blocoPeriodoTempo(periodo, tempo, estado) {
       const p = formatarPeriodoCard(periodo, estado);
       if (tempo) return p + ' [ ' + tempo + ' ]';
@@ -1414,10 +1453,19 @@ export function buildHistoricoTemplate(): string {
       elConteudo.innerHTML = '<div class="centro"><p class="aviso">Nenhum alerta disparado ainda. Configure regras em Configurações e aguarde um jogo que atenda aos critérios.</p></div>';
     }
 
-    function renderAlertaCardTopo(estado) {
+    function renderAlertaCardTopo(estado, menuKey) {
       const badgeCls = estado === 'ao_vivo' ? 'ao-vivo' : 'finalizado';
+      const menuAberto = cardMenuAberto === menuKey;
       return '<div class="card-topo">' +
         '<span class="status-badge ' + badgeCls + '">' + escapeHtml(rotuloEstado(estado)) + '</span>' +
+        '<div class="card-menu-wrap">' +
+          '<button type="button" class="card-menu-kebab" data-key="' + escapeHtml(menuKey) + '" aria-label="Opcoes do alerta" aria-expanded="' + (menuAberto ? 'true' : 'false') + '">' +
+            KEBAB_SVG +
+          '</button>' +
+          '<div class="card-menu-popover' + (menuAberto ? '' : ' hidden') + '">' +
+            '<button type="button" class="menu-item menu-item-danger card-btn-excluir-alerta" data-key="' + escapeHtml(menuKey) + '">Excluir</button>' +
+          '</div>' +
+        '</div>' +
       '</div>';
     }
 
@@ -1448,15 +1496,81 @@ export function buildHistoricoTemplate(): string {
         : 'Finalizado';
       const view = { ...base, periodoAtual };
       const clsFinalizado = view.estado === 'finalizado' ? ' finalizado' : '';
+      const menuKey = menuKeyAlerta(alerta.id);
 
       return '<article class="card' + clsFinalizado + '">' +
-        renderAlertaCardTopo(view.estado) +
+        renderAlertaCardTopo(view.estado, menuKey) +
         renderCorpoCardAlerta(view) +
       '</article>';
     }
 
     function renderListaAlertas(alertas) {
       elConteudo.innerHTML = '<div class="lista">' + alertas.map(renderAlertaCard).join('') + '</div>';
+
+      const kebabCount = elConteudo.querySelectorAll('.card-menu-kebab').length;
+      const excluirCount = elConteudo.querySelectorAll('.card-btn-excluir-alerta').length;
+      // #region agent log
+      fetch('http://127.0.0.1:7904/ingest/86615625-6ae5-4e98-a1da-0a5f0f15fc42',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'94b3c3'},body:JSON.stringify({sessionId:'94b3c3',hypothesisId:'H3',location:'historicoWebPage:renderListaAlertas',message:'dom alertas renderizado',data:{buildMark:PAINEL_BUILD_MARK,alertas:alertas.length,kebabCount,excluirCount,estados:alertas.map((a)=>inferirEstadoAlerta(a.alerta))},timestamp:Date.now()})}).catch(()=>{});
+      // #endregion
+
+      elConteudo.querySelectorAll('.card-menu-kebab').forEach((btn) => {
+        btn.addEventListener('click', (e) => {
+          e.stopPropagation();
+          const key = btn.getAttribute('data-key');
+          if (key) toggleCardMenu(key);
+        });
+      });
+
+      elConteudo.querySelectorAll('.card-menu-popover').forEach((pop) => {
+        pop.addEventListener('click', (e) => e.stopPropagation());
+      });
+
+      elConteudo.querySelectorAll('.card-btn-excluir-alerta').forEach((btn) => {
+        btn.addEventListener('click', (e) => {
+          e.stopPropagation();
+          const menuKey = btn.getAttribute('data-key');
+          if (!menuKey?.startsWith('alerta:')) return;
+          const alertaId = menuKey.slice('alerta:'.length);
+          const item = alertas.find((a) => a.alerta.id === alertaId);
+          if (item) {
+            void excluirAlerta(
+              alertaId,
+              item.alerta.time_casa,
+              item.alerta.time_fora,
+            );
+          }
+        });
+      });
+    }
+
+    async function excluirAlerta(alertaId, timeCasa, timeFora) {
+      const rotulo = timeCasa + ' x ' + timeFora;
+      if (!confirm('Excluir o alerta de ' + rotulo + '?')) return;
+
+      const usuarioId = await obterUsuarioId();
+      if (!usuarioId) {
+        alert('Faca login primeiro');
+        return;
+      }
+
+      const { data: deletados, error } = await supabase
+        .from('alertas_betano')
+        .delete()
+        .eq('id', alertaId)
+        .select('id');
+
+      if (error) {
+        alert(error.message);
+        return;
+      }
+
+      if (!deletados?.length) {
+        alert('Nenhum registro excluido. Tente atualizar a pagina.');
+        return;
+      }
+
+      cardMenuAberto = null;
+      await carregar(true);
     }
 
     async function excluirJogo(gameKey, timeCasa, timeFora) {
@@ -1842,6 +1956,9 @@ export function buildHistoricoTemplate(): string {
       try {
         if (abaAtiva === 'alertas') {
           const alertas = await buscarDadosAlertas();
+          // #region agent log
+          fetch('http://127.0.0.1:7904/ingest/86615625-6ae5-4e98-a1da-0a5f0f15fc42',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'94b3c3'},body:JSON.stringify({sessionId:'94b3c3',hypothesisId:'H1',location:'historicoWebPage:carregar',message:'aba alertas carregada',data:{buildMark:PAINEL_BUILD_MARK,href:location.href,total:alertas.length,temInferirEstadoAlerta:typeof inferirEstadoAlerta==='function'},timestamp:Date.now()})}).catch(()=>{});
+          // #endregion
           atualizarStatsHistorico({ total: alertas.length });
           if (alertas.length === 0) renderVazioAlertas();
           else renderListaAlertas(alertas);
@@ -1997,9 +2114,14 @@ export function buildHistoricoTemplate(): string {
 
     elFormRegra.addEventListener('submit', (e) => {
       e.preventDefault();
+      const nome = document.getElementById('regra-nome').value;
       const periodo = document.getElementById('regra-periodo').value;
       const minPontos = Number(document.getElementById('regra-pontos').value);
       const minOdd = Number(document.getElementById('regra-odd').value);
+      if (!nome?.trim()) {
+        alert('Informe o nome da regra.');
+        return;
+      }
       if (!periodo || !Number.isFinite(minPontos) || minPontos < 1) {
         alert('Informe o período e os pontos (mínimo 1).');
         return;
@@ -2008,7 +2130,7 @@ export function buildHistoricoTemplate(): string {
         alert('Informe a odd mínima (0 ou mais).');
         return;
       }
-      void adicionarRegra(periodo, minPontos, minOdd)
+      void adicionarRegra(nome, periodo, minPontos, minOdd)
         .then(() => {
           elFormRegra.reset();
         })

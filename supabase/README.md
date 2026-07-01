@@ -138,6 +138,15 @@ npx supabase functions deploy betano-alertas-avaliar --project-ref mddortcbebtko
 
 No painel: menu ⚙ → **Regras de Alerta** (Q1–Q4, +pts, odd líder). Próximo passo: Telegram (`telegram_config` + Edge Function).
 
+### Excluir jogos e alertas do histórico
+
+Aplique no SQL Editor:
+
+- `supabase/migrations/20260629170000_delete_jogos.sql` — excluir coletas de um jogo (aba **Coletas**, ⋮ → Excluir)
+- `supabase/migrations/20260629191000_delete_alertas.sql` — excluir alerta (aba **Alertas**, ⋮ → Excluir)
+
+Excluir um jogo em Coletas **não** remove os alertas daquele jogo.
+
 ---
 
 Testa se a Betano aceita `fetch` da nuvem Supabase com headers de Chrome mobile.
