@@ -20,7 +20,7 @@ export function buildHistoricoTemplate(): string {
       line-height: 1.4;
     }
     .header {
-      padding: 16px 12px 12px;
+      padding: 16px 0 12px;
       border-bottom: 1px solid #222;
       position: sticky;
       top: 0;
@@ -34,6 +34,10 @@ export function buildHistoricoTemplate(): string {
       align-items: center;
       justify-content: space-between;
       gap: 12px;
+      max-width: 720px;
+      margin: 0 auto;
+      padding: 0 12px;
+      width: 100%;
     }
     .menu-wrap {
       position: relative;
@@ -170,7 +174,7 @@ export function buildHistoricoTemplate(): string {
       animation: spin 0.8s linear infinite;
     }
     @keyframes spin { to { transform: rotate(360deg); } }
-    .lista { padding: 12px; padding-bottom: 32px; max-width: 520px; margin: 0 auto; }
+    .lista { padding: 12px; padding-bottom: 32px; max-width: 720px; margin: 0 auto; }
     .card {
       background: #1a1a1a;
       border-radius: 10px;
@@ -226,16 +230,15 @@ export function buildHistoricoTemplate(): string {
     .card-valores { width: 100%; }
     .card-colunas,
     .card-linha-time {
-      display: grid;
-      grid-template-columns: minmax(0, 1fr) 52px 52px;
-      column-gap: 10px;
+      display: flex;
       align-items: center;
+      gap: 8px;
       width: 100%;
     }
     .card-colunas { margin-bottom: 4px; }
-    .card-col-nome { display: none; }
+    .card-col-nome,
     .card-nome-time {
-      grid-column: 1;
+      flex: 1;
       font-size: 13px;
       font-weight: 600;
       color: #fff;
@@ -255,8 +258,12 @@ export function buildHistoricoTemplate(): string {
       font-weight: 700;
       flex-shrink: 0;
     }
+    .card-col-nome { flex: 1; }
     .card-boxes {
-      display: contents;
+      display: flex;
+      gap: 8px;
+      margin-left: auto;
+      flex-shrink: 0;
     }
     .card-col-titulo {
       font-size: 9px;
@@ -265,21 +272,19 @@ export function buildHistoricoTemplate(): string {
       text-align: center;
       text-transform: uppercase;
       letter-spacing: 0.04em;
-      justify-self: center;
-      width: 52px;
+      min-width: 44px;
     }
     .card-linha-time { margin-bottom: 6px; }
     .card.finalizado .card-nome-time { color: #888; }
     .card-box {
-      width: 52px;
-      padding: 4px 6px;
+      min-width: 44px;
+      padding: 4px 8px;
       border-radius: 8px;
       font-size: 12px;
       font-weight: 700;
       text-align: center;
       font-family: ui-monospace, monospace;
-      justify-self: center;
-      box-sizing: border-box;
+      flex-shrink: 0;
     }
     .card-box.casa.ao-vivo { background: #1a73e8; color: #fff; }
     .card-box.fora.ao-vivo { background: #c62828; color: #fff; }
@@ -467,8 +472,12 @@ export function buildHistoricoTemplate(): string {
       align-items: center;
       justify-content: space-between;
       gap: 12px;
+      max-width: 720px;
+      margin: 0 auto;
       padding: 4px 12px 10px;
       border-bottom: 1px solid #222;
+      width: 100%;
+      box-sizing: border-box;
     }
     .historico-stats-text {
       font-size: 12px;
@@ -511,7 +520,7 @@ export function buildHistoricoTemplate(): string {
       gap: 0;
       padding: 0 12px;
       border-bottom: 1px solid #222;
-      max-width: 520px;
+      max-width: 720px;
       margin: 0 auto;
     }
     .aba {

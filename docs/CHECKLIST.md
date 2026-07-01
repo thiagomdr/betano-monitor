@@ -2,7 +2,7 @@
 
 Progresso do **painel web + Supabase**. O Agent deve marcar `[x]` ao concluir cada item e atualizar a data abaixo.
 
-**Última atualização:** 2026-06-29 (layout cards desktop + remoção debug)
+**Última atualização:** 2026-06-29 (reverte grid cards; alinha título e stats à coluna dos cards)
 
 ---
 
@@ -27,7 +27,7 @@ Progresso do **painel web + Supabase**. O Agent deve marcar `[x]` ao concluir ca
 - [x] Menu ⋮ excluir jogo (Coletas) e excluir alerta (Alertas)
 - [x] Status alertas: finalizado para disparos antigos
 - [x] Supabase Realtime + polling 45s
-- [x] Layout cards alinhado no desktop (grid nome | placar | odds)
+- [x] Título e barra de stats alinhados à margem esquerda dos cards (desktop)
 - [ ] Paginação completa `jogos_coleta` (limite 1000 por batch)
 
 ---
