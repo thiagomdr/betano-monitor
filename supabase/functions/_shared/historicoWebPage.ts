@@ -285,7 +285,8 @@ export function buildHistoricoTemplate(): string {
       min-width: 44px;
     }
     .card-linha-time { margin-bottom: 6px; }
-    .card.finalizado .card-nome-time { color: #888; }
+    .card.finalizado .card-nome-texto.casa { color: #1a73e8; }
+    .card.finalizado .card-nome-texto.fora { color: #c62828; }
     .card-box {
       min-width: 44px;
       padding: 4px 8px;
@@ -1456,7 +1457,7 @@ export function buildHistoricoTemplate(): string {
         : '';
       return '<div class="card-linha-time">' +
         '<span class="card-nome-time">' +
-          '<span class="card-nome-texto">' + escapeHtml(nome) + '</span>' +
+          '<span class="card-nome-texto ' + lado + '">' + escapeHtml(nome) + '</span>' +
           vantagemHtml +
         '</span>' +
         '<div class="card-boxes">' +
