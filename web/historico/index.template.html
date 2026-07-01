@@ -96,6 +96,11 @@
       cursor: pointer;
     }
     .menu-item:hover { background: #2a2a2a; }
+    a.menu-item {
+      display: block;
+      text-decoration: none;
+      box-sizing: border-box;
+    }
     .menu-item-primary { color: #c45c00; }
     .menu-item-danger { color: #ff6b6b; }
     .menu-item-danger:hover { background: #3a2222; }
@@ -1440,7 +1445,15 @@
       }
 
       grupos.sort((a, b) => new Date(b.ultimaColetaEm) - new Date(a.ultimaColetaEm));
-      const totalEntradas = grupos.reduce((s, g) => s + g.entradas.length, 0);
+      const comLink = grupos.filter((g) => g.betanoUrl).length;
+      logCardBetanoUrl('H3', 'montarGrupos', 'grupos com url_partida', {
+        totalGrupos: grupos.length,
+        comLink,
+        amostra: grupos.slice(0, 3).map((g) => ({
+          gameKey: g.gameKey,
+          betanoUrl: g.betanoUrl ?? null,
+        })),
+      });
       return grupos;
     }
 
@@ -1546,22 +1559,48 @@
       '</div>';
     }
 
-    function renderLinkBetano(url) {
+    function renderMenuItemAbrirBetano(url) {
       if (!url) return '';
-      return '<a class="card-link-betano" href="' + escapeHtml(url) + '" target="_blank" rel="noopener noreferrer" onclick="event.stopPropagation()">Betano</a>';
+      return '<a class="menu-item menu-item-primary card-menu-abrir-betano" href="' + escapeHtml(url) + '" target="_blank" rel="noopener noreferrer" onclick="event.stopPropagation()">Abrir na Betano</a>';
+    }
+
+    function logCardBetanoUrl(hypothesisId, location, message, data) {
+      // #region agent log
+      fetch('http://127.0.0.1:7904/ingest/86615625-6ae5-4e98-a1da-0a5f0f15fc42', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'X-Debug-Session-Id': '94b3c3' },
+        body: JSON.stringify({
+          sessionId: '94b3c3',
+          hypothesisId,
+          location,
+          message,
+          data,
+          timestamp: Date.now(),
+          runId: 'menu-betano',
+        }),
+      }).catch(() => {});
+      // #endregion
     }
 
     function renderCardTopo(jogo) {
       const badgeCls = jogo.estado === 'ao_vivo' ? 'ao-vivo' : 'finalizado';
       const menuAberto = cardMenuAberto === jogo.gameKey;
+      const temLink = Boolean(jogo.betanoUrl);
+      logCardBetanoUrl('H4', 'renderCardTopo', 'card coleta menu betano', {
+        gameKey: jogo.gameKey,
+        temLink,
+        betanoUrl: temLink ? jogo.betanoUrl : null,
+      });
+      const popoverCls = menuAberto ? '' : ' hidden';
+      const linkItem = renderMenuItemAbrirBetano(jogo.betanoUrl);
       return '<div class="card-topo">' +
         '<span class="status-badge ' + badgeCls + '">' + escapeHtml(rotuloEstado(jogo.estado)) + '</span>' +
-        renderLinkBetano(jogo.betanoUrl) +
         '<div class="card-menu-wrap">' +
           '<button type="button" class="card-menu-kebab" data-key="' + escapeHtml(jogo.gameKey) + '" aria-label="Opcoes do jogo" aria-expanded="' + (menuAberto ? 'true' : 'false') + '">' +
             KEBAB_SVG +
           '</button>' +
-          '<div class="card-menu-popover' + (menuAberto ? '' : ' hidden') + '">' +
+          '<div class="card-menu-popover' + popoverCls + '">' +
+            linkItem +
             '<button type="button" class="menu-item menu-item-danger card-btn-excluir" data-key="' + escapeHtml(jogo.gameKey) + '">Excluir</button>' +
           '</div>' +
         '</div>' +
@@ -1615,14 +1654,22 @@
     function renderAlertaCardTopo(estado, menuKey, betanoUrl) {
       const badgeCls = estado === 'ao_vivo' ? 'ao-vivo' : 'finalizado';
       const menuAberto = cardMenuAberto === menuKey;
+      const temLink = Boolean(betanoUrl);
+      logCardBetanoUrl('H4', 'renderAlertaCardTopo', 'card alerta menu betano', {
+        menuKey,
+        temLink,
+        betanoUrl: temLink ? betanoUrl : null,
+      });
+      const popoverCls = menuAberto ? '' : ' hidden';
+      const linkItem = renderMenuItemAbrirBetano(betanoUrl);
       return '<div class="card-topo">' +
         '<span class="status-badge ' + badgeCls + '">' + escapeHtml(rotuloEstado(estado)) + '</span>' +
-        renderLinkBetano(betanoUrl) +
         '<div class="card-menu-wrap">' +
           '<button type="button" class="card-menu-kebab" data-key="' + escapeHtml(menuKey) + '" aria-label="Opcoes do alerta" aria-expanded="' + (menuAberto ? 'true' : 'false') + '">' +
             KEBAB_SVG +
           '</button>' +
-          '<div class="card-menu-popover' + (menuAberto ? '' : ' hidden') + '">' +
+          '<div class="card-menu-popover' + popoverCls + '">' +
+            linkItem +
             '<button type="button" class="menu-item menu-item-danger card-btn-excluir-alerta" data-key="' + escapeHtml(menuKey) + '">Excluir</button>' +
           '</div>' +
         '</div>' +
