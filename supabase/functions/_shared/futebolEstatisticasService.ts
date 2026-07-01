@@ -132,6 +132,27 @@ function calcularGolUltimos5Min(
   return placarCasaFinal !== placarCasaInicio || placarForaFinal !== placarForaInicio;
 }
 
+function camposPartidaDoSnapshot(
+  snap: FootballScoutSnapshot,
+  now: Date,
+): Record<string, unknown> {
+  const base: Record<string, unknown> = {
+    game_key: snap.gameKey,
+    time_casa: snap.homeTeam,
+    time_fora: snap.awayTeam,
+    liga: snap.league,
+    url_partida: snap.betanoUrl,
+    eta_85: snap.eta85,
+    minutos_ate_85: snap.minutesUntil85,
+    placar_casa_atual: snap.homeScore,
+    placar_fora_atual: snap.awayScore,
+    minuto_relogio: snap.periodDescription ?? (snap.matchMinute != null ? `${snap.matchMinute}'` : null),
+    periodo_atual: snap.period,
+    data_atualizacao: now.toISOString(),
+  };
+  return base;
+}
+
 async function atualizarRadar(
   usuarioId: string,
   snapshots: FootballScoutSnapshot[],
@@ -145,40 +166,50 @@ async function atualizarRadar(
     if (snap.isFinished) continue;
 
     const existente = await loadPartidaPorEventId(usuarioId, snap.eventId);
+    const campos = camposPartidaDoSnapshot(snap, now);
 
     if (!existente) {
-      if (snap.inFinalWindow || snap.minutesUntil85 == null) continue;
-      const { error } = await db().from('futebol_partidas').insert({
+      if (snap.minutesUntil85 == null && !snap.inFinalWindow) continue;
+
+      const status = snap.inFinalWindow ? 'em_janela' : 'observado';
+      const insertRow: Record<string, unknown> = {
         usuario_id: usuarioId,
         event_id: snap.eventId,
-        game_key: snap.gameKey,
-        time_casa: snap.homeTeam,
-        time_fora: snap.awayTeam,
-        liga: snap.league,
-        url_partida: snap.betanoUrl,
-        status: 'observado',
-        eta_85: snap.eta85,
-        minutos_ate_85: snap.minutesUntil85,
-        data_atualizacao: now.toISOString(),
-      });
+        status,
+        ...campos,
+      };
+      if (snap.inFinalWindow) {
+        insertRow.minuto_inicio_janela = snap.matchMinute ?? JANELA_MINUTO_INICIO;
+        insertRow.placar_casa_inicio = snap.homeScore;
+        insertRow.placar_fora_inicio = snap.awayScore;
+      }
+
+      const { error } = await db().from('futebol_partidas').insert(insertRow);
       if (error) throw new Error(error.message);
       continue;
     }
 
-    if (existente.status === 'em_janela') continue;
+    if (existente.status === 'finalizado') continue;
 
-    if (existente.status === 'observado') {
+    if (existente.status === 'em_janela') {
       await db()
         .from('futebol_partidas')
-        .update({
-          eta_85: snap.eta85,
-          minutos_ate_85: snap.minutesUntil85,
-          time_casa: snap.homeTeam,
-          time_fora: snap.awayTeam,
-          liga: snap.league,
-          url_partida: snap.betanoUrl,
-          data_atualizacao: now.toISOString(),
-        })
+        .update(campos)
+        .eq('id', existente.id);
+      continue;
+    }
+
+    if (existente.status === 'observado') {
+      const patch: Record<string, unknown> = { ...campos };
+      if (snap.inFinalWindow) {
+        patch.status = 'em_janela';
+        patch.minuto_inicio_janela = snap.matchMinute ?? JANELA_MINUTO_INICIO;
+        patch.placar_casa_inicio = snap.homeScore;
+        patch.placar_fora_inicio = snap.awayScore;
+      }
+      await db()
+        .from('futebol_partidas')
+        .update(patch)
         .eq('id', existente.id);
     }
   }
@@ -377,5 +408,40 @@ export async function processarFutebolEstatisticas(
     partidasFinalizadas,
     nextFetchAt,
     modo,
+  };
+}
+
+export interface SincronizarRadarResult {
+  localizadosJson: number;
+  sincronizados: number;
+  processamento: ProcessarFutebolResult;
+}
+
+/** Coleta imediata: todos os jogos FOOT do JSON → futebol_partidas (radar + janela se aplicável). */
+export async function sincronizarFutebolRadarImediato(
+  usuarioId: string,
+  payload: BetanoOverviewPayload,
+  now: Date = new Date(),
+): Promise<SincronizarRadarResult> {
+  const snapshots = parseFootballScoutFromOverview(payload, now);
+  const localizadosJson = snapshots.filter((s) => !s.isFinished).length;
+
+  const processamento = await processarFutebolEstatisticas(usuarioId, payload, {
+    footballFetchDue: true,
+    ranRadar: true,
+  }, now);
+
+  const { count, error: countErr } = await db()
+    .from('futebol_partidas')
+    .select('*', { count: 'exact', head: true })
+    .eq('usuario_id', usuarioId)
+    .in('status', ['observado', 'em_janela']);
+
+  if (countErr) throw new Error(countErr.message);
+
+  return {
+    localizadosJson,
+    sincronizados: count ?? localizadosJson,
+    processamento,
   };
 }

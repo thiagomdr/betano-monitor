@@ -634,6 +634,12 @@
       border: 1px solid #333;
       border-radius: 8px;
     }
+    .futebol-secao-titulo {
+      font-size: 14px;
+      font-weight: 600;
+      color: #fff;
+      margin: 8px 0 4px;
+    }
     .futebol-stats-wrap {
       padding: 12px;
       max-width: 720px;
@@ -1814,6 +1820,21 @@
         .replace(/"/g, '&quot;');
     }
 
+    async function executarColetaFutebolRadar() {
+      const { data, error } = await supabase.functions.invoke('betano-coleta', { body: {} });
+      if (error) throw new Error(error.message);
+      if (!data) throw new Error('Resposta vazia da coleta');
+      if (data.blocked) throw new Error(data.summary || 'Bloqueio provável na Betano');
+      return data;
+    }
+
+    function formatarMinutosAte85(valor) {
+      if (valor == null || !Number.isFinite(Number(valor))) return '—';
+      const n = Math.round(Number(valor));
+      if (n <= 0) return '≤ 85\'';
+      return '~' + n + ' min';
+    }
+
     async function buscarEstatisticasFutebol() {
       const [{ data: partidas, error }, { data: agenda }] = await Promise.all([
         supabase
@@ -1863,8 +1884,64 @@
       }
     }
 
+    function renderTabelaRadarFutebol(radar) {
+      if (!radar.length) {
+        return '<p class="aviso">Nenhum jogo de futebol ao vivo no JSON neste momento.</p>';
+      }
+      const linhas = radar.map((p) => {
+        const placar = (p.placar_casa_atual != null && p.placar_fora_atual != null)
+          ? p.placar_casa_atual + '–' + p.placar_fora_atual
+          : '—';
+        const minuto = p.minuto_relogio?.trim() || p.periodo_atual || '—';
+        const status = p.status === 'em_janela' ? 'Em janela (≥85\')' : 'Radar';
+        return '<tr>' +
+          '<td>' + escapeHtml(p.time_casa) + ' x ' + escapeHtml(p.time_fora) + '</td>' +
+          '<td>' + escapeHtml(p.liga || '—') + '</td>' +
+          '<td>' + escapeHtml(String(minuto)) + '</td>' +
+          '<td>' + escapeHtml(placar) + '</td>' +
+          '<td>' + escapeHtml(formatarMinutosAte85(p.minutos_ate_85)) + '</td>' +
+          '<td>' + escapeHtml(formatarDataCurta(p.eta_85)) + '</td>' +
+          '<td>' + escapeHtml(status) + '</td>' +
+        '</tr>';
+      }).join('');
+      return '<h3 class="futebol-secao-titulo">Jogos localizados no JSON (antes dos 85 min)</h3>' +
+        '<p style="color:#888;font-size:12px;margin:0 0 8px">Atualizado a cada coleta. Dados prévios; placar 85\' e estatística final vêm depois.</p>' +
+        '<table class="futebol-tabela"><thead><tr>' +
+        '<th>Partida</th><th>Liga</th><th>Minuto</th><th>Placar</th><th>Até 85\'</th><th>ETA ~85\'</th><th>Status</th>' +
+        '</tr></thead><tbody>' + linhas + '</tbody></table>';
+    }
+
+    function renderTabelaHistoricoFutebol(historico) {
+      if (!historico.length) {
+        return '<p class="aviso" style="margin-top:12px">Nenhuma partida finalizada na janela ainda.</p>';
+      }
+      const linhas = historico.map((p) => {
+        const placarInicio = (p.placar_casa_inicio != null && p.placar_fora_inicio != null)
+          ? p.placar_casa_inicio + '–' + p.placar_fora_inicio
+          : '—';
+        const placarFinal = (p.placar_casa_final != null && p.placar_fora_final != null)
+          ? p.placar_casa_final + '–' + p.placar_fora_final
+          : '—';
+        return '<tr>' +
+          '<td>' + escapeHtml(p.time_casa) + ' x ' + escapeHtml(p.time_fora) + '</td>' +
+          '<td>' + escapeHtml(placarInicio) + '</td>' +
+          '<td>' + escapeHtml(placarFinal) + '</td>' +
+          '<td>' + rotuloGolUltimos5(p.gol_nos_ultimos_5_min) + '</td>' +
+          '<td>' + escapeHtml(formatarDataCurta(p.finalizado_em ?? p.data_atualizacao)) + '</td>' +
+        '</tr>';
+      }).join('');
+      return '<h3 class="futebol-secao-titulo">Histórico — janela final (85\' até o fim)</h3>' +
+        '<table class="futebol-tabela"><thead><tr>' +
+        '<th>Partida</th><th>Placar 85\'</th><th>Final</th><th>Gol 5 min?</th><th>Encerrado</th>' +
+        '</tr></thead><tbody>' + linhas + '</tbody></table>';
+    }
+
     function renderEstatisticasFutebol(payload) {
       const { partidas, agenda, stats } = payload;
+      const radar = partidas
+        .filter((p) => p.status === 'observado' || p.status === 'em_janela')
+        .sort((a, b) => Number(a.minutos_ate_85 ?? 9999) - Number(b.minutos_ate_85 ?? 9999));
+      const historico = partidas.filter((p) => p.status === 'finalizado');
       const pct = stats.pctComGol != null
         ? stats.pctComGol + '% das partidas finalizadas tiveram gol nos últimos 5 min'
         : 'Aguardando partidas finalizadas para calcular a estatística';
@@ -1878,37 +1955,13 @@
         '<p>' + stats.finalizadas + ' finalizada(s) · ' + stats.comGol + ' com gol · ' + stats.semGol + ' sem gol · ' +
         stats.emJanela + ' em janela agora · ' + stats.observadas + ' no radar</p>' +
         '<p style="color:#888;margin-top:8px">' + escapeHtml(agendaTxt) + '</p>' +
-        '<p style="color:#888;margin-top:4px">Coleta intensiva agrupada: um fetch para todos os jogos em janela, a cada 40–50 s.</p>' +
+        '<p style="color:#888;margin-top:4px">Coleta imediata ao abrir Futebol ou Coletar Agora. Intensivo em lote: 40–50 s na janela.</p>' +
       '</div>';
 
-      if (!partidas.length) {
-        elConteudo.innerHTML = '<div class="futebol-stats-wrap">' + resumo +
-          '<p class="aviso">Nenhuma partida registrada ainda.</p></div>';
-        return;
-      }
-
-      const linhas = partidas.map((p) => {
-        const placarInicio = (p.placar_casa_inicio != null && p.placar_fora_inicio != null)
-          ? p.placar_casa_inicio + '–' + p.placar_fora_inicio
-          : '—';
-        const placarFinal = (p.placar_casa_final != null && p.placar_fora_final != null)
-          ? p.placar_casa_final + '–' + p.placar_fora_final
-          : (p.status === 'em_janela' ? 'ao vivo' : '—');
-        const status = p.status === 'em_janela' ? 'Em janela' : (p.status === 'observado' ? 'Radar' : 'Finalizado');
-        return '<tr>' +
-          '<td>' + escapeHtml(p.time_casa) + ' x ' + escapeHtml(p.time_fora) + '</td>' +
-          '<td>' + escapeHtml(status) + '</td>' +
-          '<td>' + escapeHtml(placarInicio) + '</td>' +
-          '<td>' + escapeHtml(String(placarFinal)) + '</td>' +
-          '<td>' + rotuloGolUltimos5(p.gol_nos_ultimos_5_min) + '</td>' +
-          '<td>' + escapeHtml(formatarDataCurta(p.finalizado_em ?? p.data_atualizacao)) + '</td>' +
-        '</tr>';
-      }).join('');
-
       elConteudo.innerHTML = '<div class="futebol-stats-wrap">' + resumo +
-        '<table class="futebol-tabela"><thead><tr>' +
-        '<th>Partida</th><th>Status</th><th>Placar 85\'</th><th>Final</th><th>Gol 5 min?</th><th>Atualizado</th>' +
-        '</tr></thead><tbody>' + linhas + '</tbody></table></div>';
+        renderTabelaRadarFutebol(radar) +
+        renderTabelaHistoricoFutebol(historico) +
+      '</div>';
     }
 
     function renderLoading() {
@@ -2146,10 +2199,12 @@
       }
       if (esporteAtivo === 'futebol') {
         const n = stats?.futebolFinalizadas ?? 0;
+        const radar = stats?.futebolRadar ?? 0;
         const pct = stats?.futebolPctGol;
+        const base = radar + ' no radar';
         elHistoricoStats.textContent = pct != null
-          ? n + ' partida(s) · ' + pct + '% com gol nos últimos 5 min'
-          : n + ' partida(s) monitorada(s)';
+          ? base + ' · ' + n + ' finalizada(s) · ' + pct + '% com gol nos 5 min'
+          : base + ' · ' + n + ' finalizada(s)';
         return;
       }
       elHistoricoStats.textContent = stats
@@ -2281,7 +2336,19 @@
     async function coletarAgora() {
       if (coletando) return;
       if (esporteAtivo === 'futebol') {
-        alert('Estatísticas de futebol são coletadas automaticamente pelo monitor (radar + janela final 40–50 s). Use Iniciar Coleta no menu.');
+        coletando = true;
+        elBtnColetar.disabled = true;
+        elBtnColetar.textContent = 'Coletando...';
+        try {
+          await executarColetaFutebolRadar();
+          await carregar(true);
+        } catch (e) {
+          alert(e instanceof Error ? e.message : 'Falha na coleta de futebol');
+        } finally {
+          coletando = false;
+          elBtnColetar.disabled = false;
+          elBtnColetar.textContent = 'Coletar Agora';
+        }
         return;
       }
       coletando = true;
@@ -2378,13 +2445,14 @@
         }
 
         if (esporteAtivo === 'futebol') {
+          await executarColetaFutebolRadar();
           const dados = await buscarEstatisticasFutebol();
           atualizarStatsHistorico({
             futebolFinalizadas: dados.stats.finalizadas,
             futebolPctGol: dados.stats.pctComGol,
+            futebolRadar: dados.stats.observadas + dados.stats.emJanela,
           });
-          if (!dados.partidas.length) renderVazio();
-          else renderEstatisticasFutebol(dados);
+          renderEstatisticasFutebol(dados);
           return;
         }
 
