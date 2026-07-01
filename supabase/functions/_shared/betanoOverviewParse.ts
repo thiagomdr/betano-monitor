@@ -9,6 +9,8 @@ export type GamePeriod =
   | 'OT'
   | 'unknown';
 
+const BETANO_ORIGIN = 'https://www.betano.bet.br';
+
 export interface ParsedGame {
   homeTeam: string;
   awayTeam: string;
@@ -19,6 +21,24 @@ export interface ParsedGame {
   homeOdd: number;
   awayOdd: number;
   tempoRestante: string | null;
+  eventId: number | null;
+  betanoUrl: string | null;
+}
+
+/** Monta URL absoluta da partida a partir do campo `url` do JSON overview. */
+export function buildBetanoEventUrl(
+  path: string | undefined,
+  eventId?: number | null,
+): string | null {
+  const trimmed = path?.trim();
+  if (trimmed) {
+    if (trimmed.startsWith('http://') || trimmed.startsWith('https://')) return trimmed;
+    if (trimmed.startsWith('/')) return `${BETANO_ORIGIN}${trimmed}`;
+  }
+  if (eventId != null && Number.isFinite(eventId)) {
+    return `${BETANO_ORIGIN}/live/${eventId}/`;
+  }
+  return null;
 }
 
 const SIMULATED_LEAGUE_PATTERN =
@@ -49,6 +69,7 @@ interface OverviewMarket {
 
 interface OverviewEvent {
   id?: number;
+  url?: string;
   leagueId?: number;
   sportId?: string;
   marketIdList?: number[];
@@ -216,6 +237,8 @@ function eventToGame(
     period,
   );
 
+  const eventId = event.id ?? null;
+
   return {
     homeTeam: home.name.trim(),
     awayTeam: away.name.trim(),
@@ -226,6 +249,8 @@ function eventToGame(
     homeOdd,
     awayOdd,
     tempoRestante,
+    eventId,
+    betanoUrl: buildBetanoEventUrl(event.url, eventId),
   };
 }
 

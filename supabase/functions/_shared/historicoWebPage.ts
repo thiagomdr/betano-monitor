@@ -326,6 +326,21 @@ export function buildHistoricoTemplate(): string {
       background: #454545;
       color: #000;
     }
+    .card-link-betano {
+      font-size: 10px;
+      font-weight: 600;
+      padding: 4px 8px;
+      border-radius: 4px;
+      background: #c45c00;
+      color: #fff;
+      text-decoration: none;
+      flex-shrink: 0;
+      line-height: 1.2;
+    }
+    .card-link-betano:hover {
+      background: #d96a00;
+      color: #fff;
+    }
     .card-menu-wrap {
       position: relative;
       flex-shrink: 0;
@@ -1011,6 +1026,7 @@ export function buildHistoricoTemplate(): string {
     function alertaParaCardView(alerta, jogoColeta) {
       const estado = inferirEstadoAlerta(alerta);
       const odds = oddsDoAlerta(alerta, jogoColeta);
+      const betanoUrl = alerta.url_partida ?? jogoColeta?.url_partida ?? null;
       return {
         disparadoEm: alerta.disparado_em,
         timeCasa: alerta.time_casa,
@@ -1022,6 +1038,7 @@ export function buildHistoricoTemplate(): string {
         tempoRestante: odds.tempoRestante,
         estado,
         nomeRegra: rotuloNomeRegraNoCard(alerta),
+        betanoUrl,
       };
     }
 
@@ -1319,6 +1336,7 @@ export function buildHistoricoTemplate(): string {
           oddCasa: Number(jogo.odd_casa ?? 0),
           oddFora: Number(jogo.odd_fora ?? 0),
           tempoRestante: jogo.tempo_restante ?? null,
+          urlPartida: jogo.url_partida ?? null,
           rotuloVantagem: formatarRotuloVantagem(
             jogo.placar_casa, jogo.placar_fora, jogo.time_casa, jogo.time_fora,
           ),
@@ -1340,12 +1358,17 @@ export function buildHistoricoTemplate(): string {
         const ultima = entradaMaisRecente(entradas);
         const estado = inferirEstadoGrupo(entradas, ultimaColetaGlobalEm);
         const periodoRef = ultimaEntradaPeriodoValido(entradas)?.periodo ?? ultima.periodo;
+        const betanoUrl =
+          ultima.urlPartida ??
+          entradas.find((e) => e.urlPartida)?.urlPartida ??
+          null;
         grupos.push({
           gameKey,
           timeCasa: meta.time_casa,
           timeFora: meta.time_fora,
           liga: sanitizarLiga(meta.liga),
           estado,
+          betanoUrl,
           ultimaColetaEm: ultima.coletadoEm,
           ultimoPlacarCasa: ultima.placarCasa,
           ultimoPlacarFora: ultima.placarFora,
@@ -1455,11 +1478,17 @@ export function buildHistoricoTemplate(): string {
       '</div>';
     }
 
+    function renderLinkBetano(url) {
+      if (!url) return '';
+      return '<a class="card-link-betano" href="' + escapeHtml(url) + '" target="_blank" rel="noopener noreferrer" onclick="event.stopPropagation()">Betano</a>';
+    }
+
     function renderCardTopo(jogo) {
       const badgeCls = jogo.estado === 'ao_vivo' ? 'ao-vivo' : 'finalizado';
       const menuAberto = cardMenuAberto === jogo.gameKey;
       return '<div class="card-topo">' +
         '<span class="status-badge ' + badgeCls + '">' + escapeHtml(rotuloEstado(jogo.estado)) + '</span>' +
+        renderLinkBetano(jogo.betanoUrl) +
         '<div class="card-menu-wrap">' +
           '<button type="button" class="card-menu-kebab" data-key="' + escapeHtml(jogo.gameKey) + '" aria-label="Opcoes do jogo" aria-expanded="' + (menuAberto ? 'true' : 'false') + '">' +
             KEBAB_SVG +
@@ -1515,11 +1544,12 @@ export function buildHistoricoTemplate(): string {
       elConteudo.innerHTML = '<div class="centro"><p class="aviso">Nenhum alerta disparado ainda. Configure regras em Regras de Alertas no menu e aguarde um jogo que atenda aos critérios.</p></div>';
     }
 
-    function renderAlertaCardTopo(estado, menuKey) {
+    function renderAlertaCardTopo(estado, menuKey, betanoUrl) {
       const badgeCls = estado === 'ao_vivo' ? 'ao-vivo' : 'finalizado';
       const menuAberto = cardMenuAberto === menuKey;
       return '<div class="card-topo">' +
         '<span class="status-badge ' + badgeCls + '">' + escapeHtml(rotuloEstado(estado)) + '</span>' +
+        renderLinkBetano(betanoUrl) +
         '<div class="card-menu-wrap">' +
           '<button type="button" class="card-menu-kebab" data-key="' + escapeHtml(menuKey) + '" aria-label="Opcoes do alerta" aria-expanded="' + (menuAberto ? 'true' : 'false') + '">' +
             KEBAB_SVG +
@@ -1561,7 +1591,7 @@ export function buildHistoricoTemplate(): string {
       const menuKey = menuKeyAlerta(alerta.id);
 
       return '<article class="card' + clsCard + '">' +
-        renderAlertaCardTopo(view.estado, menuKey) +
+        renderAlertaCardTopo(view.estado, menuKey, view.betanoUrl) +
         renderCorpoCardAlerta(view) +
       '</article>';
     }
@@ -1748,7 +1778,7 @@ export function buildHistoricoTemplate(): string {
         const lote = coletaIds.slice(i, i + HISTORICO_COLETAS_PAGE);
         const { data: jogos, error } = await supabase
           .from('jogos_coleta')
-          .select('coleta_id, game_key, odd_casa, odd_fora, tempo_restante')
+          .select('coleta_id, game_key, odd_casa, odd_fora, tempo_restante, url_partida')
           .in('coleta_id', lote);
 
         if (error) throw new Error(error.message);
@@ -1893,6 +1923,8 @@ export function buildHistoricoTemplate(): string {
           odd_casa: g.homeOdd ?? 0,
           odd_fora: g.awayOdd ?? 0,
           tempo_restante: g.tempoRestante ?? null,
+          event_id: g.eventId ?? null,
+          url_partida: g.betanoUrl ?? null,
         }));
         const { error: errJogos } = await supabase.from('jogos_coleta').insert(linhas);
         if (errJogos) throw new Error(errJogos.message);

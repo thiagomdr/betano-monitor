@@ -2,7 +2,7 @@
 
 Progresso do **painel web + Supabase**. O Agent deve marcar `[x]` ao concluir cada item e atualizar a data abaixo.
 
-**Última atualização:** 2026-06-29 (tela Regras + lógica quarto a partir de / ODD ≥)
+**Última atualização:** 2026-06-29 (link partida Betano nos cards)
 
 ---
 
@@ -28,6 +28,7 @@ Progresso do **painel web + Supabase**. O Agent deve marcar `[x]` ao concluir ca
 - [x] Status alertas: finalizado para disparos antigos
 - [x] Supabase Realtime + polling 45s
 - [x] Título e barra de stats alinhados à margem esquerda dos cards (desktop)
+- [x] Link Betano nos cards (Coletas e Alertas) — `url` da API overview
 - [ ] Paginação completa `jogos_coleta` (limite 1000 por batch)
 
 ---

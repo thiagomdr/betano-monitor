@@ -144,6 +144,7 @@ export async function avaliarEGravarAlertas(
         periodo_atual: c.game.period,
         odd_lider: c.leaderOdd,
         time_lider: c.leadingTeam,
+        url_partida: c.game.betanoUrl,
         telegram_enviado: false,
         disparado_em: agora,
       });
@@ -211,6 +212,8 @@ export async function persistColetaComJogos(
       odd_casa: jogo.homeOdd ?? 0,
       odd_fora: jogo.awayOdd ?? 0,
       tempo_restante: jogo.tempoRestante ?? null,
+      event_id: jogo.eventId,
+      url_partida: jogo.betanoUrl,
     }));
 
     const { error: jogosError } = await client.from('jogos_coleta').insert(linhasJogos);

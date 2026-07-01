@@ -24,6 +24,7 @@ Config: `web/historico/supabase.config.json` ou secrets `EXPO_PUBLIC_SUPABASE_*`
 | `20260629180000_regras_alerta.sql` | Regras configuráveis |
 | `20260629190000_realtime_alertas.sql` | Realtime alertas |
 | `20260629191000_delete_alertas.sql` | Excluir alertas no painel |
+| `20260629192000_jogos_url_partida.sql` | `event_id` e `url_partida` (link Betano) |
 
 `20260629140000_storage_web.sql` — legado (Storage HTML); **não necessário** com GitHub Pages.
 

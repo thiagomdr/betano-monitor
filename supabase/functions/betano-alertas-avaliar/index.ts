@@ -73,6 +73,8 @@ Deno.serve(async (req) => {
       homeOdd: Number(j.odd_casa ?? 0),
       awayOdd: Number(j.odd_fora ?? 0),
       tempoRestante: (j.tempo_restante as string | null) ?? null,
+      eventId: j.event_id != null ? Number(j.event_id) : null,
+      betanoUrl: (j.url_partida as string | null) ?? null,
     }));
 
     const alertas = await avaliarEGravarAlertas(usuarioId, coletaId, games);
