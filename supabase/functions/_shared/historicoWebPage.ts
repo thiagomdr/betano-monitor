@@ -182,6 +182,8 @@ export function buildHistoricoTemplate(): string {
       margin-bottom: 10px;
       position: relative;
     }
+    .card.ao-vivo { background: #0d2847; }
+    .card.feminino { background: #4a1a3a; }
     .card-header {
       display: block;
       cursor: pointer;
@@ -1105,6 +1107,20 @@ export function buildHistoricoTemplate(): string {
       return t && !TEXTO_INVALIDO.test(t) ? t : null;
     }
 
+    function isLigaFeminina(liga) {
+      if (!liga) return false;
+      const t = String(liga).trim();
+      return /feminin/i.test(t) || /women/i.test(t) || /\(W\)/i.test(t) || /\bW\b/.test(t);
+    }
+
+    function classesCard(estado, liga) {
+      const cls = [];
+      if (estado === 'finalizado') cls.push('finalizado');
+      if (estado === 'ao_vivo') cls.push('ao-vivo');
+      if (isLigaFeminina(liga)) cls.push('feminino');
+      return cls.length ? ' ' + cls.join(' ') : '';
+    }
+
     function entradaMaisRecente(entradas) {
       return entradas.reduce((a, b) =>
         new Date(a.coletadoEm) > new Date(b.coletadoEm) ? a : b,
@@ -1362,9 +1378,9 @@ export function buildHistoricoTemplate(): string {
         ? '<div class="timeline">' + jogo.entradas.map((e) => renderTimeline(e, jogo.timeCasa, jogo.timeFora)).join('') + '</div>'
         : '';
 
-      const clsFinalizado = jogo.estado === 'finalizado' ? ' finalizado' : '';
+      const clsCard = classesCard(jogo.estado, jogo.liga);
 
-      return '<article class="card' + clsFinalizado + '">' +
+      return '<article class="card' + clsCard + '">' +
         renderCardTopo(jogo) +
         '<button type="button" class="card-header" data-key="' + escapeHtml(jogo.gameKey) + '">' +
           renderCorpoCard(jogo, exp) +
@@ -1442,10 +1458,10 @@ export function buildHistoricoTemplate(): string {
         ? String(alerta.periodo_atual).trim()
         : 'Finalizado';
       const view = { ...base, periodoAtual };
-      const clsFinalizado = view.estado === 'finalizado' ? ' finalizado' : '';
+      const clsCard = classesCard(view.estado, alerta.liga);
       const menuKey = menuKeyAlerta(alerta.id);
 
-      return '<article class="card' + clsFinalizado + '">' +
+      return '<article class="card' + clsCard + '">' +
         renderAlertaCardTopo(view.estado, menuKey) +
         renderCorpoCardAlerta(view) +
       '</article>';
