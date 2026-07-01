@@ -1,6 +1,6 @@
 export const HISTORICO_URL_PLACEHOLDER = '__SUPABASE_URL__';
 export const HISTORICO_ANON_KEY_PLACEHOLDER = '__SUPABASE_ANON_KEY__';
-export const PAINEL_BUILD_ID = 'futebol-gols-minuto-popover-20260709';
+export const PAINEL_BUILD_ID = 'futebol-gols-popover-linha-20260709';
 
 export function buildHistoricoTemplate(): string {
   const configJson = `{"url":"${HISTORICO_URL_PLACEHOLDER}","anonKey":"${HISTORICO_ANON_KEY_PLACEHOLDER}"}`;
@@ -888,6 +888,11 @@ export function buildHistoricoTemplate(): string {
       color: #777;
       font-size: 10px;
       margin-top: 2px;
+    }
+    .futebol-gol-minuto-linha-num {
+      color: #666;
+      font-weight: 600;
+      margin-right: 4px;
     }
     .futebol-historico-numero {
       flex-shrink: 0;
@@ -2424,6 +2429,7 @@ export function buildHistoricoTemplate(): string {
         const pid = ev.partida_id;
         if (!porMinuto[min][pid]) {
           porMinuto[min][pid] = {
+            partidaId: pid,
             casa: partida.time_casa ?? '—',
             fora: partida.time_fora ?? '—',
             liga: partida.liga ?? null,
@@ -2441,16 +2447,33 @@ export function buildHistoricoTemplate(): string {
       return resultado;
     }
 
-    function renderListaJogosGolMinuto(jogos) {
+    function buildNumerosPorPartida(lista) {
+      const map = {};
+      lista.forEach((p, idx) => {
+        map[p.id] = lista.length - idx;
+      });
+      return map;
+    }
+
+    function renderListaJogosGolMinuto(jogos, numerosPorPartida) {
       if (!jogos?.length) {
         return '<p style="margin:0;font-size:12px;color:#888">Nenhum jogo registrado neste minuto.</p>';
       }
-      const itens = jogos.map((j) => {
+      const ordenados = [...jogos].sort((a, b) => {
+        const na = numerosPorPartida?.[a.partidaId] ?? 0;
+        const nb = numerosPorPartida?.[b.partidaId] ?? 0;
+        return nb - na;
+      });
+      const itens = ordenados.map((j) => {
         const qtd = j.gols === 1 ? '+1' : '+' + j.gols;
+        const num = numerosPorPartida?.[j.partidaId];
+        const prefix = num != null
+          ? '<span class="futebol-gol-minuto-linha-num">' + num + '.</span>'
+          : '';
         const liga = j.liga
           ? '<span class="liga-hint">' + escapeHtml(j.liga) + '</span>'
           : '';
-        return '<li>' +
+        return '<li>' + prefix +
           '<span class="futebol-time-casa">' + escapeHtml(j.casa) + '</span>' +
           ' <span style="color:#888">x</span> ' +
           '<span class="futebol-time-fora">' + escapeHtml(j.fora) + '</span>' +
@@ -2482,7 +2505,7 @@ export function buildHistoricoTemplate(): string {
       return calcularMaisGolsLeitura(leitura, anterior, placarCasaInicio, placarForaInicio);
     }
 
-    function renderResumoHistoricoJanela(resumo, golsPorMinutoJogos) {
+    function renderResumoHistoricoJanela(resumo, golsPorMinutoJogos, numerosPorPartida) {
       const jogosMap = golsPorMinutoJogos ?? {};
       const minutosComGol = Object.keys(resumo.golsPorMinuto)
         .map(Number)
@@ -2504,7 +2527,7 @@ export function buildHistoricoTemplate(): string {
                 escapeHtml(m + "' — " + rotulo) +
               '</button>' +
               '<div class="futebol-gol-minuto-popover hidden" role="tooltip" data-minuto="' + m + '">' +
-                renderListaJogosGolMinuto(jogosMap[m]) +
+                renderListaJogosGolMinuto(jogosMap[m], numerosPorPartida) +
               '</div>' +
             '</span>',
           );
@@ -2725,14 +2748,15 @@ export function buildHistoricoTemplate(): string {
         golsPorMinuto: {},
         maxMinutoComGol: 87,
       };
+      const numerosPorPartida = buildNumerosPorPartida(lista);
       const blocos = lista.map((p, idx) => {
         const leituras = leiturasPorPartida[p.id] ?? [];
         const expandido = futebolHistoricoExpandidos.has(p.id);
-        const numeroLinha = lista.length - idx;
+        const numeroLinha = numerosPorPartida[p.id];
         return renderBlocoPartidaHistorico(p, leituras, expandido, numeroLinha);
       }).join('');
       return '<h3 class="futebol-secao-titulo">Histórico — janela final (85\' até o fim)</h3>' +
-        renderResumoHistoricoJanela(resumo, golsPorMinutoJogos) +
+        renderResumoHistoricoJanela(resumo, golsPorMinutoJogos, numerosPorPartida) +
         '<p style="color:#888;font-size:12px;margin:0 0 8px">Clique no jogo para ver as coletas. Verde = sem gol nos 5 min · Vermelho = com gol.</p>' +
         '<div class="futebol-historico-lista">' + blocos + '</div>';
     }
