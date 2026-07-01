@@ -500,6 +500,72 @@ export function buildHistoricoTemplate(): string {
       box-shadow: 0 8px 24px rgba(0, 0, 0, 0.45);
       z-index: 200;
     }
+    .abas-historico {
+      display: flex;
+      gap: 0;
+      padding: 0 12px;
+      border-bottom: 1px solid #222;
+      max-width: 720px;
+      margin: 0 auto;
+    }
+    .aba {
+      flex: 1;
+      background: transparent;
+      border: none;
+      border-bottom: 2px solid transparent;
+      color: #888;
+      font-size: 14px;
+      font-weight: 600;
+      padding: 10px 12px;
+      cursor: pointer;
+      border-radius: 0;
+    }
+    .aba:hover { color: #ccc; }
+    .aba.ativa {
+      color: #fff;
+      border-bottom-color: #c45c00;
+    }
+    .alerta-card {
+      background: #1a1a1a;
+      border: 1px solid #2a2a2a;
+      border-radius: 12px;
+      padding: 12px;
+      margin-bottom: 10px;
+    }
+    .alerta-topo {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      gap: 8px;
+      margin-bottom: 8px;
+    }
+    .alerta-hora { font-size: 12px; color: #888; }
+    .alerta-periodo {
+      font-size: 11px;
+      font-weight: 700;
+      color: #c45c00;
+      background: rgba(196, 92, 0, 0.15);
+      padding: 2px 8px;
+      border-radius: 6px;
+    }
+    .alerta-jogo {
+      font-size: 15px;
+      font-weight: 700;
+      color: #fff;
+      margin-bottom: 4px;
+    }
+    .alerta-placar {
+      font-size: 14px;
+      color: #ddd;
+      margin-bottom: 8px;
+    }
+    .alerta-diff { color: #7cb342; font-weight: 600; }
+    .alerta-meta {
+      font-size: 12px;
+      color: #999;
+      line-height: 1.5;
+    }
+    .alerta-meta strong { color: #bbb; font-weight: 600; }
     .hidden { display: none !important; }
   </style>
 </head>
@@ -546,6 +612,10 @@ export function buildHistoricoTemplate(): string {
         </div>
       </div>
     </div>
+    <nav id="abas-historico" class="abas-historico hidden" role="tablist" aria-label="Histórico">
+      <button id="aba-coletas" type="button" class="aba ativa" role="tab" aria-selected="true" aria-controls="conteudo">Coletas</button>
+      <button id="aba-alertas" type="button" class="aba" role="tab" aria-selected="false" aria-controls="conteudo">Alertas</button>
+    </nav>
     <div id="conteudo"></div>
   </div>
 
@@ -586,6 +656,7 @@ export function buildHistoricoTemplate(): string {
     const PERIODOS_AO_VIVO = new Set(['Q1', 'Q2', 'Q3', 'Q4', 'Intervalo', 'INT', 'HT', 'OT']);
     const TEXTO_INVALIDO = /não existem mercados|mercados disponíveis|de momento|^unknown$/i;
     const HISTORICO_COLETAS_PAGE = 100;
+    const HISTORICO_ALERTAS_PAGE = 100;
     const AUTO_REFRESH_MS = 45_000;
     const CHAVE_COLETA_ATIVADA = 'betano_coleta_ativada_em';
     const CHAVE_COLETA_PARADA = 'betano_coleta_parada_em';
@@ -625,7 +696,11 @@ export function buildHistoricoTemplate(): string {
     const elPainelRegras = document.getElementById('painel-regras');
     const elListaRegras = document.getElementById('lista-regras');
     const elFormRegra = document.getElementById('form-regra');
+    const elAbasHistorico = document.getElementById('abas-historico');
+    const elAbaColetas = document.getElementById('aba-coletas');
+    const elAbaAlertas = document.getElementById('aba-alertas');
 
+    let abaAtiva = 'coletas';
     let expandidos = new Set();
     let refreshTimer = null;
     let statusTimer = null;
@@ -789,6 +864,35 @@ export function buildHistoricoTemplate(): string {
     function formatarTextoRegra(r) {
       const nome = r.nome ? r.nome + ' — ' : '';
       return nome + r.periodo + ', +' + r.min_pontos + ' pts, odd líder &gt; ' + Number(r.min_odd).toFixed(1);
+    }
+
+    function regraEmbedFromAlerta(alerta) {
+      const emb = alerta.regras_alerta;
+      if (!emb) return null;
+      return Array.isArray(emb) ? emb[0] : emb;
+    }
+
+    function formatarRegraAlertaResumo(alerta) {
+      const regra = regraEmbedFromAlerta(alerta);
+      if (!regra) return 'Regra não disponível';
+      return formatarTextoRegra(regra);
+    }
+
+    function atualizarAbasUi() {
+      const coletasAtiva = abaAtiva === 'coletas';
+      elAbaColetas?.classList.toggle('ativa', coletasAtiva);
+      elAbaAlertas?.classList.toggle('ativa', !coletasAtiva);
+      elAbaColetas?.setAttribute('aria-selected', coletasAtiva ? 'true' : 'false');
+      elAbaAlertas?.setAttribute('aria-selected', coletasAtiva ? 'false' : 'true');
+    }
+
+    function trocarAba(aba) {
+      if (aba !== 'coletas' && aba !== 'alertas') return;
+      if (abaAtiva === aba) return;
+      abaAtiva = aba;
+      fecharCardMenu();
+      atualizarAbasUi();
+      void carregar();
     }
 
     function renderListaRegras(regras) {
@@ -1288,6 +1392,39 @@ export function buildHistoricoTemplate(): string {
       elConteudo.innerHTML = '<div class="centro"><p class="aviso">' + escapeHtml(msg) + '</p></div>';
     }
 
+    function renderVazioAlertas() {
+      elConteudo.innerHTML = '<div class="centro"><p class="aviso">Nenhum alerta disparado ainda. Configure regras em Configurações e aguarde um jogo que atenda aos critérios.</p></div>';
+    }
+
+    function renderAlertaCard(alerta) {
+      const hora = formatarHora(alerta.disparado_em);
+      const periodo = String(alerta.periodo_atual || '—').trim();
+      const diff = Number(alerta.diferenca_pontos ?? 0);
+      const lider = alerta.time_lider
+        ? escapeHtml(alerta.time_lider) + ' · odd ' + escapeHtml(formatarOddWeb(alerta.odd_lider))
+        : '—';
+      const liga = alerta.liga ? '<div class="alerta-meta">' + escapeHtml(alerta.liga) + '</div>' : '';
+
+      return '<article class="alerta-card">' +
+        '<div class="alerta-topo">' +
+          '<span class="alerta-hora">' + escapeHtml(hora) + '</span>' +
+          '<span class="alerta-periodo">' + escapeHtml(periodo) + '</span>' +
+        '</div>' +
+        '<div class="alerta-jogo">' + escapeHtml(alerta.time_casa) + ' x ' + escapeHtml(alerta.time_fora) + '</div>' +
+        '<div class="alerta-placar">' +
+          escapeHtml(String(alerta.placar_casa)) + ' – ' + escapeHtml(String(alerta.placar_fora)) +
+          ' <span class="alerta-diff">(+' + diff + ')</span>' +
+        '</div>' +
+        '<div class="alerta-meta"><strong>Regra:</strong> ' + formatarRegraAlertaResumo(alerta) + '</div>' +
+        '<div class="alerta-meta"><strong>Líder:</strong> ' + lider + '</div>' +
+        liga +
+      '</article>';
+    }
+
+    function renderListaAlertas(alertas) {
+      elConteudo.innerHTML = '<div class="lista">' + alertas.map(renderAlertaCard).join('') + '</div>';
+    }
+
     async function excluirJogo(gameKey, timeCasa, timeFora) {
       const rotulo = timeCasa + ' x ' + timeFora;
       if (!confirm('Excluir todas as coletas de ' + rotulo + '?')) {
@@ -1431,10 +1568,42 @@ export function buildHistoricoTemplate(): string {
     function atualizarStatsHistorico(stats) {
       if (!elHistoricoStatsBar || !elHistoricoStats) return;
       elHistoricoStatsBar.classList.remove('hidden');
+      if (abaAtiva === 'alertas') {
+        const total = stats?.total ?? 0;
+        elHistoricoStats.textContent = total + ' alerta(s) no histórico';
+        return;
+      }
       elHistoricoStats.textContent = stats
         ? stats.cards + ' jogo(s) · ' + stats.entradas + ' coleta(s) no histórico'
         : '0 jogo(s) · 0 coleta(s) no histórico';
       if (stats) dbg('H5', 'historicoWebPage:stats', 'stats visiveis', stats, stats.runId);
+    }
+
+    async function buscarTodosAlertas() {
+      const todos = [];
+      let offset = 0;
+
+      while (true) {
+        const { data, error } = await supabase
+          .from('alertas_betano')
+          .select('*, regras_alerta ( periodo, min_pontos, min_odd, nome )')
+          .order('disparado_em', { ascending: false })
+          .range(offset, offset + HISTORICO_ALERTAS_PAGE - 1);
+
+        if (error) throw new Error(error.message);
+        if (!data?.length) break;
+
+        todos.push(...data);
+        if (data.length < HISTORICO_ALERTAS_PAGE) break;
+        offset += HISTORICO_ALERTAS_PAGE;
+      }
+
+      return todos;
+    }
+
+    async function buscarDadosAlertas() {
+      const alertas = await buscarTodosAlertas();
+      return alertas;
     }
 
     async function buscarTodosJogos() {
@@ -1609,6 +1778,14 @@ export function buildHistoricoTemplate(): string {
     async function carregar(silencioso = false) {
       if (!silencioso) renderLoading();
       try {
+        if (abaAtiva === 'alertas') {
+          const alertas = await buscarDadosAlertas();
+          atualizarStatsHistorico({ total: alertas.length });
+          if (alertas.length === 0) renderVazioAlertas();
+          else renderListaAlertas(alertas);
+          return;
+        }
+
         const jogos = await buscarDados();
         const entradas = jogos.reduce((s, g) => s + g.entradas.length, 0);
         dbg('H5', 'historicoWebPage:carregar', 'render', { grupos: jogos.length, entradas, silencioso });
@@ -1631,6 +1808,7 @@ export function buildHistoricoTemplate(): string {
       elLogin.classList.remove('hidden');
       elMain.classList.add('hidden');
       elHistoricoStatsBar?.classList.add('hidden');
+      elAbasHistorico?.classList.add('hidden');
       fecharRegrasPopover();
       pararAutoRefresh();
       pararRealtime();
@@ -1641,6 +1819,8 @@ export function buildHistoricoTemplate(): string {
       elLogin.classList.add('hidden');
       elMain.classList.remove('hidden');
       elHistoricoStatsBar?.classList.remove('hidden');
+      elAbasHistorico?.classList.remove('hidden');
+      atualizarAbasUi();
       elUserEmail.textContent = email;
       iniciarAutoRefresh();
       iniciarRealtime();
@@ -1693,6 +1873,11 @@ export function buildHistoricoTemplate(): string {
         )
         .on(
           'postgres_changes',
+          { event: 'INSERT', schema: 'public', table: 'alertas_betano' },
+          () => agendarRecargaRealtime()
+        )
+        .on(
+          'postgres_changes',
           { event: 'UPDATE', schema: 'public', table: 'coleta_scheduler' },
           () => void atualizarStatusMonitor()
         )
@@ -1721,6 +1906,9 @@ export function buildHistoricoTemplate(): string {
     document.getElementById('btn-atualizar').addEventListener('click', () => {
       void carregar();
     });
+
+    elAbaColetas?.addEventListener('click', () => trocarAba('coletas'));
+    elAbaAlertas?.addEventListener('click', () => trocarAba('alertas'));
 
     elBtnColetar.addEventListener('click', () => {
       void coletarAgora();
