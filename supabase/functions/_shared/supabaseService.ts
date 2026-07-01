@@ -110,30 +110,6 @@ export async function loadActiveRules(usuarioId: string): Promise<RegraAlerta[]>
   }));
 }
 
-export async function loadFiredRuleIdsByGame(
-  usuarioId: string,
-  gameKeys: string[],
-): Promise<Map<string, Set<string>>> {
-  const map = new Map<string, Set<string>>();
-  if (gameKeys.length === 0) return map;
-
-  const { data, error } = await getServiceClient()
-    .from('alertas_regra_disparados')
-    .select('game_key, regra_id')
-    .eq('usuario_id', usuarioId)
-    .in('game_key', gameKeys);
-
-  if (error) throw new Error(`alertas_regra_disparados: ${error.message}`);
-
-  for (const row of data ?? []) {
-    const key = row.game_key as string;
-    const set = map.get(key) ?? new Set<string>();
-    set.add(row.regra_id as string);
-    map.set(key, set);
-  }
-  return map;
-}
-
 export async function avaliarEGravarAlertas(
   usuarioId: string,
   coletaId: string,
@@ -144,18 +120,13 @@ export async function avaliarEGravarAlertas(
   const rules = await loadActiveRules(usuarioId);
   if (rules.length === 0) return 0;
 
-  const gameKeys = games.map(buildGameKeyFromGame);
-  const firedByGame = await loadFiredRuleIdsByGame(usuarioId, gameKeys);
   const agora = new Date().toISOString();
   const client = getServiceClient();
 
   const alertasParaInserir: Record<string, unknown>[] = [];
-  const disparosParaInserir: Record<string, unknown>[] = [];
 
   for (const game of games) {
-    const gameKey = buildGameKeyFromGame(game);
-    const fired = firedByGame.get(gameKey) ?? new Set<string>();
-    const candidatos = evaluateAlertRules(game, rules, fired);
+    const candidatos = evaluateAlertRules(game, rules);
 
     for (const c of candidatos) {
       alertasParaInserir.push({
@@ -176,13 +147,6 @@ export async function avaliarEGravarAlertas(
         telegram_enviado: false,
         disparado_em: agora,
       });
-      disparosParaInserir.push({
-        usuario_id: usuarioId,
-        game_key: c.gameKey,
-        regra_id: c.regraId,
-        disparado_em: agora,
-      });
-      fired.add(c.regraId);
     }
   }
 
@@ -190,11 +154,6 @@ export async function avaliarEGravarAlertas(
 
   const { error: alertasError } = await client.from('alertas_betano').insert(alertasParaInserir);
   if (alertasError) throw new Error(alertasError.message);
-
-  const { error: disparosError } = await client
-    .from('alertas_regra_disparados')
-    .upsert(disparosParaInserir, { onConflict: 'usuario_id,game_key,regra_id' });
-  if (disparosError) throw new Error(disparosError.message);
 
   return alertasParaInserir.length;
 }

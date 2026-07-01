@@ -61,7 +61,6 @@ function liderDoJogo(game: ParsedGame): { team: string; odd: number; diff: numbe
 export function evaluateAlertRules(
   game: ParsedGame,
   rules: RegraAlerta[],
-  firedRuleIds: Set<string>,
 ): AlertCandidate[] {
   const periodo = game.period;
   if (!PERIODOS_REGRA.has(periodo as RegraPeriodo)) return [];
@@ -74,7 +73,6 @@ export function evaluateAlertRules(
 
   for (const regra of rules) {
     if (!regra.ativo) continue;
-    if (firedRuleIds.has(regra.id)) continue;
     if (!quartoAtingeRegra(periodo, regra.periodo)) continue;
     if (lider.diff < regra.minPontos) continue;
     if (lider.odd < regra.minOdd) continue;

@@ -59,7 +59,7 @@ Progresso do **painel web + Supabase**. O Agent deve marcar `[x]` ao concluir ca
 
 ## 5. Alertas
 
-- [x] Motor `evaluateAlertRules` na nuvem (quarto ≥ regra, diff ≥ pontos, odd líder ≥ mínimo)
+- [x] Motor `evaluateAlertRules` na nuvem (quarto ≥ regra, diff ≥ pontos, odd líder ≥ mínimo; alerta a cada coleta)
 - [x] `alertas_betano` + join `regras_alerta` no painel
 - [x] Excluir alerta não afeta coletas; excluir jogo não afeta alertas
 - [ ] Telegram (`telegram_config` + Edge Function)

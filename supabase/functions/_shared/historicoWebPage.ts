@@ -624,7 +624,7 @@ export function buildHistoricoTemplate(): string {
         Cada regra combina <strong>três critérios</strong> para sugerir aposta no <strong>time líder em pontos</strong>:
         a partir de qual quarto vale, vantagem mínima em pontos e odd mínima do líder para vencer.
         Ex.: Q4, +15 pts e ODD ≥ 1,10 — dispara se o líder tiver 15+ de vantagem no Q4 com odd ≥ 1,10.
-        Uma vez por jogo, por regra.
+        A cada coleta em que o padrão for detectado, um novo alerta é registrado.
       </p>
       <section class="regras-secao" aria-labelledby="titulo-lista-regras">
         <h3 class="regras-secao-titulo" id="titulo-lista-regras">Minhas regras</h3>
