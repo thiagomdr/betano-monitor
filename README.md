@@ -1,110 +1,62 @@
-# Betano Monitor
+# Betano Monitor (Web)
 
-App Android pessoal para monitorar basquete ao vivo na Betano e alertar quando um time termina o 2º quarto com 10+ pontos de vantagem.
+Painel web para monitorar basquete ao vivo na Betano: histórico de coletas, alertas configuráveis e coleta automática na nuvem (Supabase).
+
+**URL pública:** https://thiagomdr.github.io/betano-monitor/
 
 ## Stack
 
-- Expo SDK 54 (mesmo do app21)
-- WebView com user-agent **Mobile Chrome**
-- Parser local + fallback **GPT-4o-mini**
-- SQLite local (alertas) + **Supabase** (histórico de coletas)
-- Foreground Service (`react-native-background-actions`)
+- **Frontend:** HTML/JS em `historicoWebPage.ts` → GitHub Pages
+- **Backend:** Supabase (Postgres + Auth + Edge Functions + `pg_cron`)
+- **Coleta:** API Betano `overview/latest` (Edge Function `betano-coleta`)
 
-## Requisito importante
+## Configuração local
 
-Este app **não roda completamente no Expo Go** — o monitor em background exige **development build** ou **APK** (`expo-dev-client`).
-
-Para testar só a WebView, ainda pode usar Expo Go com limitações (sem foreground service).
-
-## Configuração
-
-1. Copie `.env.example` para `.env` e preencha `EXPO_PUBLIC_OPENAI_API_KEY` e Supabase.
-2. Aplique a migration SQL — ver `supabase/README.md`.
-3. Crie usuário no Supabase Auth e faça login no app.
-4. Instale dependências:
+1. Copie `.env.example` para `.env` (ou use `web/historico/supabase.config.json`).
+2. Aplique migrations — ver `supabase/README.md`.
+3. Instale dependências de build:
 
 ```powershell
 cd C:\Projetos\betano-monitor
 npm install
 ```
 
-## Testar no Expo Go (WebView)
-
-**Use o script do projeto** — não rode `npx expo start` direto (com `expo-dev-client` instalado o QR vira development build e o Expo Go ignora).
+## Desenvolver o painel
 
 ```powershell
-npm run start:clear
+npm run build:historico-html
+npx serve web/historico -p 5173
 ```
 
-No terminal deve aparecer `› Using Expo Go` e `exp://192.168.x.x:8081`. Se ainda mostrar `development build`, pressione **`s`** no terminal para alternar.
+Abra http://localhost:5173 — login com usuário do Supabase Auth.
 
-## Rodar em desenvolvimento (dev client / APK)
-
-Instale o dev client antes do build nativo:
+Edite a UI em `supabase/functions/_shared/historicoWebPage.ts`, depois:
 
 ```powershell
-npx expo install expo-dev-client
-npx expo prebuild --platform android
-npx expo run:android
+npm run build:historico-web
 ```
 
-Depois do APK gerado:
+O template `web/historico/index.template.html` é versionado; o `index.html` é gerado localmente (gitignored).
+
+## Deploy do painel
+
+Push em `main` dispara `.github/workflows/deploy-historico-pages.yml`.
+
+Secrets opcionais no GitHub: `EXPO_PUBLIC_SUPABASE_URL`, `EXPO_PUBLIC_SUPABASE_ANON_KEY` (sobrescrevem `supabase.config.json`).
+
+## Deploy Supabase
 
 ```powershell
-npm run start:dev
+npm run deploy:coleta
+npm run deploy:probe
+npx supabase functions deploy betano-coleta-cron --project-ref mddortcbebtkopeanrhu
+npx supabase functions deploy betano-alertas-avaliar --project-ref mddortcbebtkopeanrhu
 ```
 
-## Gerar APK release
+## Checklist
 
-```powershell
-cd android
-.\gradlew assembleRelease
-```
+Progresso: **`docs/CHECKLIST.md`**
 
-APK em `android/app/build/outputs/apk/release/`.
+## Regras Cursor
 
-## Painel web — histórico (Chrome)
-
-URL pública (GitHub Pages):
-
-**https://thiagomdr.github.io/betano-monitor/**
-
-Deploy automático a cada `git push` em `main` (workflow `.github/workflows/deploy-historico-pages.yml`).
-
-Config Supabase do painel: `web/historico/supabase.config.json` (chave **anon/publishable** — mesma do app).
-
-### Ativar uma vez no GitHub
-
-**Settings → Pages → Build and deployment → Source:** **GitHub Actions**
-
-(Secrets em Actions são opcionais; sobrescrevem o `supabase.config.json` se definidos.)
-
-### HTML local no celular (sem URL)
-
-```powershell
-npm run deploy:historico
-```
-
-Gera `web/historico/abrir-no-celular.html` — copie para o celular e abra no Chrome.
-
-## Uso
-
-1. Abra o app e aceite cookies na Betano.
-2. Toque em **Basquete** se necessário.
-3. **Coletar agora** — testa uma leitura imediata.
-4. **Iniciar** — monitora a cada 4–8 min com notificação fixa.
-5. Desative otimização de bateria para o app no Android.
-
-## Alerta
-
-Dispara quando: período anterior `Q2` → atual `Intervalo` ou `Q3`, e diferença de placar ≥ 10.
-
-## Checklist do projeto
-
-Progresso e próximos passos: **[docs/CHECKLIST.md](docs/CHECKLIST.md)**
-
-O Agent deve atualizar esse arquivo conforme itens forem concluídos.
-
-## Supabase (planejado)
-
-Histórico de cada coleta na Betano será armazenado no Supabase (`coletas_betano`, `jogos_coleta`, `alertas_betano`). SQLite local continua responsável por alertas em tempo real.
+`.cursor/rules/` — hierarquia, stack web, arquitetura, Supabase, checklist.

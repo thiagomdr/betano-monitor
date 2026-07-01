@@ -1,5 +1,5 @@
 ---
-description: Hierarquia das regras + princípios globais do betano-monitor
+description: Hierarquia das regras + princípios globais (projeto web)
 globs: **/*
 alwaysApply: true
 ---
@@ -10,11 +10,16 @@ alwaysApply: true
 
 1. **00-hierarquia-e-principios.mdc**
 2. **03-supabase-coletas.mdc**
-3. **01-stack-expo54.mdc**
-4. **02-arquitetura-e-pastas.mdc**
+3. **01-stack-web.mdc**
+4. **02-arquitetura-web.mdc**
 5. **04-checklist-projeto.mdc**
 
 Regra mais específica prevalece no mesmo nível.
+
+## Projeto
+
+**Painel web** em GitHub Pages + **Supabase** (coleta na nuvem, histórico, alertas).
+Não há app mobile neste repositório.
 
 ## Princípios
 
@@ -22,16 +27,16 @@ Regra mais específica prevalece no mesmo nível.
 
 - Alterar somente arquivos necessários à tarefa.
 - Mudanças pequenas e reversíveis.
-- Manter Expo SDK 54 e React Native 0.81.5.
+- Fonte única da UI: `supabase/functions/_shared/historicoWebPage.ts` → build → GitHub Pages.
 - Atualizar `docs/CHECKLIST.md` ao concluir item do checklist.
-- SQLite local para alertas; Supabase para histórico de coletas.
+- Supabase para histórico, alertas e coleta automática (`pg_cron`).
 
 ### PROIBIDO
 
 - Atualizar dependências sem pedido explícito.
 - `service_role` ou secrets no código/commits.
-- Import de `servicos/supabase.ts` em telas/componentes (usar serviços).
+- Duplicar HTML do painel fora de `historicoWebPage.ts` (exceto template gerado).
 
-## Checklist do projeto
+## Checklist
 
 Fonte única de progresso: **`docs/CHECKLIST.md`**

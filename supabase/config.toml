@@ -9,11 +9,5 @@ verify_jwt = false
 [functions.betano-coleta-cron]
 verify_jwt = false
 
-[functions.betano-historico]
-verify_jwt = false
-
-[functions.betano-historico-data]
-verify_jwt = false
-
 [functions.betano-alertas-avaliar]
 verify_jwt = false

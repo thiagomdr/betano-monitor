@@ -1,125 +1,76 @@
-# Checklist — betano-monitor
+# Checklist — betano-monitor (web)
 
-Progresso do **projeto inteiro**. O Agent deve marcar `[x]` ao concluir cada item e atualizar a data abaixo.
+Progresso do **painel web + Supabase**. O Agent deve marcar `[x]` ao concluir cada item e atualizar a data abaixo.
 
-**Última atualização:** 2026-06-29 (menu excluir alertas + status finalizado)
-
----
-
-## 1. Fundação e stack
-
-- [x] Projeto Expo SDK 54 criado (`C:\Projetos\betano-monitor`)
-- [x] Versões alinhadas ao app21 (RN 0.81.5, React 19.1.0)
-- [x] `react-native-webview` instalado
-- [x] Regras Cursor em `.cursor/rules/`
-- [x] Checklist do projeto em `docs/CHECKLIST.md`
-- [ ] `.env` com `EXPO_PUBLIC_OPENAI_API_KEY` (Supabase no `.env` **depois**)
+**Última atualização:** 2026-06-29 (migração projeto web — remoção app Expo)
 
 ---
 
-## 2. WebView e coleta Betano
+## 1. Fundação web e deploy
 
-- [x] Teste WebView — site Betano carrega no celular
-- [x] Aceitar cookies validado
-- [x] Extração de `innerText` funcionando
-- [x] UA **Mobile Chrome** fixo (sem toggle Desktop)
-- [x] Componente `BetanoWebView`
-- [x] `scrapeBridge` com timeout e inject JS
-- [x] URL direta basquete ao vivo (`BETANO_BASKETBALL_LIVE_URL`)
-- [x] Navegação automática + wait load + retry (`executarColetaWeb`)
-- [x] Filtro Basquete automático com fallback (clique JS + URL direta)
-- [x] Edge Function `betano-probe` (teste Betano com headers Chrome)
-- [x] Edge Function `betano-coleta` (API JSON overview/latest + filtro BASK)
-- [x] Coleta automática via Supabase quando `.env` configurado (`monitorLoop`)
-- [x] Agendamento na nuvem `pg_cron` + `betano-coleta-cron` (4–8 min aleatório, ms)
-- [x] Migration `coleta_scheduler` + `jogos_estado_monitor`
-- [x] Aplicar migration `20260629130000_coleta_scheduler.sql` no Supabase
-- [ ] Configurar `CRON_SECRET` (opcional) em `coleta_cron_config` + Edge Secrets
-- [x] Deploy `betano-coleta` no Supabase + resultado validado no app
-- [ ] Deploy `betano-probe` no Supabase + resultado do probe validado
+- [x] Repositório focado em web (app Expo removido)
+- [x] Fonte única UI: `supabase/functions/_shared/historicoWebPage.ts`
+- [x] Build: `scripts/build-historico-template.mjs` + `fill-historico-html.mjs`
+- [x] GitHub Pages: `thiagomdr.github.io/betano-monitor`
+- [x] Workflow deploy: `.github/workflows/deploy-historico-pages.yml`
+- [x] Regras Cursor reescritas (`.cursor/rules/`)
 
 ---
 
-## 3. Parser, regras e alertas
+## 2. Painel web (`historicoWebPage.ts`)
 
-- [x] Parser local (`parseLocal.ts`)
-- [x] Fallback GPT-4o-mini (`parseLlm.ts`)
-- [x] Regra fim Q2 + diferença ≥ 10 (`rules.ts`) — legado app; nuvem usa `regras_alerta`
-- [x] SQLite local — estado por jogo (`store.ts`)
-- [x] Notificações locais Notifee
-- [x] `processGames` integrado ao ciclo de coleta
-- [ ] Ajustar parser com amostras reais de texto da Betano
-- [x] Regras configuráveis Q1–Q4 + pts + odd (`regras_alerta`, painel web)
-- [x] Motor `evaluateAlertRules` na nuvem (substitui Q2 fixo)
-- [x] Deploy `betano-alertas-avaliar` + migration regras no Supabase
-- [ ] Telegram (próximo passo)
-- [ ] Testar alerta real com regra customizada
-- [ ] Filtro eBasketball / simulados validado em produção
+- [x] Login Supabase Auth
+- [x] Abas **Coletas** | **Alertas**
+- [x] Cards por jogo (`game_key`) + timeline ao expandir
+- [x] Coletar Agora + Iniciar/Parar monitor (scheduler nuvem)
+- [x] Regras de alerta (ícone config na aba Alertas)
+- [x] Menu ⋮ excluir jogo (Coletas) e excluir alerta (Alertas)
+- [x] Status alertas: finalizado para disparos antigos
+- [x] Supabase Realtime + polling 45s
+- [ ] Paginação completa `jogos_coleta` (limite 1000 por batch)
 
 ---
 
-## 4. Monitor em background
+## 3. Supabase — banco e segurança
 
-- [x] `monitorLoop.ts` com intervalo 4–8 min
-- [x] Foreground Service (`react-native-background-actions`)
-- [x] Plugin Android `with-android-monitor.js`
-- [x] Tela `MonitorScreen` (Iniciar / Parar / Coletar agora)
-- [ ] Dev client gerado (`npx expo prebuild` + `expo run:android`)
-- [ ] Monitor 24h estável (notificação persistente)
-- [ ] Otimização de bateria desativada documentada/testada
-
----
-
-## 5. Supabase — histórico de coletas
-
-> **Nota:** O código no app já está pronto. Criar o **projeto no Supabase** (nuvem), aplicar migration e configurar `.env` ficam **para depois** — quando for testar o histórico na nuvem. Use um projeto **dedicado**, separado do app21.
-
-### Código no app (feito)
-
-- [x] Migration SQL no repositório: `coletas_betano`, `jogos_coleta`, `alertas_betano`
-- [x] RLS e políticas na migration (`supabase/migrations/...`)
-- [x] `src/services/supabase.ts`
-- [x] `src/services/coletasSupabase.ts`
-- [x] `src/services/autenticacaoSupabase.ts` + login na tela
-- [x] Registro de cada coleta após `runCollectionCycle`
-- [x] Registro de alertas em `alertas_betano`
-- [x] Falha Supabase não bloqueia alerta local
-- [x] Tela `HistoricoColetasScreen` agrupada por jogo (expansão + linha do tempo)
-- [x] Serviço `historicoColetasSupabase.ts` (`listarHistoricoPorJogo`)
-- [x] Painel web histórico — **GitHub Pages** (`thiagomdr.github.io/betano-monitor`)
-- [x] Painel web — **Supabase Realtime** (coletas + scheduler; fallback polling 45s)
-- [x] Painel web — cards de alerta unificados com coletas + nome da regra
-- [x] Painel web — menu ⋮ excluir alerta (aba Alertas) + status finalizado em alertas antigos
-- [~] Edge Function `betano-historico` (legado; Chrome bloqueia redirect — usar Pages)
-
-### Nuvem — fazer depois
-
-- [ ] Criar projeto Supabase dedicado (separado do app21)
-- [ ] Aplicar migration no SQL Editor (`supabase/migrations/20260629120000_betano_coletas.sql`)
-- [ ] Copiar URL e anon key para `.env` (`EXPO_PUBLIC_SUPABASE_*`)
-- [ ] Criar usuário no Supabase Auth (e-mail/senha)
-- [ ] Login no app + coleta de teste
-- [x] Deploy `betano-historico` + validar no Chrome
+- [x] Migrations: `coletas_betano`, `jogos_coleta`, `alertas_betano`
+- [x] `regras_alerta`, `coleta_scheduler`, `jogos_estado_monitor`
+- [x] RLS por `auth.uid()`
+- [x] Realtime: coletas, jogos, alertas, scheduler
+- [x] Delete RLS: jogos e alertas (painel)
+- [x] Projeto Supabase dedicado (`mddortcbebtkopeanrhu`)
+- [ ] `CRON_SECRET` opcional configurado
 
 ---
 
-## 6. Build APK e produção
+## 4. Edge Functions e coleta automática
 
-- [ ] `expo prebuild --platform android` executado com sucesso
-- [ ] APK debug instalado no celular
-- [ ] APK release (`assembleRelease`) gerado
-- [ ] App instalado via sideload (fora da Play Store)
-- [x] README atualizado com Supabase e checklist
+- [x] `betano-coleta` — API Betano overview/latest + filtro BASK
+- [x] `betano-coleta-cron` — scheduler 4–8 min + persistência
+- [x] `betano-alertas-avaliar` — regras configuráveis
+- [x] `betano-probe` — diagnóstico Betano na nuvem
+- [x] Migration `pg_cron` aplicada
+- [x] Cron só grava coleta se `games.length > 0`
+- [ ] Deploy `betano-probe` validado em produção
+- [x] Removido legado `betano-historico` / Storage HTML
 
 ---
 
-## 7. Testes end-to-end
+## 5. Alertas
 
-- [ ] Fluxo: abrir app → cookies → basquete → coletar agora
-- [ ] Fluxo: iniciar monitor → esperar ciclo → ver status na tela
-- [ ] Fluxo: alerta recebido no celular
-- [ ] Fluxo: coleta registrada no Supabase
-- [ ] Fluxo: mesmo jogo não dispara alerta duplicado
+- [x] Motor `evaluateAlertRules` na nuvem
+- [x] `alertas_betano` + join `regras_alerta` no painel
+- [x] Excluir alerta não afeta coletas; excluir jogo não afeta alertas
+- [ ] Telegram (`telegram_config` + Edge Function)
+- [ ] Teste e2e: regra customizada dispara alerta visível no painel
+
+---
+
+## 6. Produção e próximos passos
+
+- [x] README e `supabase/README.md` atualizados (web)
+- [ ] Testes e2e painel: login → coletas → alertas → excluir
+- [ ] Documentar ativação monitor nuvem só pelo painel (sem app)
 
 ---
 
@@ -129,4 +80,4 @@ Progresso do **projeto inteiro**. O Agent deve marcar `[x]` ao concluir cada ite
 |-------|-------------|
 | `[x]` | Concluído |
 | `[ ]` | Pendente |
-| `[~]` | Em andamento (uso opcional) |
+| `[~]` | Em andamento (opcional) |

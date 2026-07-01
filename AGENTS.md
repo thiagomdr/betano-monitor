@@ -1,19 +1,19 @@
-# Expo HAS CHANGED
+# Betano Monitor — Agent
 
-Read the exact versioned docs at https://docs.expo.dev/versions/v54.0.0/ before writing any code.
+Painel **web** (GitHub Pages) + **Supabase** na nuvem. Não há app mobile neste repositório.
 
 ## Projeto
 
-App Android pessoal: monitora basquete ao vivo na Betano e alerta no fim do Q2 com ≥10 pts de vantagem.
+Monitora basquete ao vivo na Betano, grava histórico de coletas e dispara alertas por regras configuráveis (Q1–Q4, pontos, odd).
 
 ## Stack
 
-Expo SDK 54, WebView UA Mobile Chrome, SQLite (alertas), Supabase (histórico de coletas), parser local + GPT-4o-mini, Notifee, Foreground Service.
+GitHub Pages (`historicoWebPage.ts`), Supabase Auth/DB/Realtime, Edge Functions (`betano-coleta`, `betano-coleta-cron`, `betano-alertas-avaliar`), `pg_cron`.
 
 ## Checklist
 
-Progresso do projeto inteiro: **`docs/CHECKLIST.md`** — ler antes de tarefas grandes; marcar `[x]` ao concluir itens.
+**`docs/CHECKLIST.md`** — ler antes de tarefas grandes; marcar `[x]` ao concluir.
 
 ## Regras
 
-`.cursor/rules/` — hierarquia, stack, arquitetura, Supabase, checklist.
+`.cursor/rules/` — hierarquia, stack web, arquitetura, Supabase, checklist.

@@ -1,6 +1,6 @@
 ---
-description: Supabase — histórico de coletas Betano
-globs: src/**/*,supabase/**/*
+description: Supabase — coletas, jogos e alertas Betano
+globs: supabase/**/*
 alwaysApply: false
 ---
 
@@ -8,7 +8,7 @@ alwaysApply: false
 
 ## Objetivo
 
-Registrar **cada coleta** da Betano para análise histórica posterior.
+Registrar **cada coleta** da Betano e **alertas disparados** para histórico e painel web.
 
 ## Tabelas oficiais
 
@@ -17,12 +17,15 @@ Registrar **cada coleta** da Betano para análise histórica posterior.
 | Coleta (1 por ciclo) | `coletas_betano` |
 | Jogos na coleta | `jogos_coleta` |
 | Alerta disparado | `alertas_betano` |
+| Regras configuráveis | `regras_alerta` |
+| Scheduler nuvem | `coleta_scheduler` |
+| Estado monitor | `jogos_estado_monitor` |
 
 **PROIBIDO** duplicar com nomes como `scrapes`, `history`.
 
 ## Campos mínimos — coletas_betano
 
-`id`, `usuario_id`, `coletado_em`, `fonte_parser` (`local`|`llm`|`nenhum`),
+`id`, `usuario_id`, `coletado_em`, `fonte_parser` (`api`|`local`|`llm`|`nenhum`),
 `sucesso`, `qtd_jogos`, `erro_mensagem`, `texto_tamanho`, `texto_preview`,
 `dispositivo_id`, `data_criacao`, `data_atualizacao`
 
@@ -30,13 +33,14 @@ Registrar **cada coleta** da Betano para análise histórica posterior.
 
 - RLS em todas as tabelas.
 - Políticas para usuário autenticado (`auth.uid()`).
-- Variáveis: `EXPO_PUBLIC_SUPABASE_URL`, `EXPO_PUBLIC_SUPABASE_ANON_KEY` no `.env`.
-- **PROIBIDO** `service_role` no app.
+- Anon key no painel (browser); **PROIBIDO** `service_role` no frontend.
+- `service_role` só em Edge Functions via secrets.
 
 ## Implementação
 
-- Cliente: `src/services/supabase.ts`
-- Coletas: `src/services/coletasSupabase.ts`
+- Painel: Supabase client inline em `historicoWebPage.ts`
+- Persistência coleta/alertas: `supabase/functions/_shared/supabaseService.ts`
+- Regras: `supabase/functions/_shared/betanoRules.ts`
 - Migrations: `supabase/migrations/`
 
 Após migration: marcar itens em `docs/CHECKLIST.md`.
