@@ -301,7 +301,7 @@ async function processarLeiturasLote(
       partida_id: partida.id,
       lote_id: loteId,
       coletado_em: now.toISOString(),
-      minuto_relogio: snap.periodDescription ?? String(snap.matchMinute ?? ''),
+      minuto_relogio: snap.periodDescription ?? snap.tempoDecorrido ?? (snap.matchMinute != null ? `${snap.matchMinute}'` : null),
       placar_casa: snap.homeScore,
       placar_fora: snap.awayScore,
       odd_manter_placar: snap.oddManterPlacar > 0 ? snap.oddManterPlacar : null,

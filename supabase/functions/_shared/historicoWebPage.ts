@@ -702,6 +702,60 @@ export function buildHistoricoTemplate(): string {
     .futebol-badge-sim { color: #ff6b6b; font-weight: 600; }
     .futebol-badge-nao { color: #7cb342; font-weight: 600; }
     .futebol-badge-pendente { color: #c45c00; }
+    .futebol-historico-lista {
+      display: flex;
+      flex-direction: column;
+      gap: 12px;
+      margin-top: 8px;
+    }
+    .futebol-historico-partida {
+      background: #1a1a1a;
+      border-radius: 10px;
+      padding: 12px;
+      border: 1px solid #2a2a2a;
+    }
+    .futebol-historico-cabecalho {
+      font-size: 13px;
+      line-height: 1.5;
+      margin-bottom: 10px;
+      color: #ccc;
+    }
+    .futebol-historico-cabecalho strong { color: #fff; }
+    .futebol-historico-meta {
+      font-size: 12px;
+      color: #888;
+      margin-top: 4px;
+    }
+    .futebol-historico-badge {
+      display: inline-block;
+      font-size: 11px;
+      font-weight: 600;
+      padding: 2px 8px;
+      border-radius: 6px;
+      margin-left: 6px;
+      vertical-align: middle;
+    }
+    .futebol-historico-badge.janela {
+      background: #3d2a00;
+      color: #ffb74d;
+    }
+    .futebol-historico-badge.final {
+      background: #1a2a1a;
+      color: #7cb342;
+    }
+    .futebol-tabela-leituras {
+      font-size: 11px;
+      margin-top: 4px;
+    }
+    .futebol-tabela-leituras th {
+      font-size: 10px;
+    }
+    .futebol-sem-leituras {
+      font-size: 12px;
+      color: #666;
+      margin: 4px 0 0;
+    }
+    .futebol-mais-gols-sim { color: #ff6b6b; font-weight: 600; }
     @media (min-width: 900px) {
       .header-top,
       .historico-stats-bar,
@@ -1893,8 +1947,31 @@ export function buildHistoricoTemplate(): string {
       const semGol = finalizadas.filter((p) => p.gol_nos_ultimos_5_min === false);
       const emJanela = lista.filter((p) => p.status === 'em_janela').length;
       const observadas = lista.filter((p) => p.status === 'observado').length;
+      const historicoJanela = lista.filter((p) => p.status === 'em_janela' || p.status === 'finalizado');
+      const partidaIds = historicoJanela.map((p) => p.id);
+
+      let leituras = [];
+      if (partidaIds.length > 0) {
+        const { data: leiturasData, error: leiturasError } = await supabase
+          .from('futebol_leituras')
+          .select('*')
+          .in('partida_id', partidaIds)
+          .order('coletado_em', { ascending: true });
+        if (leiturasError) throw new Error(leiturasError.message);
+        leituras = leiturasData ?? [];
+      }
+
+      const leiturasPorPartida = {};
+      for (const leitura of leituras) {
+        const pid = leitura.partida_id;
+        if (!leiturasPorPartida[pid]) leiturasPorPartida[pid] = [];
+        leiturasPorPartida[pid].push(leitura);
+      }
+
       return {
         partidas: lista,
+        historicoJanela,
+        leiturasPorPartida,
         agenda: agenda ?? null,
         stats: {
           finalizadas: finalizadas.length,
@@ -1998,33 +2075,104 @@ export function buildHistoricoTemplate(): string {
         '</tr></thead><tbody>' + linhas + '</tbody></table></div>';
     }
 
-    function renderTabelaHistoricoFutebol(historico) {
-      if (!historico.length) {
-        return '<p class="aviso" style="margin-top:12px">Nenhuma partida finalizada na janela ainda.</p>';
+    function totalGolsPartida(casa, fora) {
+      return Number(casa ?? 0) + Number(fora ?? 0);
+    }
+
+    function calcularMaisGolsLeitura(leitura, anterior, placarCasaInicio, placarForaInicio) {
+      const atual = totalGolsPartida(leitura.placar_casa, leitura.placar_fora);
+      const referencia = anterior
+        ? totalGolsPartida(anterior.placar_casa, anterior.placar_fora)
+        : (placarCasaInicio != null && placarForaInicio != null
+          ? totalGolsPartida(placarCasaInicio, placarForaInicio)
+          : null);
+      if (referencia == null) return '—';
+      const delta = atual - referencia;
+      if (delta === 0) return '0';
+      return '+' + delta;
+    }
+
+    function formatarOddManter(valor) {
+      if (valor == null || !Number.isFinite(Number(valor)) || Number(valor) <= 0) return '—';
+      return Number(valor).toFixed(2);
+    }
+
+    function ordenarHistoricoJanela(lista) {
+      return [...lista].sort((a, b) => {
+        const ja = a.status === 'em_janela' ? 0 : 1;
+        const jb = b.status === 'em_janela' ? 0 : 1;
+        if (ja !== jb) return ja - jb;
+        const da = new Date(a.finalizado_em ?? a.data_atualizacao ?? 0).getTime();
+        const db = new Date(b.finalizado_em ?? b.data_atualizacao ?? 0).getTime();
+        return db - da;
+      });
+    }
+
+    function renderTabelaLeiturasPartida(partida, leituras) {
+      if (!leituras.length) {
+        return '<p class="futebol-sem-leituras">Nenhuma coleta intensiva registrada nesta janela ainda.</p>';
       }
-      const linhas = historico.map((p) => {
-        const placarInicio = (p.placar_casa_inicio != null && p.placar_fora_inicio != null)
-          ? p.placar_casa_inicio + '–' + p.placar_fora_inicio
-          : '—';
-        const placarFinal = (p.placar_casa_final != null && p.placar_fora_final != null)
-          ? p.placar_casa_final + '–' + p.placar_fora_final
-          : '—';
+      const linhas = leituras.map((l, idx) => {
+        const anterior = idx > 0 ? leituras[idx - 1] : null;
+        const maisGols = calcularMaisGolsLeitura(
+          l, anterior, partida.placar_casa_inicio, partida.placar_fora_inicio,
+        );
+        const clsGol = String(maisGols).startsWith('+') ? ' class="futebol-mais-gols-sim"' : '';
+        const placar = l.placar_casa + '–' + l.placar_fora;
         return '<tr>' +
-          '<td>' + escapeHtml(p.time_casa) + ' x ' + escapeHtml(p.time_fora) + '</td>' +
-          '<td>' + escapeHtml(placarInicio) + '</td>' +
-          '<td>' + escapeHtml(placarFinal) + '</td>' +
-          '<td>' + rotuloGolUltimos5(p.gol_nos_ultimos_5_min) + '</td>' +
-          '<td>' + escapeHtml(formatarDataCurta(p.finalizado_em ?? p.data_atualizacao)) + '</td>' +
+          '<td>' + escapeHtml(formatarDataCurta(l.coletado_em)) + '</td>' +
+          '<td>' + escapeHtml(l.minuto_relogio?.trim() || '—') + ' <span style="color:#666">(' + escapeHtml(placar) + ')</span></td>' +
+          '<td' + clsGol + '>' + escapeHtml(maisGols) + '</td>' +
+          '<td>' + escapeHtml(formatarOddManter(l.odd_manter_placar)) + '</td>' +
         '</tr>';
       }).join('');
+      return '<div class="futebol-tabela-wrap"><table class="futebol-tabela futebol-tabela-leituras"><thead><tr>' +
+        '<th>Data/Hora</th><th>Tempo de jogo</th><th>+Gols</th><th>ODD manter</th>' +
+        '</tr></thead><tbody>' + linhas + '</tbody></table></div>';
+    }
+
+    function renderBlocoPartidaHistorico(partida, leituras) {
+      const placarInicio = (partida.placar_casa_inicio != null && partida.placar_fora_inicio != null)
+        ? partida.placar_casa_inicio + '–' + partida.placar_fora_inicio
+        : '—';
+      const placarFinal = (partida.placar_casa_final != null && partida.placar_fora_final != null)
+        ? partida.placar_casa_final + '–' + partida.placar_fora_final
+        : '—';
+      const emJanela = partida.status === 'em_janela';
+      const badgeCls = emJanela ? 'janela' : 'final';
+      const badgeTxt = emJanela ? 'Em janela' : 'Finalizado';
+      const golTxt = emJanela ? '—' : rotuloGolUltimos5(partida.gol_nos_ultimos_5_min);
+      const leiturasTxt = leituras.length + ' coleta(s) intensiva(s)';
+      return '<article class="futebol-historico-partida">' +
+        '<div class="futebol-historico-cabecalho">' +
+          '<strong>' + escapeHtml(partida.time_casa) + ' x ' + escapeHtml(partida.time_fora) + '</strong>' +
+          '<span class="futebol-historico-badge ' + badgeCls + '">' + badgeTxt + '</span>' +
+          '<div class="futebol-historico-meta">' +
+            escapeHtml(partida.liga || '—') + ' · Placar 85\': ' + escapeHtml(placarInicio) +
+            ' · Final: ' + escapeHtml(placarFinal) + ' · Gol 5 min: ' + golTxt +
+            ' · ' + escapeHtml(leiturasTxt) +
+          '</div>' +
+        '</div>' +
+        renderTabelaLeiturasPartida(partida, leituras) +
+      '</article>';
+    }
+
+    function renderTabelaHistoricoFutebol(historicoJanela, leiturasPorPartida) {
+      const lista = ordenarHistoricoJanela(historicoJanela);
+      if (!lista.length) {
+        return '<p class="aviso" style="margin-top:12px">Nenhuma partida na janela final ainda. Com o monitor ativo, jogos ≥85\' aparecem aqui com coletas a cada 40–50 s.</p>';
+      }
+      const blocos = lista.map((p) => {
+        const leituras = leiturasPorPartida[p.id] ?? [];
+        return renderBlocoPartidaHistorico(p, leituras);
+      }).join('');
       return '<h3 class="futebol-secao-titulo">Histórico — janela final (85\' até o fim)</h3>' +
-        '<table class="futebol-tabela"><thead><tr>' +
-        '<th>Partida</th><th>Placar 85\'</th><th>Final</th><th>Gol 5 min?</th><th>Encerrado</th>' +
-        '</tr></thead><tbody>' + linhas + '</tbody></table>';
+        '<p style="color:#888;font-size:12px;margin:0 0 8px">Coletas intensivas na janela final. +Gols = gols desde a coleta anterior (ou desde o placar no 85\' na primeira linha).</p>' +
+        '<div class="futebol-historico-lista">' + blocos + '</div>';
     }
 
     function renderEstatisticasFutebol(payload) {
-      const { partidas, agenda, stats, aoVivoJson } = payload;
+      const { partidas, agenda, stats, aoVivoJson, historicoJanela, leiturasPorPartida } = payload;
       const aoVivo = ordenarJogosAoVivo(
         Array.isArray(aoVivoJson) && aoVivoJson.length
           ? aoVivoJson.map(normalizarJogoAoVivoJson)
@@ -2032,7 +2180,8 @@ export function buildHistoricoTemplate(): string {
             .filter((p) => p.status === 'observado' || p.status === 'em_janela')
             .map(normalizarJogoAoVivoDb),
       );
-      const historico = partidas.filter((p) => p.status === 'finalizado');
+      const historico = historicoJanela ?? partidas.filter((p) => p.status === 'em_janela' || p.status === 'finalizado');
+      const leiturasMap = leiturasPorPartida ?? {};
       const pct = stats.pctComGol != null
         ? stats.pctComGol + '% das partidas finalizadas tiveram gol nos últimos 5 min'
         : 'Aguardando partidas finalizadas para calcular a estatística';
@@ -2051,7 +2200,7 @@ export function buildHistoricoTemplate(): string {
 
       elConteudo.innerHTML = '<div class="futebol-stats-wrap">' + resumo +
         renderTabelaAoVivoFutebol(aoVivo) +
-        renderTabelaHistoricoFutebol(historico) +
+        renderTabelaHistoricoFutebol(historico, leiturasMap) +
       '</div>';
       // #region agent log
       requestAnimationFrame(() => {

@@ -2,7 +2,7 @@
 
 Progresso do **painel web + Supabase**. O Agent deve marcar `[x]` ao concluir cada item e atualizar a data abaixo.
 
-**Última atualização:** 2026-06-29 (futebol — largura tabela + tempo de jogo e restante até 85')
+**Última atualização:** 2026-06-29 (futebol — histórico janela com leituras intensivas)
 
 ---
 
@@ -30,7 +30,7 @@ Progresso do **painel web + Supabase**. O Agent deve marcar `[x]` ao concluir ca
 - [x] Título e barra de stats alinhados à margem esquerda dos cards (desktop)
 - [x] Link Betano nos cards (Coletas e Alertas) — `url` da API overview
 - [x] Seletor **Basquete** | **Futebol** — cards, alertas e regras separados por esporte
-- [x] Aba Futebol **Estatísticas** — todos ao vivo no JSON + histórico janela 85'
+- [x] Aba Futebol **Estatísticas** — todos ao vivo no JSON + histórico janela 85' com leituras intensivas (+Gols, ODD)
 - [ ] Paginação completa `jogos_coleta` (limite 1000 por batch)
 
 ---
