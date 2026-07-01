@@ -26,3 +26,4 @@ supabase/.temp/
 
 # typescript
 *.tsbuildinfo
+tmp-module.mjs

@@ -1601,7 +1601,7 @@ export function buildHistoricoTemplate(): string {
       elHistoricoStats.textContent = stats
         ? stats.cards + ' jogo(s) · ' + stats.entradas + ' coleta(s) no histórico'
         : '0 jogo(s) · 0 coleta(s) no histórico';
-      if (stats)    }
+    }
 
     async function buscarTodosAlertas() {
       const todos = [];
