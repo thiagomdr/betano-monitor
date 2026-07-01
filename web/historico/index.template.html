@@ -4,7 +4,7 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1" />
   <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate" />
-  <meta name="painel-build" content="futebol-resumo-minutos-20260707" />
+  <meta name="painel-build" content="futebol-gols-minuto-fix-20260707" />
   <title>Monitor Betano</title>
   <style>
     * { box-sizing: border-box; margin: 0; padding: 0; }
@@ -1042,7 +1042,7 @@
     const CHAVE_COLETA_ATIVADA = 'betano_coleta_ativada_em';
     const CHAVE_COLETA_PARADA = 'betano_coleta_parada_em';
     const CHAVE_ESPORTE_ATIVO = 'betano_esporte_ativo';
-    const PAINEL_BUILD_ID = 'futebol-resumo-minutos-20260707';
+    const PAINEL_BUILD_ID = 'futebol-gols-minuto-fix-20260707';
 
     const OPCOES_PERIODO_BASQUETE = [
       { value: 'Q1', label: 'Q1 — desde o 1º quarto' },
@@ -2310,7 +2310,15 @@
       const aposto = trimmed.match(/(\d{1,3})\s*['′]/);
       if (aposto) return Number.parseInt(aposto[1], 10);
       const clock = trimmed.match(/(\d{1,3}):(\d{2})/);
-      if (clock) return Number.parseInt(clock[1], 10);
+      if (clock) {
+        const m = Number.parseInt(clock[1], 10);
+        const s = Number.parseInt(clock[2], 10);
+        // Relógio decorrido (ex.: 88:32)
+        if (m >= 46) return m;
+        // Tempo restante no 2º tempo (ex.: 4:30 ≈ 86')
+        if (m <= 20) return 90 - m - (s >= 45 ? 1 : 0);
+        return m;
+      }
       const solto = trimmed.match(/\b(\d{1,3})\s*\+/);
       if (solto) return Number.parseInt(solto[1], 10);
       return null;
@@ -2366,55 +2374,127 @@
       return Math.max(0, totalGolsPartida(final.casa, final.fora) - golsInicio);
     }
 
+    function atribuirGolsPorMinutoPartida(partida, leituras, golsPorMinuto, statsDebug) {
+      if (partida.placar_casa_inicio == null || partida.placar_fora_inicio == null) return 0;
+      const golsInicio = totalGolsPartida(partida.placar_casa_inicio, partida.placar_fora_inicio);
+      const final = placarFinalPartida(partida, leituras);
+      if (!final) return 0;
+      const golsTotal = Math.max(0, totalGolsPartida(final.casa, final.fora) - golsInicio);
+      if (golsTotal <= 0) return 0;
+
+      if (!leituras.length) return golsTotal;
+
+      let atribuidos = 0;
+      const min0 = extrairMinutoJogo(leituras[0].minuto_relogio);
+      const abertura = totalGolsPartida(leituras[0].placar_casa, leituras[0].placar_fora) - golsInicio;
+      if (abertura > 0 && min0 != null && min0 >= 85) {
+        somarGolsPorMinuto(golsPorMinuto, min0, abertura);
+        atribuidos += abertura;
+        if (statsDebug) statsDebug.viaAbertura += abertura;
+      }
+
+      for (let i = 1; i < leituras.length; i++) {
+        const min = extrairMinutoJogo(leituras[i].minuto_relogio);
+        const delta = totalGolsPartida(leituras[i].placar_casa, leituras[i].placar_fora)
+          - totalGolsPartida(leituras[i - 1].placar_casa, leituras[i - 1].placar_fora);
+        if (delta > 0 && min != null && min >= 85) {
+          somarGolsPorMinuto(golsPorMinuto, min, delta);
+          atribuidos += delta;
+          if (statsDebug) statsDebug.viaConsecutivo += delta;
+        }
+      }
+
+      const ult = leituras[leituras.length - 1];
+      const minUlt = extrairMinutoJogo(ult.minuto_relogio);
+      const fechamento = totalGolsPartida(final.casa, final.fora)
+        - totalGolsPartida(ult.placar_casa, ult.placar_fora);
+      if (fechamento > 0 && minUlt != null && minUlt >= 85) {
+        somarGolsPorMinuto(golsPorMinuto, minUlt, fechamento);
+        atribuidos += fechamento;
+        if (statsDebug) statsDebug.viaFechamento += fechamento;
+      }
+
+      const naoAtribuidos = golsTotal - atribuidos;
+      if (naoAtribuidos > 0 && statsDebug) {
+        statsDebug.naoAtribuidos += naoAtribuidos;
+        statsDebug.amostrasNaoAtrib.push({
+          partida: partida.time_casa + ' x ' + partida.time_fora,
+          golsTotal,
+          atribuidos,
+          naoAtribuidos,
+          tempos: leituras.slice(-3).map((l) => l.minuto_relogio),
+        });
+      }
+      return golsTotal;
+    }
+
     function calcularResumoHistoricoJanela(historicoJanela, leiturasPorPartida) {
       const golsPorMinuto = {};
       let jogosComGol = 0;
       let totalGolsNaJanela = 0;
       let maxMinutoComGol = 85;
+      const statsDebug = {
+        viaAbertura: 0,
+        viaConsecutivo: 0,
+        viaFechamento: 0,
+        naoAtribuidos: 0,
+        amostrasNaoAtrib: [],
+      };
 
       for (const p of historicoJanela) {
         const leituras = leiturasPorPartida[p.id] ?? [];
-        const golsPartida = golsNaJanelaPartida(p, leituras);
+        const golsPartida = atribuirGolsPorMinutoPartida(p, leituras, golsPorMinuto, statsDebug);
         if (golsPartida > 0) jogosComGol += 1;
         totalGolsNaJanela += golsPartida;
-
-        let golsAtribuidos = 0;
-        for (let i = 0; i < leituras.length; i++) {
-          const l = leituras[i];
-          const min = extrairMinutoJogo(l.minuto_relogio);
-          if (min == null || min < 85) continue;
-          const delta = deltaGolsLeitura(
-            l, i > 0 ? leituras[i - 1] : null, p.placar_casa_inicio, p.placar_fora_inicio,
-          );
-          if (delta > 0) {
-            somarGolsPorMinuto(golsPorMinuto, min, delta);
-            golsAtribuidos += delta;
-            if (min > maxMinutoComGol) maxMinutoComGol = min;
-          }
-        }
-
-        const restante = golsPartida - golsAtribuidos;
-        if (restante > 0) {
-          const minFallback = ultimoMinutoLeituraJanela(leituras)
-            ?? p.minuto_inicio_janela
-            ?? 85;
-          somarGolsPorMinuto(golsPorMinuto, minFallback, restante);
-          if (minFallback > maxMinutoComGol) maxMinutoComGol = minFallback;
-        }
       }
 
-      return {
+      for (const m of Object.keys(golsPorMinuto)) {
+        const min = Number(m);
+        if (min > maxMinutoComGol) maxMinutoComGol = min;
+      }
+
+      const resumo = {
         jogosColetados: historicoJanela.length,
         jogosComGolNaJanela: jogosComGol,
         totalGolsNaJanela,
         golsPorMinuto,
         maxMinutoComGol: Math.max(87, maxMinutoComGol),
       };
+
+      // #region agent log
+      fetch('http://127.0.0.1:7904/ingest/86615625-6ae5-4e98-a1da-0a5f0f15fc42', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'X-Debug-Session-Id': '94b3c3' },
+        body: JSON.stringify({
+          sessionId: '94b3c3',
+          runId: 'gols-minuto-fix',
+          hypothesisId: 'H1-H5',
+          location: 'historicoWebPage.ts:calcularResumoHistoricoJanela',
+          message: 'gols por minuto agregado',
+          data: {
+            totalGolsNaJanela,
+            golsPorMinuto,
+            statsDebug,
+            maxMinutoComGol: resumo.maxMinutoComGol,
+          },
+          timestamp: Date.now(),
+        }),
+      }).catch(() => {});
+      // #endregion
+
+      return resumo;
     }
 
     function renderResumoHistoricoJanela(resumo) {
+      const minutosComGol = Object.keys(resumo.golsPorMinuto)
+        .map(Number)
+        .filter((m) => (resumo.golsPorMinuto[m] ?? 0) > 0)
+        .sort((a, b) => a - b);
+      const maxExibir = minutosComGol.length
+        ? Math.max(87, minutosComGol[minutosComGol.length - 1])
+        : 87;
       const linhasMinuto = [];
-      for (let m = 85; m <= resumo.maxMinutoComGol; m++) {
+      for (let m = 85; m <= maxExibir; m++) {
         const n = resumo.golsPorMinuto[m] ?? 0;
         const cls = n > 0 ? 'futebol-gol-minuto com-gol' : 'futebol-gol-minuto';
         const rotulo = n === 1 ? '1 gol' : n + ' gols';
