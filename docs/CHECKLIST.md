@@ -23,7 +23,7 @@ Progresso do **painel web + Supabase**. O Agent deve marcar `[x]` ao concluir ca
 - [x] Abas **Coletas** | **Alertas**
 - [x] Cards por jogo (`game_key`) + timeline ao expandir
 - [x] Coletar Agora + Iniciar/Parar monitor (scheduler nuvem)
-- [x] Regras de alerta — aba Regras (listar, criar, editar, excluir)
+- [x] Regras de alerta — menu superior (listar, criar, editar, excluir)
 - [x] Menu ⋮ excluir jogo (Coletas) e excluir alerta (Alertas)
 - [x] Status alertas: finalizado para disparos antigos
 - [x] Supabase Realtime + polling 45s

@@ -372,6 +372,31 @@
       max-width: 720px;
       margin: 0 auto;
     }
+    .tela-regras-topo {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      margin-bottom: 16px;
+    }
+    .tela-regras-topo h2 {
+      font-size: 18px;
+      font-weight: 700;
+      color: #fff;
+      flex: 1;
+      min-width: 0;
+    }
+    .btn-voltar-regras {
+      background: transparent;
+      border: 1px solid #444;
+      border-radius: 8px;
+      color: #ccc;
+      font-size: 13px;
+      font-weight: 600;
+      padding: 8px 12px;
+      cursor: pointer;
+      flex-shrink: 0;
+    }
+    .btn-voltar-regras:hover { color: #fff; border-color: #666; }
     .regras-intro {
       font-size: 13px;
       color: #aaa;
@@ -568,9 +593,9 @@
               <div id="monitor-status" class="menu-status off">Coleta: Parada</div>
             </div>
             <div class="menu-divider" role="separator"></div>
-            <button id="btn-coletar" class="menu-item menu-item-primary" type="button" role="menuitem">Coletar Agora</button>
             <button id="btn-monitor" class="menu-item" type="button" role="menuitem">Parar Coleta</button>
-            <button id="btn-atualizar" class="menu-item" type="button" role="menuitem">Atualizar</button>
+            <button id="btn-coletar" class="menu-item menu-item-primary" type="button" role="menuitem">Coletar Agora</button>
+            <button id="btn-regras-menu" class="menu-item" type="button" role="menuitem">Regras de Alertas</button>
             <button id="btn-sair" class="menu-item" type="button" role="menuitem">Sair</button>
           </div>
         </div>
@@ -579,13 +604,16 @@
     <nav id="abas-historico" class="abas-historico hidden" role="tablist" aria-label="Histórico">
       <button id="aba-coletas" type="button" class="aba ativa" role="tab" aria-selected="true" aria-controls="conteudo">Coletas</button>
       <button id="aba-alertas" type="button" class="aba" role="tab" aria-selected="false" aria-controls="conteudo">Alertas</button>
-      <button id="aba-regras" type="button" class="aba" role="tab" aria-selected="false" aria-controls="tela-regras">Regras</button>
     </nav>
     <div id="historico-stats-bar" class="historico-stats-bar hidden">
       <span id="historico-stats" class="historico-stats-text" aria-live="polite"></span>
     </div>
     <div id="conteudo"></div>
-    <div id="tela-regras" class="tela-regras hidden" role="tabpanel" aria-labelledby="aba-regras">
+    <div id="tela-regras" class="tela-regras hidden" role="region" aria-label="Regras de alerta">
+      <div class="tela-regras-topo">
+        <button type="button" id="btn-voltar-regras" class="btn-voltar-regras">Voltar</button>
+        <h2>Regras de Alertas</h2>
+      </div>
       <p class="regras-intro" id="regras-ajuda">
         Cada regra combina <strong>três critérios</strong> para sugerir aposta no <strong>time líder em pontos</strong>:
         a partir de qual quarto vale, vantagem mínima em pontos e odd mínima do líder para vencer.
@@ -662,6 +690,8 @@
     const elMonitorStatus = document.getElementById('monitor-status');
     const elBtnMonitor = document.getElementById('btn-monitor');
     const elBtnColetar = document.getElementById('btn-coletar');
+    const elBtnRegrasMenu = document.getElementById('btn-regras-menu');
+    const elBtnVoltarRegras = document.getElementById('btn-voltar-regras');
     const elBtnMenu = document.getElementById('btn-menu');
     const elMenuPopover = document.getElementById('menu-popover');
     const elPainelRegras = document.getElementById('tela-regras');
@@ -673,9 +703,9 @@
     const elAbasHistorico = document.getElementById('abas-historico');
     const elAbaColetas = document.getElementById('aba-coletas');
     const elAbaAlertas = document.getElementById('aba-alertas');
-    const elAbaRegras = document.getElementById('aba-regras');
 
     let abaAtiva = 'coletas';
+    let telaRegrasAberta = false;
     let regraEmEdicaoId = null;
     let expandidos = new Set();
     let refreshTimer = null;
@@ -827,34 +857,44 @@
     }
 
     function atualizarVisibilidadeTelas() {
-      const regras = abaAtiva === 'regras';
-      elConteudo.classList.toggle('hidden', regras);
-      elPainelRegras?.classList.toggle('hidden', !regras);
-      elHistoricoStatsBar?.classList.toggle('hidden', regras);
+      elConteudo.classList.toggle('hidden', telaRegrasAberta);
+      elPainelRegras?.classList.toggle('hidden', !telaRegrasAberta);
+      elHistoricoStatsBar?.classList.toggle('hidden', telaRegrasAberta);
+      elAbasHistorico?.classList.toggle('hidden', telaRegrasAberta);
+    }
+
+    function abrirTelaRegras() {
+      fecharMenu();
+      fecharCardMenu();
+      telaRegrasAberta = true;
+      limparFormRegra();
+      atualizarVisibilidadeTelas();
+      void carregarRegras();
+    }
+
+    function fecharTelaRegras() {
+      telaRegrasAberta = false;
+      limparFormRegra();
+      atualizarVisibilidadeTelas();
+      void carregar();
     }
 
     function atualizarAbasUi() {
       elAbaColetas?.classList.toggle('ativa', abaAtiva === 'coletas');
       elAbaAlertas?.classList.toggle('ativa', abaAtiva === 'alertas');
-      elAbaRegras?.classList.toggle('ativa', abaAtiva === 'regras');
       elAbaColetas?.setAttribute('aria-selected', abaAtiva === 'coletas' ? 'true' : 'false');
       elAbaAlertas?.setAttribute('aria-selected', abaAtiva === 'alertas' ? 'true' : 'false');
-      elAbaRegras?.setAttribute('aria-selected', abaAtiva === 'regras' ? 'true' : 'false');
       atualizarVisibilidadeTelas();
     }
 
     function trocarAba(aba) {
-      if (aba !== 'coletas' && aba !== 'alertas' && aba !== 'regras') return;
-      if (abaAtiva === aba) return;
+      if (aba !== 'coletas' && aba !== 'alertas') return;
+      if (abaAtiva === aba && !telaRegrasAberta) return;
       abaAtiva = aba;
+      telaRegrasAberta = false;
       fecharCardMenu();
       atualizarAbasUi();
-      if (aba === 'regras') {
-        limparFormRegra();
-        void carregarRegras();
-      } else {
-        void carregar();
-      }
+      void carregar();
     }
 
     function atualizarUiFormRegra() {
@@ -1063,7 +1103,7 @@
         monitorAtivo = false;
         coletaAtivadaEm = lerAtivacaoLocal();
         coletaParadaEm = lerParadaLocal();
-        elBtnMonitor.textContent = 'Iniciar Coleta';
+        elBtnMonitor.textContent = 'Ativar Coleta';
         pararTimerStatus();
         atualizarTextoStatusMonitor();
         return;
@@ -1078,7 +1118,7 @@
       } else {
         coletaAtivadaEm = lerAtivacaoLocal();
         coletaParadaEm = lerParadaLocal();
-        elBtnMonitor.textContent = 'Iniciar Coleta';
+        elBtnMonitor.textContent = 'Ativar Coleta';
         pararTimerStatus();
         atualizarTextoStatusMonitor();
       }
@@ -1117,7 +1157,7 @@
       coletaParadaEm = Date.parse(agora);
       salvarParadaLocal(agora);
       monitorAtivo = false;
-      elBtnMonitor.textContent = 'Iniciar Coleta';
+      elBtnMonitor.textContent = 'Ativar Coleta';
       pararTimerStatus();
       atualizarTextoStatusMonitor();
     }
@@ -1461,12 +1501,12 @@
 
     function renderVazio(motivo) {
       const msg = motivo ||
-        'Nenhum jogo registrado ainda. Use Iniciar Coleta ou Coletar Agora quando houver basquete ao vivo na Betano.';
+        'Nenhum jogo registrado ainda. Use Ativar Coleta ou Coletar Agora quando houver basquete ao vivo na Betano.';
       elConteudo.innerHTML = '<div class="centro"><p class="aviso">' + escapeHtml(msg) + '</p></div>';
     }
 
     function renderVazioAlertas() {
-      elConteudo.innerHTML = '<div class="centro"><p class="aviso">Nenhum alerta disparado ainda. Configure regras na aba Regras e aguarde um jogo que atenda aos critérios.</p></div>';
+      elConteudo.innerHTML = '<div class="centro"><p class="aviso">Nenhum alerta disparado ainda. Configure regras em Regras de Alertas no menu e aguarde um jogo que atenda aos critérios.</p></div>';
     }
 
     function renderAlertaCardTopo(estado, menuKey) {
@@ -1660,7 +1700,7 @@
 
     function atualizarStatsHistorico(stats) {
       if (!elHistoricoStatsBar || !elHistoricoStats) return;
-      if (abaAtiva === 'regras') return;
+      if (telaRegrasAberta) return;
       elHistoricoStatsBar.classList.remove('hidden');
       if (abaAtiva === 'alertas') {
         const total = stats?.total ?? 0;
@@ -1869,11 +1909,7 @@
     }
 
     async function carregar(silencioso = false) {
-      if (abaAtiva === 'regras') {
-        atualizarAbasUi();
-        void carregarRegras();
-        return;
-      }
+      if (telaRegrasAberta) return;
       if (!silencioso) renderLoading();
       try {
         if (abaAtiva === 'alertas') {
@@ -1906,6 +1942,7 @@
       elHistoricoStatsBar?.classList.add('hidden');
       elAbasHistorico?.classList.add('hidden');
       elPainelRegras?.classList.add('hidden');
+      telaRegrasAberta = false;
       pararAutoRefresh();
       pararRealtime();
       pararTimerStatus();
@@ -1996,16 +2033,20 @@
     document.getElementById('btn-sair').addEventListener('click', async () => {
       await supabase.auth.signOut();
       expandidos = new Set();
+      telaRegrasAberta = false;
       mostrarLogin();
-    });
-
-    document.getElementById('btn-atualizar').addEventListener('click', () => {
-      void carregar();
     });
 
     elAbaColetas?.addEventListener('click', () => trocarAba('coletas'));
     elAbaAlertas?.addEventListener('click', () => trocarAba('alertas'));
-    elAbaRegras?.addEventListener('click', () => trocarAba('regras'));
+
+    elBtnRegrasMenu?.addEventListener('click', () => {
+      abrirTelaRegras();
+    });
+
+    elBtnVoltarRegras?.addEventListener('click', () => {
+      fecharTelaRegras();
+    });
 
     elBtnColetar.addEventListener('click', () => {
       void coletarAgora();
