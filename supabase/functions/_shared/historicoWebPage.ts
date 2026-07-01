@@ -807,12 +807,6 @@ export function buildHistoricoTemplate(): string {
       });
     }
 
-    function toggleCardMenu(key) {
-      fecharMenu();
-      cardMenuAberto = cardMenuAberto === key ? null : key;
-      atualizarCardMenusDom();
-    }
-
     function toggleMenu() {
       const aberto = !elMenuPopover.classList.contains('hidden');
       if (aberto) fecharMenu();

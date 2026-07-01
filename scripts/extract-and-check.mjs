@@ -6,7 +6,10 @@ import { createRequire } from 'node:module';
 const root = join(dirname(fileURLToPath(import.meta.url)), '..');
 const source = process.argv[2] === '--prod'
   ? await fetch('https://thiagomdr.github.io/betano-monitor/').then((r) => r.text())
-  : readFileSync(join(root, 'web/historico/index.html'), 'utf8');
+  : readFileSync(
+      join(root, 'web/historico/index.template.html'),
+      'utf8',
+    );
 
 const start = source.indexOf('<script type="module">') + '<script type="module">'.length;
 const end = source.indexOf('</script>', start);
