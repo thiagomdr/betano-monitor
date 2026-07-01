@@ -4,7 +4,7 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1" />
   <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate" />
-  <meta name="painel-build" content="futebol-gols-db-backfill-20260709" />
+  <meta name="painel-build" content="futebol-gols-minuto-popover-20260709" />
   <title>Monitor Betano</title>
   <style>
     * { box-sizing: border-box; margin: 0; padding: 0; }
@@ -822,6 +822,66 @@
       color: #ffb74d;
       font-weight: 600;
     }
+    .futebol-gol-minuto-wrap {
+      position: relative;
+      display: inline-block;
+    }
+    .futebol-gol-minuto-btn {
+      background: transparent;
+      border: none;
+      padding: 0;
+      font: inherit;
+      color: inherit;
+      cursor: pointer;
+      border-radius: 4px;
+      text-decoration: underline dotted transparent;
+    }
+    .futebol-gol-minuto-btn.com-gol:hover,
+    .futebol-gol-minuto-btn.com-gol:focus-visible {
+      text-decoration-color: #ffb74d;
+      outline: none;
+    }
+    .futebol-gol-minuto-popover {
+      position: absolute;
+      bottom: calc(100% + 6px);
+      left: 0;
+      min-width: 220px;
+      max-width: min(320px, 90vw);
+      background: #1a1a1a;
+      border: 1px solid #444;
+      border-radius: 10px;
+      padding: 8px 10px;
+      box-shadow: 0 8px 24px rgba(0, 0, 0, 0.5);
+      z-index: 250;
+      text-align: left;
+      font-weight: 400;
+      color: #ddd;
+    }
+    .futebol-gol-minuto-popover ul {
+      margin: 0;
+      padding: 0;
+      list-style: none;
+    }
+    .futebol-gol-minuto-popover li {
+      padding: 5px 0;
+      font-size: 12px;
+      line-height: 1.35;
+      border-bottom: 1px solid #2a2a2a;
+    }
+    .futebol-gol-minuto-popover li:last-child {
+      border-bottom: none;
+    }
+    .futebol-gol-minuto-popover .gol-qtd {
+      color: #ffb74d;
+      font-weight: 600;
+      margin-left: 4px;
+    }
+    .futebol-gol-minuto-popover .liga-hint {
+      display: block;
+      color: #777;
+      font-size: 10px;
+      margin-top: 2px;
+    }
     .futebol-historico-numero {
       flex-shrink: 0;
       min-width: 1.8em;
@@ -1042,7 +1102,7 @@
     const CHAVE_COLETA_ATIVADA = 'betano_coleta_ativada_em';
     const CHAVE_COLETA_PARADA = 'betano_coleta_parada_em';
     const CHAVE_ESPORTE_ATIVO = 'betano_esporte_ativo';
-    const PAINEL_BUILD_ID = 'futebol-gols-db-backfill-20260709';
+    const PAINEL_BUILD_ID = 'futebol-gols-minuto-popover-20260709';
 
     const OPCOES_PERIODO_BASQUETE = [
       { value: 'Q1', label: 'Q1 — desde o 1º quarto' },
@@ -2096,6 +2156,7 @@
         { data: partidas, error },
         { data: agenda },
         { data: resumoJanelaRaw, error: resumoErr },
+        { data: eventosGol, error: eventosErr },
       ] = await Promise.all([
         supabase
           .from('futebol_partidas')
@@ -2104,9 +2165,15 @@
           .limit(300),
         supabase.from('futebol_agenda').select('modo, next_fetch_at, last_radar_at, last_intensive_at').maybeSingle(),
         supabase.rpc('futebol_resumo_janela'),
+        supabase
+          .from('futebol_eventos_gol')
+          .select('minuto_jogo, quantidade, partida_id, futebol_partidas(time_casa, time_fora, liga)')
+          .gte('minuto_jogo', 85)
+          .order('minuto_jogo'),
       ]);
       if (error) throw new Error(error.message);
       if (resumoErr) throw new Error(resumoErr.message);
+      if (eventosErr) throw new Error(eventosErr.message);
       const lista = partidas ?? [];
       const finalizadas = lista.filter((p) => p.status === 'finalizado');
       const comGol = finalizadas.filter((p) => p.gol_nos_ultimos_5_min === true);
@@ -2139,6 +2206,7 @@
         historicoJanela,
         leiturasPorPartida,
         resumoJanela: normalizarResumoJanelaDb(resumoJanelaRaw),
+        golsPorMinutoJogos: montarGolsPorMinutoJogos(eventosGol),
         agenda: agenda ?? null,
         stats: {
           finalizadas: finalizadas.length,
@@ -2338,6 +2406,54 @@
       return resumo;
     }
 
+    function montarGolsPorMinutoJogos(eventos) {
+      const porMinuto = {};
+      for (const ev of eventos ?? []) {
+        const min = Number(ev.minuto_jogo);
+        if (!Number.isFinite(min) || min < 85) continue;
+        const partida = ev.futebol_partidas;
+        if (!partida || !ev.partida_id) continue;
+        if (!porMinuto[min]) porMinuto[min] = {};
+        const pid = ev.partida_id;
+        if (!porMinuto[min][pid]) {
+          porMinuto[min][pid] = {
+            casa: partida.time_casa ?? '—',
+            fora: partida.time_fora ?? '—',
+            liga: partida.liga ?? null,
+            gols: 0,
+          };
+        }
+        porMinuto[min][pid].gols += Number(ev.quantidade ?? 0);
+      }
+      const resultado = {};
+      for (const min of Object.keys(porMinuto)) {
+        resultado[Number(min)] = Object.values(porMinuto[min]).sort((a, b) =>
+          String(a.casa).localeCompare(String(b.casa), 'pt-BR'),
+        );
+      }
+      return resultado;
+    }
+
+    function renderListaJogosGolMinuto(jogos) {
+      if (!jogos?.length) {
+        return '<p style="margin:0;font-size:12px;color:#888">Nenhum jogo registrado neste minuto.</p>';
+      }
+      const itens = jogos.map((j) => {
+        const qtd = j.gols === 1 ? '+1' : '+' + j.gols;
+        const liga = j.liga
+          ? '<span class="liga-hint">' + escapeHtml(j.liga) + '</span>'
+          : '';
+        return '<li>' +
+          '<span class="futebol-time-casa">' + escapeHtml(j.casa) + '</span>' +
+          ' <span style="color:#888">x</span> ' +
+          '<span class="futebol-time-fora">' + escapeHtml(j.fora) + '</span>' +
+          '<span class="gol-qtd">' + escapeHtml(qtd) + '</span>' +
+          liga +
+        '</li>';
+      }).join('');
+      return '<ul>' + itens + '</ul>';
+    }
+
     function placarFinalPartida(partida, leituras) {
       let casaF = partida.placar_casa_final;
       let foraF = partida.placar_fora_final;
@@ -2359,7 +2475,8 @@
       return calcularMaisGolsLeitura(leitura, anterior, placarCasaInicio, placarForaInicio);
     }
 
-    function renderResumoHistoricoJanela(resumo) {
+    function renderResumoHistoricoJanela(resumo, golsPorMinutoJogos) {
+      const jogosMap = golsPorMinutoJogos ?? {};
       const minutosComGol = Object.keys(resumo.golsPorMinuto)
         .map(Number)
         .filter((m) => (resumo.golsPorMinuto[m] ?? 0) > 0)
@@ -2370,11 +2487,25 @@
       const linhasMinuto = [];
       for (let m = 85; m <= maxExibir; m++) {
         const n = resumo.golsPorMinuto[m] ?? 0;
-        const cls = n > 0 ? 'futebol-gol-minuto com-gol' : 'futebol-gol-minuto';
         const rotulo = n === 1 ? '1 gol' : n + ' gols';
-        linhasMinuto.push(
-          '<span class="' + cls + '">' + m + "' — " + escapeHtml(rotulo) + '</span>',
-        );
+        if (n > 0) {
+          linhasMinuto.push(
+            '<span class="futebol-gol-minuto-wrap">' +
+              '<button type="button" class="futebol-gol-minuto futebol-gol-minuto-btn com-gol" ' +
+                'data-minuto="' + m + '" aria-expanded="false" aria-haspopup="true" ' +
+                'title="Ver jogos com gol aos ' + m + ' min">' +
+                escapeHtml(m + "' — " + rotulo) +
+              '</button>' +
+              '<div class="futebol-gol-minuto-popover hidden" role="tooltip" data-minuto="' + m + '">' +
+                renderListaJogosGolMinuto(jogosMap[m]) +
+              '</div>' +
+            '</span>',
+          );
+        } else {
+          linhasMinuto.push(
+            '<span class="futebol-gol-minuto">' + m + "' — " + escapeHtml(rotulo) + '</span>',
+          );
+        }
       }
       const minutosHtml = linhasMinuto.length
         ? '<div class="futebol-gols-por-minuto">' + linhasMinuto.join('') + '</div>'
@@ -2386,7 +2517,8 @@
         '<p><strong>Número de jogos com gol na janela:</strong> ' + resumo.jogosComGolNaJanela +
           ' <span style="color:#888;font-size:11px">(≥1 gol entre o início da janela e o fim)</span></p>' +
         '<p><strong>Total de gols na janela:</strong> ' + resumo.totalGolsNaJanela + '</p>' +
-        '<p><strong>Gols por minuto de jogo:</strong></p>' +
+        '<p><strong>Gols por minuto de jogo:</strong>' +
+          ' <span style="color:#888;font-size:11px">(clique no minuto com gol para ver os jogos)</span></p>' +
         minutosHtml +
       '</div>';
     }
@@ -2542,7 +2674,39 @@
       });
     }
 
-    function renderTabelaHistoricoFutebol(historicoJanela, leiturasPorPartida, resumoJanela) {
+    let golsMinutoPopoverDocBound = false;
+
+    function fecharGolsMinutoPopovers() {
+      elConteudo.querySelectorAll('.futebol-gol-minuto-popover').forEach((pop) => {
+        pop.classList.add('hidden');
+      });
+      elConteudo.querySelectorAll('.futebol-gol-minuto-btn').forEach((btn) => {
+        btn.setAttribute('aria-expanded', 'false');
+      });
+    }
+
+    function wireGolsPorMinutoPopover() {
+      elConteudo.querySelectorAll('.futebol-gol-minuto-btn').forEach((btn) => {
+        btn.addEventListener('click', (e) => {
+          e.stopPropagation();
+          const wrap = btn.closest('.futebol-gol-minuto-wrap');
+          const pop = wrap?.querySelector('.futebol-gol-minuto-popover');
+          if (!pop) return;
+          const abrir = pop.classList.contains('hidden');
+          fecharGolsMinutoPopovers();
+          if (abrir) {
+            pop.classList.remove('hidden');
+            btn.setAttribute('aria-expanded', 'true');
+          }
+        });
+      });
+      if (!golsMinutoPopoverDocBound) {
+        golsMinutoPopoverDocBound = true;
+        document.addEventListener('click', () => fecharGolsMinutoPopovers());
+      }
+    }
+
+    function renderTabelaHistoricoFutebol(historicoJanela, leiturasPorPartida, resumoJanela, golsPorMinutoJogos) {
       const lista = ordenarHistoricoJanela(historicoJanela);
       if (!lista.length) {
         return '<p class="aviso" style="margin-top:12px">Nenhuma partida na janela final ainda. Com o monitor ativo, jogos ≥85\' aparecem aqui com coletas a cada 40–50 s.</p>';
@@ -2561,7 +2725,7 @@
         return renderBlocoPartidaHistorico(p, leituras, expandido, numeroLinha);
       }).join('');
       return '<h3 class="futebol-secao-titulo">Histórico — janela final (85\' até o fim)</h3>' +
-        renderResumoHistoricoJanela(resumo) +
+        renderResumoHistoricoJanela(resumo, golsPorMinutoJogos) +
         '<p style="color:#888;font-size:12px;margin:0 0 8px">Clique no jogo para ver as coletas. Verde = sem gol nos 5 min · Vermelho = com gol.</p>' +
         '<div class="futebol-historico-lista">' + blocos + '</div>';
     }
@@ -2614,7 +2778,7 @@
     }
 
     function renderEstatisticasFutebol(payload) {
-      const { partidas, agenda, stats, aoVivoJson, historicoJanela, leiturasPorPartida, resumoJanela } = payload;
+      const { partidas, agenda, stats, aoVivoJson, historicoJanela, leiturasPorPartida, resumoJanela, golsPorMinutoJogos } = payload;
       const aoVivo = ordenarJogosAoVivo(
         Array.isArray(aoVivoJson) && aoVivoJson.length
           ? aoVivoJson.map(normalizarJogoAoVivoJson)
@@ -2643,11 +2807,12 @@
 
       elConteudo.innerHTML = '<div class="futebol-stats-wrap">' + resumo +
         renderTabelaAoVivoFutebol(aoVivo, futebolAoVivoSecaoAberta) +
-        renderTabelaHistoricoFutebol(historico, leiturasMap, resumoJanela) +
+        renderTabelaHistoricoFutebol(historico, leiturasMap, resumoJanela, golsPorMinutoJogos) +
       '</div>';
       wireFutebolAoVivoToggle();
       wireFutebolHistoricoToggle();
       wireFutebolHistoricoExcluir();
+      wireGolsPorMinutoPopover();
       // #region agent log
       requestAnimationFrame(() => {
         const wrap = elConteudo.querySelector('.futebol-stats-wrap');
