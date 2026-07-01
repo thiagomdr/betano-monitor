@@ -1,6 +1,6 @@
 export const HISTORICO_URL_PLACEHOLDER = '__SUPABASE_URL__';
 export const HISTORICO_ANON_KEY_PLACEHOLDER = '__SUPABASE_ANON_KEY__';
-export const PAINEL_BUILD_ID = 'futebol-resumo-janela-20260706';
+export const PAINEL_BUILD_ID = 'futebol-resumo-minutos-20260707';
 
 export function buildHistoricoTemplate(): string {
   const configJson = `{"url":"${HISTORICO_URL_PLACEHOLDER}","anonKey":"${HISTORICO_ANON_KEY_PLACEHOLDER}"}`;
@@ -744,7 +744,7 @@ export function buildHistoricoTemplate(): string {
     }
     .futebol-historico-linha {
       display: flex;
-      align-items: flex-start;
+      align-items: center;
       gap: 8px;
     }
     .futebol-historico-excluir {
@@ -828,6 +828,14 @@ export function buildHistoricoTemplate(): string {
     .futebol-gol-minuto.com-gol {
       color: #ffb74d;
       font-weight: 600;
+    }
+    .futebol-historico-numero {
+      flex-shrink: 0;
+      min-width: 1.8em;
+      color: #666;
+      font-size: 12px;
+      font-weight: 600;
+      text-align: right;
     }
     .futebol-ao-vivo-secao {
       background: #1a1a1a;
@@ -2306,8 +2314,40 @@ export function buildHistoricoTemplate(): string {
       if (acrescimo) {
         return Number.parseInt(acrescimo[1], 10) + Number.parseInt(acrescimo[2], 10);
       }
-      const m = trimmed.match(/(\d{1,3})\s*['′+]/);
-      return m ? Number.parseInt(m[1], 10) : null;
+      const aposto = trimmed.match(/(\d{1,3})\s*['′]/);
+      if (aposto) return Number.parseInt(aposto[1], 10);
+      const clock = trimmed.match(/(\d{1,3}):(\d{2})/);
+      if (clock) return Number.parseInt(clock[1], 10);
+      const solto = trimmed.match(/\b(\d{1,3})\s*\+/);
+      if (solto) return Number.parseInt(solto[1], 10);
+      return null;
+    }
+
+    function placarFinalPartida(partida, leituras) {
+      let casaF = partida.placar_casa_final;
+      let foraF = partida.placar_fora_final;
+      if (casaF == null || foraF == null) {
+        const ult = leituras.length ? leituras[leituras.length - 1] : null;
+        if (!ult) return null;
+        casaF = ult.placar_casa;
+        foraF = ult.placar_fora;
+      }
+      if (casaF == null || foraF == null) return null;
+      return { casa: casaF, fora: foraF };
+    }
+
+    function somarGolsPorMinuto(golsPorMinuto, minuto, quantidade) {
+      if (quantidade <= 0 || minuto == null || minuto < 85) return;
+      golsPorMinuto[minuto] = (golsPorMinuto[minuto] ?? 0) + quantidade;
+    }
+
+    function ultimoMinutoLeituraJanela(leituras) {
+      let ultimo = null;
+      for (const l of leituras) {
+        const min = extrairMinutoJogo(l.minuto_relogio);
+        if (min != null && min >= 85) ultimo = min;
+      }
+      return ultimo;
     }
 
     function deltaGolsLeitura(leitura, anterior, placarCasaInicio, placarForaInicio) {
@@ -2320,27 +2360,32 @@ export function buildHistoricoTemplate(): string {
     function partidaTeveGolNaJanela(partida, leituras) {
       if (partida.placar_casa_inicio == null || partida.placar_fora_inicio == null) return false;
       const golsInicio = totalGolsPartida(partida.placar_casa_inicio, partida.placar_fora_inicio);
-      let casaF = partida.placar_casa_final;
-      let foraF = partida.placar_fora_final;
-      if (casaF == null || foraF == null) {
-        const ult = leituras.length ? leituras[leituras.length - 1] : null;
-        if (!ult) return false;
-        casaF = ult.placar_casa;
-        foraF = ult.placar_fora;
-      }
-      if (casaF == null || foraF == null) return false;
-      return totalGolsPartida(casaF, foraF) > golsInicio;
+      const final = placarFinalPartida(partida, leituras);
+      if (!final) return false;
+      return totalGolsPartida(final.casa, final.fora) > golsInicio;
+    }
+
+    function golsNaJanelaPartida(partida, leituras) {
+      if (partida.placar_casa_inicio == null || partida.placar_fora_inicio == null) return 0;
+      const golsInicio = totalGolsPartida(partida.placar_casa_inicio, partida.placar_fora_inicio);
+      const final = placarFinalPartida(partida, leituras);
+      if (!final) return 0;
+      return Math.max(0, totalGolsPartida(final.casa, final.fora) - golsInicio);
     }
 
     function calcularResumoHistoricoJanela(historicoJanela, leiturasPorPartida) {
       const golsPorMinuto = {};
       let jogosComGol = 0;
+      let totalGolsNaJanela = 0;
       let maxMinutoComGol = 85;
 
       for (const p of historicoJanela) {
         const leituras = leiturasPorPartida[p.id] ?? [];
-        if (partidaTeveGolNaJanela(p, leituras)) jogosComGol += 1;
+        const golsPartida = golsNaJanelaPartida(p, leituras);
+        if (golsPartida > 0) jogosComGol += 1;
+        totalGolsNaJanela += golsPartida;
 
+        let golsAtribuidos = 0;
         for (let i = 0; i < leituras.length; i++) {
           const l = leituras[i];
           const min = extrairMinutoJogo(l.minuto_relogio);
@@ -2349,15 +2394,26 @@ export function buildHistoricoTemplate(): string {
             l, i > 0 ? leituras[i - 1] : null, p.placar_casa_inicio, p.placar_fora_inicio,
           );
           if (delta > 0) {
-            golsPorMinuto[min] = (golsPorMinuto[min] ?? 0) + delta;
+            somarGolsPorMinuto(golsPorMinuto, min, delta);
+            golsAtribuidos += delta;
             if (min > maxMinutoComGol) maxMinutoComGol = min;
           }
+        }
+
+        const restante = golsPartida - golsAtribuidos;
+        if (restante > 0) {
+          const minFallback = ultimoMinutoLeituraJanela(leituras)
+            ?? p.minuto_inicio_janela
+            ?? 85;
+          somarGolsPorMinuto(golsPorMinuto, minFallback, restante);
+          if (minFallback > maxMinutoComGol) maxMinutoComGol = minFallback;
         }
       }
 
       return {
         jogosColetados: historicoJanela.length,
         jogosComGolNaJanela: jogosComGol,
+        totalGolsNaJanela,
         golsPorMinuto,
         maxMinutoComGol: Math.max(87, maxMinutoComGol),
       };
@@ -2373,13 +2429,17 @@ export function buildHistoricoTemplate(): string {
           '<span class="' + cls + '">' + m + "' — " + escapeHtml(rotulo) + '</span>',
         );
       }
+      const minutosHtml = linhasMinuto.length
+        ? '<div class="futebol-gols-por-minuto">' + linhasMinuto.join('') + '</div>'
+        : '<p style="color:#888;font-size:12px;margin:4px 0 0">Nenhum gol atribuído a minuto nas coletas.</p>';
       return '<div class="futebol-historico-resumo-stats">' +
         '<h4>Resumo da janela final</h4>' +
         '<p><strong>Número de jogos coletados:</strong> ' + resumo.jogosColetados + '</p>' +
         '<p><strong>Número de jogos com gol na janela:</strong> ' + resumo.jogosComGolNaJanela +
           ' <span style="color:#888;font-size:11px">(≥1 gol entre o início da janela e o fim)</span></p>' +
+        '<p><strong>Total de gols na janela:</strong> ' + resumo.totalGolsNaJanela + '</p>' +
         '<p><strong>Gols por minuto de jogo:</strong></p>' +
-        '<div class="futebol-gols-por-minuto">' + linhasMinuto.join('') + '</div>' +
+        minutosHtml +
       '</div>';
     }
 
@@ -2424,7 +2484,7 @@ export function buildHistoricoTemplate(): string {
       return 'neutro';
     }
 
-    function renderBlocoPartidaHistorico(partida, leituras, expandido) {
+    function renderBlocoPartidaHistorico(partida, leituras, expandido, numeroLinha) {
       const emJanela = partida.status === 'em_janela';
       const badgeCls = emJanela ? 'janela' : 'final';
       const badgeTxt = emJanela ? 'Em janela' : 'Finalizado';
@@ -2447,6 +2507,7 @@ export function buildHistoricoTemplate(): string {
         escapeHtml(leituras.length + ' coleta(s)') + '</span>';
       return '<article class="futebol-historico-partida ' + resultadoCls + '">' +
         '<div class="futebol-historico-linha">' +
+          '<span class="futebol-historico-numero" aria-hidden="true">' + numeroLinha + '.</span>' +
           '<button type="button" class="futebol-historico-toggle" data-partida-id="' + escapeHtml(partida.id) + '" aria-expanded="' + (expandido ? 'true' : 'false') + '">' +
             '<div class="futebol-historico-resumo">' +
               '<span class="expand-icon">' + (expandido ? '▼' : '▶') + '</span>' +
@@ -2536,10 +2597,11 @@ export function buildHistoricoTemplate(): string {
         return '<p class="aviso" style="margin-top:12px">Nenhuma partida na janela final ainda. Com o monitor ativo, jogos ≥85\' aparecem aqui com coletas a cada 40–50 s.</p>';
       }
       const resumo = calcularResumoHistoricoJanela(lista, leiturasPorPartida);
-      const blocos = lista.map((p) => {
+      const blocos = lista.map((p, idx) => {
         const leituras = leiturasPorPartida[p.id] ?? [];
         const expandido = futebolHistoricoExpandidos.has(p.id);
-        return renderBlocoPartidaHistorico(p, leituras, expandido);
+        const numeroLinha = lista.length - idx;
+        return renderBlocoPartidaHistorico(p, leituras, expandido, numeroLinha);
       }).join('');
       return '<h3 class="futebol-secao-titulo">Histórico — janela final (85\' até o fim)</h3>' +
         renderResumoHistoricoJanela(resumo) +
