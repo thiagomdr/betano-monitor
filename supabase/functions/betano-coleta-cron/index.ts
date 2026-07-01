@@ -78,6 +78,7 @@ Deno.serve(async (req) => {
       });
     }
 
+    const cronTickAt = new Date();
     const coleta = await executarColetaBetanoJson();
     const ranAt = new Date();
 
@@ -89,6 +90,7 @@ Deno.serve(async (req) => {
       futebolStats = await processarFutebolEstatisticas(usuarioId, coleta.payload, {
         footballFetchDue: footballDue,
         ranRadar,
+        cronTickAt,
       }, ranAt);
     }
 

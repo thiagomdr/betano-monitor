@@ -56,6 +56,7 @@ Deno.serve(async (req) => {
       // body vazio
     }
 
+    const cronTickAt = new Date();
     const coleta = await executarColetaBetanoJson();
     const now = new Date();
 
@@ -78,7 +79,7 @@ Deno.serve(async (req) => {
         const { data: userData } = await userClient.auth.getUser();
         const usuarioId = userData.user?.id;
         if (usuarioId) {
-          futebolSync = await sincronizarFutebolRadarImediato(usuarioId, coleta.payload, now);
+          futebolSync = await sincronizarFutebolRadarImediato(usuarioId, coleta.payload, now, cronTickAt);
         }
       }
     }

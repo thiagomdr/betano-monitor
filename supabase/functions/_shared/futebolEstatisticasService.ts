@@ -58,6 +58,12 @@ export interface ProcessarFutebolResult {
     skippedIntervalo: boolean;
     emJanela: number;
     lastIntensiveAt: string | null;
+    cronTickAt: string;
+    ranAt: string;
+    fetchDurationMs: number;
+    delayMs: number | null;
+    nextFetchAt: string | null;
+    scheduledFrom: 'cron_tick' | 'completion';
   };
 }
 
@@ -386,27 +392,29 @@ async function processarLeiturasLote(
 export async function processarFutebolEstatisticas(
   usuarioId: string,
   payload: BetanoOverviewPayload,
-  opts: { footballFetchDue: boolean; ranRadar: boolean },
-  now: Date = new Date(),
+  opts: { footballFetchDue: boolean; ranRadar: boolean; cronTickAt?: Date },
+  ranAt: Date = new Date(),
 ): Promise<ProcessarFutebolResult> {
-  const snapshots = parseFootballScoutFromOverview(payload, now);
+  const tickAt = opts.cronTickAt ?? ranAt;
+  const snapshots = parseFootballScoutFromOverview(payload, ranAt);
   const agenda = await loadFutebolAgenda(usuarioId);
-  const { nextFetchAt: radarNext, emJanela } = await atualizarRadar(usuarioId, snapshots, now);
+  const { nextFetchAt: radarNext, emJanela } = await atualizarRadar(usuarioId, snapshots, ranAt);
 
   let leiturasGravadas = 0;
   let partidasFinalizadas = 0;
   let aindaEmJanela = emJanela.length;
   let modo: 'radar' | 'intenso' = emJanela.length > 0 ? 'intenso' : 'radar';
+  let pickedDelayMs: number | null = null;
   let nextFetchAt = emJanela.length > 0
-    ? (agenda?.next_fetch_at ?? addMs(now, pickFootballIntensiveDelayMs()))
+    ? (agenda?.next_fetch_at ?? addMs(tickAt, pickFootballIntensiveDelayMs()))
     : radarNext;
 
   const intensivoDue = resolverIntensivoDue(opts.footballFetchDue, emJanela.length, agenda);
-  const skippedIntervalo = intensivoDue && !intensivoIntervaloOk(agenda, now);
+  const skippedIntervalo = intensivoDue && !intensivoIntervaloOk(agenda, tickAt);
   const gravarLeituras = intensivoDue && !skippedIntervalo;
 
   if (intensivoDue || emJanela.length > 0) {
-    const res = await processarLeiturasLote(usuarioId, snapshots, now, { gravarLeituras });
+    const res = await processarLeiturasLote(usuarioId, snapshots, ranAt, { gravarLeituras });
     leiturasGravadas = res.leituras;
     partidasFinalizadas = res.finalizadas;
     aindaEmJanela = res.aindaEmJanela;
@@ -414,7 +422,8 @@ export async function processarFutebolEstatisticas(
     if (aindaEmJanela > 0) {
       modo = 'intenso';
       if (gravarLeituras) {
-        nextFetchAt = addMs(now, pickFootballIntensiveDelayMs());
+        pickedDelayMs = pickFootballIntensiveDelayMs();
+        nextFetchAt = addMs(tickAt, pickedDelayMs);
       } else if (agenda?.next_fetch_at) {
         nextFetchAt = agenda.next_fetch_at;
       }
@@ -433,8 +442,8 @@ export async function processarFutebolEstatisticas(
     modo,
     next_fetch_at: nextFetchAt,
   };
-  if (opts.ranRadar) agendaPatch.last_radar_at = now.toISOString();
-  if (leiturasGravadas > 0) agendaPatch.last_intensive_at = now.toISOString();
+  if (opts.ranRadar) agendaPatch.last_radar_at = ranAt.toISOString();
+  if (leiturasGravadas > 0) agendaPatch.last_intensive_at = tickAt.toISOString();
 
   await upsertAgenda(usuarioId, agendaPatch);
 
@@ -451,6 +460,12 @@ export async function processarFutebolEstatisticas(
       skippedIntervalo,
       emJanela: emJanela.length,
       lastIntensiveAt: agenda?.last_intensive_at ?? null,
+      cronTickAt: tickAt.toISOString(),
+      ranAt: ranAt.toISOString(),
+      fetchDurationMs: ranAt.getTime() - tickAt.getTime(),
+      delayMs: pickedDelayMs,
+      nextFetchAt,
+      scheduledFrom: 'cron_tick',
     },
   };
 }
@@ -465,17 +480,20 @@ export interface SincronizarRadarResult {
 export async function sincronizarFutebolRadarImediato(
   usuarioId: string,
   payload: BetanoOverviewPayload,
-  now: Date = new Date(),
+  ranAt: Date = new Date(),
+  cronTickAt?: Date,
 ): Promise<SincronizarRadarResult> {
-  const snapshots = parseFootballScoutFromOverview(payload, now);
+  const snapshots = parseFootballScoutFromOverview(payload, ranAt);
   const localizadosJson = snapshots.filter((s) => !s.isFinished).length;
 
-  const footballDue = await isFutebolFetchDue(usuarioId, now);
+  const tickAt = cronTickAt ?? ranAt;
+  const footballDue = await isFutebolFetchDue(usuarioId, tickAt);
 
   const processamento = await processarFutebolEstatisticas(usuarioId, payload, {
     footballFetchDue: footballDue,
     ranRadar: true,
-  }, now);
+    cronTickAt: tickAt,
+  }, ranAt);
 
   const { count, error: countErr } = await db()
     .from('futebol_partidas')

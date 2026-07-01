@@ -4,7 +4,7 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1" />
   <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate" />
-  <meta name="painel-build" content="futebol-ao-vivo-collapse-20260701" />
+  <meta name="painel-build" content="monitor-home-link-20260701" />
   <title>Monitor Betano</title>
   <style>
     * { box-sizing: border-box; margin: 0; padding: 0; }
@@ -25,6 +25,11 @@
     }
     .title { font-size: 20px; font-weight: 700; color: #fff; flex: 1; min-width: 0; }
     .title-accent { color: #c45c00; }
+    .title-home {
+      color: #fff;
+      text-decoration: none;
+    }
+    .title-home:hover { text-decoration: underline; }
     .title-link {
       text-decoration: none;
       color: #c45c00;
@@ -739,6 +744,17 @@
       color: #ccc;
     }
     .futebol-historico-resumo strong { color: #fff; }
+    .futebol-time-casa { color: #64b5f6; font-weight: 600; }
+    .futebol-time-fora { color: #ef5350; font-weight: 600; }
+    .futebol-historico-titulo {
+      flex: 1 1 auto;
+      min-width: 0;
+    }
+    .futebol-placar-janela {
+      color: #bbb;
+      font-weight: 500;
+      margin-left: 4px;
+    }
     .futebol-historico-resumo-meta {
       font-size: 12px;
       color: #aaa;
@@ -862,7 +878,7 @@
   <div id="app-main" class="hidden">
     <header class="header">
       <div class="header-top">
-        <div class="title">Monitor <a class="title-accent title-link" href="https://www.betano.bet.br" target="_blank" rel="noopener noreferrer">Betano</a></div>
+        <div class="title"><a class="title-home" href="./" title="Página inicial do Monitor">Monitor</a> <a class="title-accent title-link" href="https://www.betano.bet.br" target="_blank" rel="noopener noreferrer">Betano</a></div>
         <div class="menu-wrap">
           <button id="btn-menu" type="button" class="menu-kebab" aria-label="Menu" aria-expanded="false" aria-haspopup="true">
             <img class="menu-kebab-icon" src="icons/menu-gear.png" width="30" height="30" alt="" />
@@ -966,7 +982,7 @@
     const CHAVE_COLETA_ATIVADA = 'betano_coleta_ativada_em';
     const CHAVE_COLETA_PARADA = 'betano_coleta_parada_em';
     const CHAVE_ESPORTE_ATIVO = 'betano_esporte_ativo';
-    const PAINEL_BUILD_ID = 'futebol-ao-vivo-collapse-20260701';
+    const PAINEL_BUILD_ID = 'monitor-home-link-20260701';
 
     const OPCOES_PERIODO_BASQUETE = [
       { value: 'Q1', label: 'Q1 — desde o 1º quarto' },
@@ -2214,6 +2230,11 @@
       return Number(valor).toFixed(2);
     }
 
+    function formatarPlacarIxF(casa, fora) {
+      if (casa == null || fora == null) return '—';
+      return casa + 'x' + fora;
+    }
+
     function ordenarHistoricoJanela(lista) {
       return [...lista].sort((a, b) => {
         const ja = a.status === 'em_janela' ? 0 : 1;
@@ -2256,31 +2277,32 @@
     }
 
     function renderBlocoPartidaHistorico(partida, leituras, expandido) {
-      const placarInicio = (partida.placar_casa_inicio != null && partida.placar_fora_inicio != null)
-        ? partida.placar_casa_inicio + '–' + partida.placar_fora_inicio
-        : '—';
-      const placarFinal = (partida.placar_casa_final != null && partida.placar_fora_final != null)
-        ? partida.placar_casa_final + '–' + partida.placar_fora_final
-        : '—';
       const emJanela = partida.status === 'em_janela';
       const badgeCls = emJanela ? 'janela' : 'final';
       const badgeTxt = emJanela ? 'Em janela' : 'Finalizado';
-      const golTxt = emJanela ? '—' : rotuloGolUltimos5(partida.gol_nos_ultimos_5_min);
-      const leiturasTxt = leituras.length + ' coleta(s)';
+      const placarI = formatarPlacarIxF(partida.placar_casa_inicio, partida.placar_fora_inicio);
+      let placarF = formatarPlacarIxF(partida.placar_casa_final, partida.placar_fora_final);
+      if (emJanela && placarF === '—' && leituras.length > 0) {
+        const ult = leituras[leituras.length - 1];
+        placarF = formatarPlacarIxF(ult.placar_casa, ult.placar_fora);
+      }
       const resultadoCls = classeResultadoFutebol(partida);
       const detalheCls = expandido ? '' : ' hidden';
-      const resumoMeta = escapeHtml(partida.liga || '—') +
-        ' · 85\': ' + escapeHtml(placarInicio) +
-        ' → ' + escapeHtml(placarFinal) +
-        ' · Gol 5 min: ' + golTxt +
-        ' · ' + escapeHtml(leiturasTxt);
+      const tituloLinha =
+        '<span class="futebol-time-casa">' + escapeHtml(partida.time_casa) + '</span>' +
+        ' <span style="color:#888">x</span> ' +
+        '<span class="futebol-time-fora">' + escapeHtml(partida.time_fora) + '</span>' +
+        ' <span class="futebol-historico-badge ' + badgeCls + '">' + badgeTxt + '</span>' +
+        ' <span class="futebol-placar-janela">I:' + escapeHtml(placarI) + ' / F:' + escapeHtml(placarF) + '</span>';
+      const resumoMeta = '<span class="futebol-historico-resumo-meta">' +
+        (partida.liga ? escapeHtml(partida.liga) + ' · ' : '') +
+        escapeHtml(leituras.length + ' coleta(s)') + '</span>';
       return '<article class="futebol-historico-partida ' + resultadoCls + '">' +
         '<button type="button" class="futebol-historico-toggle" data-partida-id="' + escapeHtml(partida.id) + '" aria-expanded="' + (expandido ? 'true' : 'false') + '">' +
           '<div class="futebol-historico-resumo">' +
             '<span class="expand-icon">' + (expandido ? '▼' : '▶') + '</span>' +
-            '<strong>' + escapeHtml(partida.time_casa) + ' x ' + escapeHtml(partida.time_fora) + '</strong>' +
-            '<span class="futebol-historico-badge ' + badgeCls + '">' + badgeTxt + '</span>' +
-            '<span class="futebol-historico-resumo-meta">' + resumoMeta + '</span>' +
+            '<span class="futebol-historico-titulo">' + tituloLinha + '</span>' +
+            resumoMeta +
           '</div>' +
         '</button>' +
         '<div class="futebol-historico-detalhe' + detalheCls + '">' +
