@@ -2,7 +2,7 @@
 
 Progresso do **painel web + Supabase**. O Agent deve marcar `[x]` ao concluir cada item e atualizar a data abaixo.
 
-**Última atualização:** 2026-06-29 (cron futebol 15s para intervalo 40–50s)
+**Última atualização:** 2026-06-29 (backfill futebol_eventos_gol histórico)
 
 ---
 
@@ -31,6 +31,7 @@ Progresso do **painel web + Supabase**. O Agent deve marcar `[x]` ao concluir ca
 - [x] Link Betano nos cards (Coletas e Alertas) — `url` da API overview
 - [x] Seletor **Basquete** | **Futebol** — cards, alertas e regras separados por esporte
 - [x] Aba Futebol **Estatísticas** — todos ao vivo no JSON + histórico janela 85' com leituras intensivas (+Gols, ODD)
+- [x] Resumo janela futebol via RPC `futebol_resumo_janela` (sem agregação/parse no painel)
 - [ ] Paginação completa `jogos_coleta` (limite 1000 por batch)
 
 ---
@@ -41,6 +42,7 @@ Progresso do **painel web + Supabase**. O Agent deve marcar `[x]` ao concluir ca
 - [x] `regras_alerta`, `coleta_scheduler`, `jogos_estado_monitor`
 - [x] Coluna `esporte` (basquete/futebol) + períodos futebol `1T`/`2T` em regras
 - [x] Tabelas estatística futebol: `futebol_partidas`, `futebol_leituras`, `futebol_agenda`
+- [x] Gols na janela: `futebol_eventos_gol`, colunas `gols_na_janela`, `minuto_jogo`, `delta_gols`
 - [x] RLS por `auth.uid()`
 - [x] Realtime: coletas, jogos, alertas, scheduler
 - [x] Delete RLS: jogos e alertas (painel)

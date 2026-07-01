@@ -1,6 +1,13 @@
 import type { SupabaseClient } from 'https://esm.sh/@supabase/supabase-js@2.49.1';
 
 import {
+  atualizarGolsNaJanelaEmCurso,
+  loadUltimaLeituraGol,
+  prepararMetadadosLeituraGol,
+  registrarEventoGolLeitura,
+  sincronizarGolsPartidaFinalizada,
+} from './futebolGolJanelaService.ts';
+import {
   addMs,
   FOOT_INTENSIVE_MIN_MS,
   FOOT_RADAR_MARGEM_MIN,
@@ -347,19 +354,39 @@ async function processarLeiturasLote(
 
     if (!partida) continue;
 
-    const { error: errLeitura } = await db().from('futebol_leituras').insert({
+    const prevLeitura = await loadUltimaLeituraGol(partida.id);
+    const meta = await prepararMetadadosLeituraGol(partida, snap, prevLeitura);
+
+    const { data: leituraInserida, error: errLeitura } = await db().from('futebol_leituras').insert({
       usuario_id: usuarioId,
       partida_id: partida.id,
       lote_id: loteId,
       coletado_em: now.toISOString(),
       minuto_relogio: snap.periodDescription ?? snap.tempoDecorrido ?? (snap.matchMinute != null ? `${snap.matchMinute}'` : null),
+      minuto_jogo: meta.minutoJogo,
+      gols_totais: meta.golsTotais,
+      delta_gols: meta.deltaGols,
       placar_casa: snap.homeScore,
       placar_fora: snap.awayScore,
       odd_manter_placar: snap.oddManterPlacar > 0 ? snap.oddManterPlacar : null,
       mercado_nome: snap.mercadoNome,
       linha_gols: snap.linhaGols,
-    });
+    }).select('id').single();
     if (errLeitura) throw new Error(errLeitura.message);
+
+    await registrarEventoGolLeitura(
+      usuarioId,
+      partida.id,
+      leituraInserida.id,
+      meta.minutoJogo,
+      meta.deltaGols,
+    );
+    await atualizarGolsNaJanelaEmCurso(
+      usuarioId,
+      partida,
+      snap.homeScore,
+      snap.awayScore,
+    );
     leituras += 1;
     }
   }
@@ -384,6 +411,15 @@ async function processarLeiturasLote(
         );
       }
       await db().from('futebol_partidas').update(patch).eq('id', p.id);
+      if (ult) {
+        await sincronizarGolsPartidaFinalizada(
+          usuarioId,
+          p,
+          ult.placar_casa,
+          ult.placar_fora,
+          null,
+        );
+      }
       finalizadas += 1;
       continue;
     }
@@ -406,6 +442,13 @@ async function processarLeiturasLote(
           data_atualizacao: now.toISOString(),
         })
         .eq('id', p.id);
+      await sincronizarGolsPartidaFinalizada(
+        usuarioId,
+        p,
+        snap.homeScore,
+        snap.awayScore,
+        snap.matchMinute,
+      );
       finalizadas += 1;
     }
   }

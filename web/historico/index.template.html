@@ -4,7 +4,7 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1" />
   <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate" />
-  <meta name="painel-build" content="futebol-gols-minuto-fix-20260707" />
+  <meta name="painel-build" content="futebol-gols-db-backfill-20260709" />
   <title>Monitor Betano</title>
   <style>
     * { box-sizing: border-box; margin: 0; padding: 0; }
@@ -1042,7 +1042,7 @@
     const CHAVE_COLETA_ATIVADA = 'betano_coleta_ativada_em';
     const CHAVE_COLETA_PARADA = 'betano_coleta_parada_em';
     const CHAVE_ESPORTE_ATIVO = 'betano_esporte_ativo';
-    const PAINEL_BUILD_ID = 'futebol-gols-minuto-fix-20260707';
+    const PAINEL_BUILD_ID = 'futebol-gols-db-backfill-20260709';
 
     const OPCOES_PERIODO_BASQUETE = [
       { value: 'Q1', label: 'Q1 — desde o 1º quarto' },
@@ -2092,15 +2092,21 @@
     }
 
     async function buscarEstatisticasFutebol() {
-      const [{ data: partidas, error }, { data: agenda }] = await Promise.all([
+      const [
+        { data: partidas, error },
+        { data: agenda },
+        { data: resumoJanelaRaw, error: resumoErr },
+      ] = await Promise.all([
         supabase
           .from('futebol_partidas')
           .select('*')
           .order('data_atualizacao', { ascending: false })
           .limit(300),
         supabase.from('futebol_agenda').select('modo, next_fetch_at, last_radar_at, last_intensive_at').maybeSingle(),
+        supabase.rpc('futebol_resumo_janela'),
       ]);
       if (error) throw new Error(error.message);
+      if (resumoErr) throw new Error(resumoErr.message);
       const lista = partidas ?? [];
       const finalizadas = lista.filter((p) => p.status === 'finalizado');
       const comGol = finalizadas.filter((p) => p.gol_nos_ultimos_5_min === true);
@@ -2132,6 +2138,7 @@
         partidas: lista,
         historicoJanela,
         leiturasPorPartida,
+        resumoJanela: normalizarResumoJanelaDb(resumoJanelaRaw),
         agenda: agenda ?? null,
         stats: {
           finalizadas: finalizadas.length,
@@ -2300,28 +2307,35 @@
       return casa + 'x' + fora;
     }
 
-    function extrairMinutoJogo(texto) {
-      if (!texto) return null;
-      const trimmed = String(texto).trim();
-      const acrescimo = trimmed.match(/(\d{1,3})\s*['′]\s*\+\s*(\d{1,2})/);
-      if (acrescimo) {
-        return Number.parseInt(acrescimo[1], 10) + Number.parseInt(acrescimo[2], 10);
+    function normalizarResumoJanelaDb(raw) {
+      const golsPorMinuto = {};
+      const fonte = raw?.golsPorMinuto ?? {};
+      for (const [k, v] of Object.entries(fonte)) {
+        golsPorMinuto[Number(k)] = Number(v);
       }
-      const aposto = trimmed.match(/(\d{1,3})\s*['′]/);
-      if (aposto) return Number.parseInt(aposto[1], 10);
-      const clock = trimmed.match(/(\d{1,3}):(\d{2})/);
-      if (clock) {
-        const m = Number.parseInt(clock[1], 10);
-        const s = Number.parseInt(clock[2], 10);
-        // Relógio decorrido (ex.: 88:32)
-        if (m >= 46) return m;
-        // Tempo restante no 2º tempo (ex.: 4:30 ≈ 86')
-        if (m <= 20) return 90 - m - (s >= 45 ? 1 : 0);
-        return m;
-      }
-      const solto = trimmed.match(/\b(\d{1,3})\s*\+/);
-      if (solto) return Number.parseInt(solto[1], 10);
-      return null;
+      const resumo = {
+        jogosColetados: Number(raw?.jogosColetados ?? 0),
+        jogosComGolNaJanela: Number(raw?.jogosComGolNaJanela ?? 0),
+        totalGolsNaJanela: Number(raw?.totalGolsNaJanela ?? 0),
+        golsPorMinuto,
+        maxMinutoComGol: Number(raw?.maxMinutoComGol ?? 87),
+      };
+      // #region agent log
+      fetch('http://127.0.0.1:7904/ingest/86615625-6ae5-4e98-a1da-0a5f0f15fc42', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'X-Debug-Session-Id': '94b3c3' },
+        body: JSON.stringify({
+          sessionId: '94b3c3',
+          runId: 'gols-db-rpc',
+          hypothesisId: 'DB',
+          location: 'historicoWebPage.ts:normalizarResumoJanelaDb',
+          message: 'resumo janela via RPC',
+          data: resumo,
+          timestamp: Date.now(),
+        }),
+      }).catch(() => {});
+      // #endregion
+      return resumo;
     }
 
     function placarFinalPartida(partida, leituras) {
@@ -2337,152 +2351,12 @@
       return { casa: casaF, fora: foraF };
     }
 
-    function somarGolsPorMinuto(golsPorMinuto, minuto, quantidade) {
-      if (quantidade <= 0 || minuto == null || minuto < 85) return;
-      golsPorMinuto[minuto] = (golsPorMinuto[minuto] ?? 0) + quantidade;
-    }
-
-    function ultimoMinutoLeituraJanela(leituras) {
-      let ultimo = null;
-      for (const l of leituras) {
-        const min = extrairMinutoJogo(l.minuto_relogio);
-        if (min != null && min >= 85) ultimo = min;
+    function formatarDeltaGolsLeitura(leitura, anterior, placarCasaInicio, placarForaInicio) {
+      if (leitura.delta_gols != null && Number.isFinite(Number(leitura.delta_gols))) {
+        const d = Number(leitura.delta_gols);
+        return d === 0 ? '0' : '+' + d;
       }
-      return ultimo;
-    }
-
-    function deltaGolsLeitura(leitura, anterior, placarCasaInicio, placarForaInicio) {
-      const mais = calcularMaisGolsLeitura(leitura, anterior, placarCasaInicio, placarForaInicio);
-      if (mais === '—' || mais === '0') return 0;
-      const n = Number(String(mais).replace('+', ''));
-      return Number.isFinite(n) && n > 0 ? n : 0;
-    }
-
-    function partidaTeveGolNaJanela(partida, leituras) {
-      if (partida.placar_casa_inicio == null || partida.placar_fora_inicio == null) return false;
-      const golsInicio = totalGolsPartida(partida.placar_casa_inicio, partida.placar_fora_inicio);
-      const final = placarFinalPartida(partida, leituras);
-      if (!final) return false;
-      return totalGolsPartida(final.casa, final.fora) > golsInicio;
-    }
-
-    function golsNaJanelaPartida(partida, leituras) {
-      if (partida.placar_casa_inicio == null || partida.placar_fora_inicio == null) return 0;
-      const golsInicio = totalGolsPartida(partida.placar_casa_inicio, partida.placar_fora_inicio);
-      const final = placarFinalPartida(partida, leituras);
-      if (!final) return 0;
-      return Math.max(0, totalGolsPartida(final.casa, final.fora) - golsInicio);
-    }
-
-    function atribuirGolsPorMinutoPartida(partida, leituras, golsPorMinuto, statsDebug) {
-      if (partida.placar_casa_inicio == null || partida.placar_fora_inicio == null) return 0;
-      const golsInicio = totalGolsPartida(partida.placar_casa_inicio, partida.placar_fora_inicio);
-      const final = placarFinalPartida(partida, leituras);
-      if (!final) return 0;
-      const golsTotal = Math.max(0, totalGolsPartida(final.casa, final.fora) - golsInicio);
-      if (golsTotal <= 0) return 0;
-
-      if (!leituras.length) return golsTotal;
-
-      let atribuidos = 0;
-      const min0 = extrairMinutoJogo(leituras[0].minuto_relogio);
-      const abertura = totalGolsPartida(leituras[0].placar_casa, leituras[0].placar_fora) - golsInicio;
-      if (abertura > 0 && min0 != null && min0 >= 85) {
-        somarGolsPorMinuto(golsPorMinuto, min0, abertura);
-        atribuidos += abertura;
-        if (statsDebug) statsDebug.viaAbertura += abertura;
-      }
-
-      for (let i = 1; i < leituras.length; i++) {
-        const min = extrairMinutoJogo(leituras[i].minuto_relogio);
-        const delta = totalGolsPartida(leituras[i].placar_casa, leituras[i].placar_fora)
-          - totalGolsPartida(leituras[i - 1].placar_casa, leituras[i - 1].placar_fora);
-        if (delta > 0 && min != null && min >= 85) {
-          somarGolsPorMinuto(golsPorMinuto, min, delta);
-          atribuidos += delta;
-          if (statsDebug) statsDebug.viaConsecutivo += delta;
-        }
-      }
-
-      const ult = leituras[leituras.length - 1];
-      const minUlt = extrairMinutoJogo(ult.minuto_relogio);
-      const fechamento = totalGolsPartida(final.casa, final.fora)
-        - totalGolsPartida(ult.placar_casa, ult.placar_fora);
-      if (fechamento > 0 && minUlt != null && minUlt >= 85) {
-        somarGolsPorMinuto(golsPorMinuto, minUlt, fechamento);
-        atribuidos += fechamento;
-        if (statsDebug) statsDebug.viaFechamento += fechamento;
-      }
-
-      const naoAtribuidos = golsTotal - atribuidos;
-      if (naoAtribuidos > 0 && statsDebug) {
-        statsDebug.naoAtribuidos += naoAtribuidos;
-        statsDebug.amostrasNaoAtrib.push({
-          partida: partida.time_casa + ' x ' + partida.time_fora,
-          golsTotal,
-          atribuidos,
-          naoAtribuidos,
-          tempos: leituras.slice(-3).map((l) => l.minuto_relogio),
-        });
-      }
-      return golsTotal;
-    }
-
-    function calcularResumoHistoricoJanela(historicoJanela, leiturasPorPartida) {
-      const golsPorMinuto = {};
-      let jogosComGol = 0;
-      let totalGolsNaJanela = 0;
-      let maxMinutoComGol = 85;
-      const statsDebug = {
-        viaAbertura: 0,
-        viaConsecutivo: 0,
-        viaFechamento: 0,
-        naoAtribuidos: 0,
-        amostrasNaoAtrib: [],
-      };
-
-      for (const p of historicoJanela) {
-        const leituras = leiturasPorPartida[p.id] ?? [];
-        const golsPartida = atribuirGolsPorMinutoPartida(p, leituras, golsPorMinuto, statsDebug);
-        if (golsPartida > 0) jogosComGol += 1;
-        totalGolsNaJanela += golsPartida;
-      }
-
-      for (const m of Object.keys(golsPorMinuto)) {
-        const min = Number(m);
-        if (min > maxMinutoComGol) maxMinutoComGol = min;
-      }
-
-      const resumo = {
-        jogosColetados: historicoJanela.length,
-        jogosComGolNaJanela: jogosComGol,
-        totalGolsNaJanela,
-        golsPorMinuto,
-        maxMinutoComGol: Math.max(87, maxMinutoComGol),
-      };
-
-      // #region agent log
-      fetch('http://127.0.0.1:7904/ingest/86615625-6ae5-4e98-a1da-0a5f0f15fc42', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json', 'X-Debug-Session-Id': '94b3c3' },
-        body: JSON.stringify({
-          sessionId: '94b3c3',
-          runId: 'gols-minuto-fix',
-          hypothesisId: 'H1-H5',
-          location: 'historicoWebPage.ts:calcularResumoHistoricoJanela',
-          message: 'gols por minuto agregado',
-          data: {
-            totalGolsNaJanela,
-            golsPorMinuto,
-            statsDebug,
-            maxMinutoComGol: resumo.maxMinutoComGol,
-          },
-          timestamp: Date.now(),
-        }),
-      }).catch(() => {});
-      // #endregion
-
-      return resumo;
+      return calcularMaisGolsLeitura(leitura, anterior, placarCasaInicio, placarForaInicio);
     }
 
     function renderResumoHistoricoJanela(resumo) {
@@ -2504,9 +2378,10 @@
       }
       const minutosHtml = linhasMinuto.length
         ? '<div class="futebol-gols-por-minuto">' + linhasMinuto.join('') + '</div>'
-        : '<p style="color:#888;font-size:12px;margin:4px 0 0">Nenhum gol atribuído a minuto nas coletas.</p>';
+        : '<p style="color:#888;font-size:12px;margin:4px 0 0">Nenhum gol registrado em futebol_eventos_gol ainda (coletas após deploy).</p>';
       return '<div class="futebol-historico-resumo-stats">' +
         '<h4>Resumo da janela final</h4>' +
+        '<p style="color:#666;font-size:11px;margin:0 0 8px">Fonte: banco (futebol_partidas + futebol_eventos_gol)</p>' +
         '<p><strong>Número de jogos coletados:</strong> ' + resumo.jogosColetados + '</p>' +
         '<p><strong>Número de jogos com gol na janela:</strong> ' + resumo.jogosComGolNaJanela +
           ' <span style="color:#888;font-size:11px">(≥1 gol entre o início da janela e o fim)</span></p>' +
@@ -2533,14 +2408,17 @@
       }
       const linhas = leituras.map((l, idx) => {
         const anterior = idx > 0 ? leituras[idx - 1] : null;
-        const maisGols = calcularMaisGolsLeitura(
+        const maisGols = formatarDeltaGolsLeitura(
           l, anterior, partida.placar_casa_inicio, partida.placar_fora_inicio,
         );
         const clsGol = String(maisGols).startsWith('+') ? ' class="futebol-mais-gols-sim"' : '';
         const placar = l.placar_casa + '–' + l.placar_fora;
+        const tempoJogo = l.minuto_jogo != null
+          ? l.minuto_jogo + "'"
+          : (l.minuto_relogio?.trim() || '—');
         return '<tr>' +
           '<td>' + escapeHtml(formatarDataComSegundos(l.coletado_em)) + '</td>' +
-          '<td>' + escapeHtml(l.minuto_relogio?.trim() || '—') + ' <span style="color:#666">(' + escapeHtml(placar) + ')</span></td>' +
+          '<td>' + escapeHtml(tempoJogo) + ' <span style="color:#666">(' + escapeHtml(placar) + ')</span></td>' +
           '<td' + clsGol + '>' + escapeHtml(maisGols) + '</td>' +
           '<td>' + escapeHtml(formatarOddManter(l.odd_manter_placar)) + '</td>' +
         '</tr>';
@@ -2664,12 +2542,18 @@
       });
     }
 
-    function renderTabelaHistoricoFutebol(historicoJanela, leiturasPorPartida) {
+    function renderTabelaHistoricoFutebol(historicoJanela, leiturasPorPartida, resumoJanela) {
       const lista = ordenarHistoricoJanela(historicoJanela);
       if (!lista.length) {
         return '<p class="aviso" style="margin-top:12px">Nenhuma partida na janela final ainda. Com o monitor ativo, jogos ≥85\' aparecem aqui com coletas a cada 40–50 s.</p>';
       }
-      const resumo = calcularResumoHistoricoJanela(lista, leiturasPorPartida);
+      const resumo = resumoJanela ?? {
+        jogosColetados: lista.length,
+        jogosComGolNaJanela: 0,
+        totalGolsNaJanela: 0,
+        golsPorMinuto: {},
+        maxMinutoComGol: 87,
+      };
       const blocos = lista.map((p, idx) => {
         const leituras = leiturasPorPartida[p.id] ?? [];
         const expandido = futebolHistoricoExpandidos.has(p.id);
@@ -2730,7 +2614,7 @@
     }
 
     function renderEstatisticasFutebol(payload) {
-      const { partidas, agenda, stats, aoVivoJson, historicoJanela, leiturasPorPartida } = payload;
+      const { partidas, agenda, stats, aoVivoJson, historicoJanela, leiturasPorPartida, resumoJanela } = payload;
       const aoVivo = ordenarJogosAoVivo(
         Array.isArray(aoVivoJson) && aoVivoJson.length
           ? aoVivoJson.map(normalizarJogoAoVivoJson)
@@ -2759,7 +2643,7 @@
 
       elConteudo.innerHTML = '<div class="futebol-stats-wrap">' + resumo +
         renderTabelaAoVivoFutebol(aoVivo, futebolAoVivoSecaoAberta) +
-        renderTabelaHistoricoFutebol(historico, leiturasMap) +
+        renderTabelaHistoricoFutebol(historico, leiturasMap, resumoJanela) +
       '</div>';
       wireFutebolAoVivoToggle();
       wireFutebolHistoricoToggle();
