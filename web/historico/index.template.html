@@ -23,6 +23,11 @@
     }
     .title { font-size: 20px; font-weight: 700; color: #fff; flex: 1; min-width: 0; }
     .title-accent { color: #c45c00; }
+    .title-link {
+      text-decoration: none;
+      color: #c45c00;
+    }
+    .title-link:hover { text-decoration: underline; }
     .header-top {
       display: flex;
       align-items: center;
@@ -620,7 +625,7 @@
   <div id="app-main" class="hidden">
     <header class="header">
       <div class="header-top">
-        <div class="title">Monitor <span class="title-accent">Betano</span></div>
+        <div class="title">Monitor <a class="title-accent title-link" href="https://www.betano.bet.br" target="_blank" rel="noopener noreferrer">Betano</a></div>
         <div class="menu-wrap">
           <button id="btn-menu" type="button" class="menu-kebab" aria-label="Menu" aria-expanded="false" aria-haspopup="true">
             <img class="menu-kebab-icon" src="icons/menu-gear.png" width="30" height="30" alt="" />
