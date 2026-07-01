@@ -64,11 +64,12 @@ Deno.serve(async (req) => {
     }
 
     const games = (jogos ?? []).map((j) => ({
+      esporte: (j.esporte as 'basquete' | 'futebol') ?? 'basquete',
       homeTeam: j.time_casa as string,
       awayTeam: j.time_fora as string,
       homeScore: Number(j.placar_casa),
       awayScore: Number(j.placar_fora),
-      period: j.periodo as 'Q1' | 'Q2' | 'Q3' | 'Q4' | 'Intervalo' | 'OT' | 'unknown',
+      period: j.periodo as string,
       league: (j.liga as string | null) ?? null,
       homeOdd: Number(j.odd_casa ?? 0),
       awayOdd: Number(j.odd_fora ?? 0),

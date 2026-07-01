@@ -607,9 +607,43 @@ export function buildHistoricoTemplate(): string {
       color: #fff;
       border-bottom-color: #c45c00;
     }
+    .abas-esporte {
+      display: flex;
+      gap: 8px;
+      padding: 10px 12px 0;
+      max-width: 720px;
+      margin: 0 auto;
+    }
+    .esporte-btn {
+      flex: 1;
+      background: #222;
+      color: #aaa;
+      border: 1px solid #333;
+      border-radius: 8px;
+      font-size: 13px;
+      font-weight: 600;
+      padding: 10px 12px;
+      cursor: pointer;
+    }
+    .esporte-btn:hover { color: #ccc; }
+    .esporte-btn.ativa {
+      background: #c45c00;
+      border-color: #c45c00;
+      color: #fff;
+    }
+    .regra-esporte-rotulo {
+      font-size: 14px;
+      font-weight: 600;
+      color: #fff;
+      padding: 10px 12px;
+      background: #222;
+      border: 1px solid #333;
+      border-radius: 8px;
+    }
     @media (min-width: 900px) {
       .header-top,
       .historico-stats-bar,
+      .abas-esporte,
       .abas-historico,
       .lista {
         max-width: 1100px;
@@ -655,6 +689,10 @@ export function buildHistoricoTemplate(): string {
         </div>
       </div>
     </header>
+    <nav id="abas-esporte" class="abas-esporte hidden" role="tablist" aria-label="Esporte">
+      <button id="esporte-basquete" type="button" class="esporte-btn ativa" role="tab" aria-selected="true">Basquete</button>
+      <button id="esporte-futebol" type="button" class="esporte-btn" role="tab" aria-selected="false">Futebol</button>
+    </nav>
     <nav id="abas-historico" class="abas-historico hidden" role="tablist" aria-label="Histórico">
       <button id="aba-coletas" type="button" class="aba ativa" role="tab" aria-selected="true" aria-controls="conteudo">Coletas</button>
       <button id="aba-alertas" type="button" class="aba" role="tab" aria-selected="false" aria-controls="conteudo">Alertas</button>
@@ -669,10 +707,10 @@ export function buildHistoricoTemplate(): string {
         <h2>Regras de Alertas</h2>
       </div>
       <p class="regras-intro" id="regras-ajuda">
-        Cada regra combina <strong>três critérios</strong> para sugerir aposta no <strong>time líder em pontos</strong>:
-        a partir de qual quarto vale, vantagem mínima em pontos e odd mínima do líder para vencer.
-        Ex.: Q4, +15 pts e ODD ≥ 1,10 — dispara se o líder tiver 15+ de vantagem no Q4 com odd ≥ 1,10.
+        Cada regra combina <strong>três critérios</strong> para sugerir aposta no <strong>time líder</strong>:
+        a partir de qual período vale, vantagem mínima no placar e odd mínima do líder para vencer.
         A cada coleta em que o padrão for detectado, um novo alerta é registrado.
+        No <strong>futebol</strong>, a coleta na Betano ocorre apenas nos <strong>últimos 5 minutos do 2º tempo</strong>.
       </p>
       <section class="regras-secao" aria-labelledby="titulo-lista-regras">
         <h3 class="regras-secao-titulo" id="titulo-lista-regras">Minhas regras</h3>
@@ -686,19 +724,19 @@ export function buildHistoricoTemplate(): string {
             <input id="regra-nome" type="text" maxlength="80" placeholder="Ex.: Líder Q4 confortável" required />
           </div>
           <div class="form-regra-campo">
-            <label for="regra-periodo">A partir do quarto</label>
-            <select id="regra-periodo" required>
-              <option value="Q1">Q1 — desde o 1º quarto</option>
-              <option value="Q2">Q2 — a partir do 2º quarto</option>
-              <option value="Q3">Q3 — a partir do 3º quarto</option>
-              <option value="Q4">Q4 — a partir do 4º quarto</option>
-            </select>
-            <span class="campo-dica">A regra vale neste quarto e nos seguintes (ex.: Q2 inclui Q3 e Q4).</span>
+            <label>Esporte</label>
+            <div id="regra-esporte-rotulo" class="regra-esporte-rotulo">Basquete</div>
+            <span class="campo-dica">Use os botões Basquete/Futebol no topo do painel para definir o esporte desta regra.</span>
           </div>
           <div class="form-regra-campo">
-            <label for="regra-pontos">+ Pontos (vantagem mínima)</label>
+            <label for="regra-periodo" id="regra-periodo-label">A partir do quarto</label>
+            <select id="regra-periodo" required></select>
+            <span class="campo-dica" id="regra-periodo-dica">A regra vale neste quarto e nos seguintes (ex.: Q2 inclui Q3 e Q4).</span>
+          </div>
+          <div class="form-regra-campo">
+            <label for="regra-pontos" id="regra-pontos-label">+ Pontos (vantagem mínima)</label>
             <input id="regra-pontos" type="number" min="1" step="1" placeholder="Ex.: 15" required />
-            <span class="campo-dica">Diferença de placar entre líder e adversário deve ser ≥ este valor.</span>
+            <span class="campo-dica" id="regra-pontos-dica">Diferença de placar entre líder e adversário deve ser ≥ este valor.</span>
           </div>
           <div class="form-regra-campo">
             <label for="regra-odd">ODD mínima do líder</label>
@@ -726,7 +764,7 @@ export function buildHistoricoTemplate(): string {
       },
     });
 
-    const PERIODOS_AO_VIVO = new Set(['Q1', 'Q2', 'Q3', 'Q4', 'Intervalo', 'INT', 'HT', 'OT']);
+    const PERIODOS_AO_VIVO = new Set(['Q1', 'Q2', 'Q3', 'Q4', 'Intervalo', 'INT', 'HT', 'OT', '1T', '2T']);
     /** Sem nova leitura deste jogo: marca Finalizado (cron não grava coleta com 0 jogos). */
     const JANELA_SEM_ENTRADA_MS = 20 * 60 * 1000;
     const TEXTO_INVALIDO = /não existem mercados|mercados disponíveis|de momento|^unknown$/i;
@@ -735,6 +773,18 @@ export function buildHistoricoTemplate(): string {
     const AUTO_REFRESH_MS = 45_000;
     const CHAVE_COLETA_ATIVADA = 'betano_coleta_ativada_em';
     const CHAVE_COLETA_PARADA = 'betano_coleta_parada_em';
+    const CHAVE_ESPORTE_ATIVO = 'betano_esporte_ativo';
+
+    const OPCOES_PERIODO_BASQUETE = [
+      { value: 'Q1', label: 'Q1 — desde o 1º quarto' },
+      { value: 'Q2', label: 'Q2 — a partir do 2º quarto' },
+      { value: 'Q3', label: 'Q3 — a partir do 3º quarto' },
+      { value: 'Q4', label: 'Q4 — a partir do 4º quarto' },
+    ];
+    const OPCOES_PERIODO_FUTEBOL = [
+      { value: '1T', label: '1T — desde o 1º tempo' },
+      { value: '2T', label: '2T — a partir do 2º tempo' },
+    ];
 
     const elLogin = document.getElementById('app-login');
     const elMain = document.getElementById('app-main');
@@ -759,8 +809,18 @@ export function buildHistoricoTemplate(): string {
     const elAbasHistorico = document.getElementById('abas-historico');
     const elAbaColetas = document.getElementById('aba-coletas');
     const elAbaAlertas = document.getElementById('aba-alertas');
+    const elAbasEsporte = document.getElementById('abas-esporte');
+    const elEsporteBasquete = document.getElementById('esporte-basquete');
+    const elEsporteFutebol = document.getElementById('esporte-futebol');
+    const elRegraEsporteRotulo = document.getElementById('regra-esporte-rotulo');
+    const elRegraPeriodoLabel = document.getElementById('regra-periodo-label');
+    const elRegraPeriodoDica = document.getElementById('regra-periodo-dica');
+    const elRegraPontosLabel = document.getElementById('regra-pontos-label');
+    const elRegraPontosDica = document.getElementById('regra-pontos-dica');
+    const elSelectRegraPeriodo = document.getElementById('regra-periodo');
 
     let abaAtiva = 'coletas';
+    let esporteAtivo = localStorage.getItem(CHAVE_ESPORTE_ATIVO) === 'futebol' ? 'futebol' : 'basquete';
     let telaRegrasAberta = false;
     let regraEmEdicaoId = null;
     let expandidos = new Set();
@@ -903,9 +963,74 @@ export function buildHistoricoTemplate(): string {
       return data.user?.id ?? null;
     }
 
+    function rotuloEsporte(esporte) {
+      return esporte === 'futebol' ? 'Futebol' : 'Basquete';
+    }
+
+    function jogoEsporte(jogo) {
+      return jogo?.esporte === 'futebol' ? 'futebol' : 'basquete';
+    }
+
+    function atualizarOpcoesPeriodoRegra() {
+      const opcoes = esporteAtivo === 'futebol' ? OPCOES_PERIODO_FUTEBOL : OPCOES_PERIODO_BASQUETE;
+      const valorAtual = elSelectRegraPeriodo?.value;
+      if (elSelectRegraPeriodo) {
+        elSelectRegraPeriodo.innerHTML = opcoes
+          .map((o) => '<option value="' + o.value + '">' + escapeHtml(o.label) + '</option>')
+          .join('');
+        if (valorAtual && opcoes.some((o) => o.value === valorAtual)) {
+          elSelectRegraPeriodo.value = valorAtual;
+        }
+      }
+      if (elRegraEsporteRotulo) elRegraEsporteRotulo.textContent = rotuloEsporte(esporteAtivo);
+      if (elRegraPeriodoLabel) {
+        elRegraPeriodoLabel.textContent = esporteAtivo === 'futebol'
+          ? 'A partir do tempo'
+          : 'A partir do quarto';
+      }
+      if (elRegraPeriodoDica) {
+        elRegraPeriodoDica.textContent = esporteAtivo === 'futebol'
+          ? 'A regra vale neste tempo e no seguinte (ex.: 2T só no 2º tempo).'
+          : 'A regra vale neste quarto e nos seguintes (ex.: Q2 inclui Q3 e Q4).';
+      }
+      if (elRegraPontosLabel) {
+        elRegraPontosLabel.textContent = esporteAtivo === 'futebol'
+          ? '+ Gols (vantagem mínima)'
+          : '+ Pontos (vantagem mínima)';
+      }
+      if (elRegraPontosDica) {
+        elRegraPontosDica.textContent = esporteAtivo === 'futebol'
+          ? 'Diferença de gols entre líder e adversário deve ser ≥ este valor.'
+          : 'Diferença de placar entre líder e adversário deve ser ≥ este valor.';
+      }
+    }
+
+    function atualizarAbasEsporteUi() {
+      elEsporteBasquete?.classList.toggle('ativa', esporteAtivo === 'basquete');
+      elEsporteFutebol?.classList.toggle('ativa', esporteAtivo === 'futebol');
+      elEsporteBasquete?.setAttribute('aria-selected', esporteAtivo === 'basquete' ? 'true' : 'false');
+      elEsporteFutebol?.setAttribute('aria-selected', esporteAtivo === 'futebol' ? 'true' : 'false');
+      atualizarOpcoesPeriodoRegra();
+    }
+
+    function trocarEsporte(esporte) {
+      if (esporte !== 'basquete' && esporte !== 'futebol') return;
+      if (esporteAtivo === esporte && !telaRegrasAberta) return;
+      esporteAtivo = esporte;
+      localStorage.setItem(CHAVE_ESPORTE_ATIVO, esporteAtivo);
+      atualizarAbasEsporteUi();
+      if (telaRegrasAberta) {
+        limparFormRegra();
+        void carregarRegras();
+        return;
+      }
+      void carregar();
+    }
+
     function formatarTextoRegra(r) {
       const odd = Number(r.min_odd).toFixed(2);
-      return 'A partir de ' + r.periodo + ' · +' + r.min_pontos + ' pts · ODD líder ≥ ' + odd;
+      const unidade = (r.esporte ?? 'basquete') === 'futebol' ? 'gols' : 'pts';
+      return 'A partir de ' + r.periodo + ' · +' + r.min_pontos + ' ' + unidade + ' · ODD líder ≥ ' + odd;
     }
 
     function formatarNomeRegraLista(r) {
@@ -924,6 +1049,7 @@ export function buildHistoricoTemplate(): string {
       fecharCardMenu();
       telaRegrasAberta = true;
       limparFormRegra();
+      atualizarAbasEsporteUi();
       atualizarVisibilidadeTelas();
       void carregarRegras();
     }
@@ -967,12 +1093,20 @@ export function buildHistoricoTemplate(): string {
     function limparFormRegra() {
       regraEmEdicaoId = null;
       elFormRegra?.reset();
+      atualizarOpcoesPeriodoRegra();
       atualizarUiFormRegra();
     }
 
     function iniciarEdicaoRegra(regra) {
+      const esporteRegra = regra.esporte === 'futebol' ? 'futebol' : 'basquete';
+      if (esporteRegra !== esporteAtivo) {
+        esporteAtivo = esporteRegra;
+        localStorage.setItem(CHAVE_ESPORTE_ATIVO, esporteAtivo);
+        atualizarAbasEsporteUi();
+      }
       regraEmEdicaoId = regra.id;
       document.getElementById('regra-nome').value = regra.nome || '';
+      atualizarOpcoesPeriodoRegra();
       document.getElementById('regra-periodo').value = regra.periodo;
       document.getElementById('regra-pontos').value = String(regra.min_pontos);
       document.getElementById('regra-odd').value = String(regra.min_odd);
@@ -987,9 +1121,10 @@ export function buildHistoricoTemplate(): string {
       }
       elListaRegras.innerHTML = regras.map((r) => {
         const cls = r.ativo ? 'regra-item' : 'regra-item inativa';
+        const esporteTag = rotuloEsporte(r.esporte ?? 'basquete');
         return '<div class="' + cls + '" data-id="' + escapeHtml(r.id) + '">' +
           '<div class="regra-item-corpo">' +
-            '<div class="regra-item-nome">' + escapeHtml(formatarNomeRegraLista(r)) + '</div>' +
+            '<div class="regra-item-nome">' + escapeHtml(formatarNomeRegraLista(r)) + ' · ' + escapeHtml(esporteTag) + '</div>' +
             '<div class="regra-item-detalhe">' + formatarTextoRegra(r) + '</div>' +
           '</div>' +
           '<div class="regra-item-acoes">' +
@@ -1085,6 +1220,7 @@ export function buildHistoricoTemplate(): string {
         .from('regras_alerta')
         .select('*')
         .eq('usuario_id', usuarioId)
+        .eq('esporte', esporteAtivo)
         .order('ordem', { ascending: true })
         .order('data_criacao', { ascending: true });
       if (error) {
@@ -1101,6 +1237,7 @@ export function buildHistoricoTemplate(): string {
       if (!nomeTrim) throw new Error('Informe o nome da regra');
       const payload = {
         nome: nomeTrim,
+        esporte: esporteAtivo,
         periodo,
         min_pontos: minPontos,
         min_odd: minOdd,
@@ -1229,11 +1366,15 @@ export function buildHistoricoTemplate(): string {
       }
     }
 
-    function buildGameKey(home, away) {
-      return [home, away]
+    function buildGameKey(esporte, home, away) {
+      const teams = [home, away]
         .map((n) => n.trim().toLowerCase().replace(/\s+/g, ' '))
-        .sort()
-        .join('|');
+        .sort();
+      return esporte + '|' + teams.join('|');
+    }
+
+    function buildGameKeyLegado(home, away) {
+      return buildGameKey('basquete', home, away);
     }
 
     function formatarRotuloVantagem(pc, pf, tc, tf) {
@@ -1412,7 +1553,7 @@ export function buildHistoricoTemplate(): string {
           ),
         };
 
-        const grupoKey = jogo.game_key || buildGameKey(jogo.time_casa, jogo.time_fora);
+        const grupoKey = jogo.game_key || buildGameKey(jogoEsporte(jogo), jogo.time_casa, jogo.time_fora);
         const existente = gruposRaw.get(grupoKey);
         if (existente) {
           existente.entradas.push(entrada);
@@ -1648,13 +1789,17 @@ export function buildHistoricoTemplate(): string {
     }
 
     function renderVazio(motivo) {
-      const msg = motivo ||
-        'Nenhum jogo registrado ainda. Use Ativar Coleta ou Coletar Agora quando houver basquete ao vivo na Betano.';
+      const padrao = esporteAtivo === 'futebol'
+        ? 'Nenhum jogo de futebol coletado ainda. A coleta grava apenas nos últimos 5 minutos do 2º tempo — use Ativar Coleta ou Coletar Agora nessa janela.'
+        : 'Nenhum jogo registrado ainda. Use Ativar Coleta ou Coletar Agora quando houver basquete ao vivo na Betano.';
+      const msg = motivo || padrao;
       elConteudo.innerHTML = '<div class="centro"><p class="aviso">' + escapeHtml(msg) + '</p></div>';
     }
 
     function renderVazioAlertas() {
-      elConteudo.innerHTML = '<div class="centro"><p class="aviso">Nenhum alerta disparado ainda. Configure regras em Regras de Alertas no menu e aguarde um jogo que atenda aos critérios.</p></div>';
+      const esporte = rotuloEsporte(esporteAtivo);
+      elConteudo.innerHTML = '<div class="centro"><p class="aviso">Nenhum alerta de ' + escapeHtml(esporte) +
+        ' disparado ainda. Configure regras em Regras de Alertas no menu e aguarde um jogo que atenda aos critérios.</p></div>';
     }
 
     function renderAlertaCardTopo(estado, menuKey, betanoUrl) {
@@ -1863,12 +2008,12 @@ export function buildHistoricoTemplate(): string {
       elHistoricoStatsBar.classList.remove('hidden');
       if (abaAtiva === 'alertas') {
         const total = stats?.total ?? 0;
-        elHistoricoStats.textContent = total + ' alerta(s) no histórico';
+        elHistoricoStats.textContent = total + ' alerta(s) de ' + rotuloEsporte(esporteAtivo).toLowerCase();
         return;
       }
       elHistoricoStats.textContent = stats
-        ? stats.cards + ' jogo(s) · ' + stats.entradas + ' coleta(s) no histórico'
-        : '0 jogo(s) · 0 coleta(s) no histórico';
+        ? stats.cards + ' jogo(s) de ' + rotuloEsporte(esporteAtivo).toLowerCase() + ' · ' + stats.entradas + ' coleta(s)'
+        : '0 jogo(s) de ' + rotuloEsporte(esporteAtivo).toLowerCase();
     }
 
     async function buscarTodosAlertas() {
@@ -1890,7 +2035,7 @@ export function buildHistoricoTemplate(): string {
         offset += HISTORICO_ALERTAS_PAGE;
       }
 
-      return todos;
+      return todos.filter((a) => (a.esporte ?? 'basquete') === esporteAtivo);
     }
 
     async function enriquecerAlertasComJogos(alertas) {
@@ -1983,11 +2128,12 @@ export function buildHistoricoTemplate(): string {
       ]);
 
       if (errU) throw new Error(errU.message);
-      if (!jogos.length) {
+      const jogosFiltrados = jogos.filter((j) => jogoEsporte(j) === esporteAtivo);
+      if (!jogosFiltrados.length) {
         return [];
       }
 
-      const grupos = montarGrupos(ultimaColeta?.coletado_em ?? null, jogos);
+      const grupos = montarGrupos(ultimaColeta?.coletado_em ?? null, jogosFiltrados);
       return grupos;
     }
 
@@ -2009,7 +2155,20 @@ export function buildHistoricoTemplate(): string {
         const games = coleta.games ?? [];
         if (!games.length) {
           await atualizarStatusMonitor();
-          renderVazio(coleta.summary || 'Nenhum jogo de basquete ao vivo no momento.');
+          let msg = coleta.summary || 'Nenhum jogo elegível para coleta no momento.';
+          if (esporteAtivo === 'futebol' && (coleta.futebolAoVivoTotal ?? 0) > 0) {
+            msg = coleta.futebolAoVivoTotal + ' jogo(s) de futebol ao vivo, mas fora da janela de coleta (últimos 5 min do 2º tempo).';
+          } else if (esporteAtivo === 'basquete' && (coleta.gamesBasquete?.length ?? 0) === 0) {
+            msg = coleta.summary || 'Nenhum jogo de basquete ao vivo no momento.';
+          }
+          renderVazio(msg);
+          return;
+        }
+
+        const gamesParaPainel = games.filter((g) => (g.esporte ?? 'basquete') === esporteAtivo);
+        if (!gamesParaPainel.length) {
+          await atualizarStatusMonitor();
+          renderVazio(coleta.summary);
           return;
         }
 
@@ -2036,7 +2195,8 @@ export function buildHistoricoTemplate(): string {
 
         const linhas = games.map((g) => ({
           coleta_id: coletaRow.id,
-          game_key: buildGameKey(g.homeTeam, g.awayTeam),
+          game_key: buildGameKey(g.esporte ?? 'basquete', g.homeTeam, g.awayTeam),
+          esporte: g.esporte ?? 'basquete',
           time_casa: g.homeTeam,
           time_fora: g.awayTeam,
           liga: g.league,
@@ -2105,6 +2265,7 @@ export function buildHistoricoTemplate(): string {
       elLogin.classList.remove('hidden');
       elMain.classList.add('hidden');
       elHistoricoStatsBar?.classList.add('hidden');
+      elAbasEsporte?.classList.add('hidden');
       elAbasHistorico?.classList.add('hidden');
       elPainelRegras?.classList.add('hidden');
       telaRegrasAberta = false;
@@ -2117,7 +2278,9 @@ export function buildHistoricoTemplate(): string {
       elLogin.classList.add('hidden');
       elMain.classList.remove('hidden');
       elHistoricoStatsBar?.classList.remove('hidden');
+      elAbasEsporte?.classList.remove('hidden');
       elAbasHistorico?.classList.remove('hidden');
+      atualizarAbasEsporteUi();
       atualizarAbasUi();
       elUserEmail.textContent = email;
       iniciarAutoRefresh();
@@ -2204,6 +2367,8 @@ export function buildHistoricoTemplate(): string {
 
     elAbaColetas?.addEventListener('click', () => trocarAba('coletas'));
     elAbaAlertas?.addEventListener('click', () => trocarAba('alertas'));
+    elEsporteBasquete?.addEventListener('click', () => trocarEsporte('basquete'));
+    elEsporteFutebol?.addEventListener('click', () => trocarEsporte('futebol'));
 
     elBtnRegrasMenu?.addEventListener('click', () => {
       abrirTelaRegras();
@@ -2232,7 +2397,9 @@ export function buildHistoricoTemplate(): string {
         return;
       }
       if (!periodo || !Number.isFinite(minPontos) || minPontos < 1) {
-        alert('Informe o quarto e a vantagem mínima em pontos (mínimo 1).');
+        alert(esporteAtivo === 'futebol'
+          ? 'Informe o tempo e a vantagem mínima em gols (mínimo 1).'
+          : 'Informe o quarto e a vantagem mínima em pontos (mínimo 1).');
         return;
       }
       if (!Number.isFinite(minOdd) || minOdd <= 0) {

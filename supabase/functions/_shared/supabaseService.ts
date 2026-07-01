@@ -94,7 +94,7 @@ export async function scheduleNextRun(
 export async function loadActiveRules(usuarioId: string): Promise<RegraAlerta[]> {
   const { data, error } = await getServiceClient()
     .from('regras_alerta')
-    .select('id, periodo, min_pontos, min_odd, ativo')
+    .select('id, esporte, periodo, min_pontos, min_odd, ativo')
     .eq('usuario_id', usuarioId)
     .eq('ativo', true)
     .order('ordem', { ascending: true });
@@ -103,6 +103,7 @@ export async function loadActiveRules(usuarioId: string): Promise<RegraAlerta[]>
 
   return (data ?? []).map((row) => ({
     id: row.id as string,
+    esporte: (row.esporte as RegraAlerta['esporte']) ?? 'basquete',
     periodo: row.periodo as RegraAlerta['periodo'],
     minPontos: Number(row.min_pontos),
     minOdd: Number(row.min_odd),
@@ -133,6 +134,7 @@ export async function avaliarEGravarAlertas(
         usuario_id: usuarioId,
         coleta_id: coletaId,
         regra_id: c.regraId,
+        esporte: c.game.esporte,
         game_key: c.gameKey,
         time_casa: c.game.homeTeam,
         time_fora: c.game.awayTeam,
@@ -203,6 +205,7 @@ export async function persistColetaComJogos(
     const linhasJogos = coleta.games.map((jogo) => ({
       coleta_id: coletaId,
       game_key: buildGameKeyFromGame(jogo),
+      esporte: jogo.esporte,
       time_casa: jogo.homeTeam,
       time_fora: jogo.awayTeam,
       liga: jogo.league,

@@ -135,6 +135,7 @@ export interface BetanoOverviewFetchResult {
   parseError: string | null;
   totalEvents: number;
   baskLeagueIds: number[];
+  footLeagueIds: number[];
   sportsAvailable: string[];
 }
 
@@ -198,6 +199,7 @@ export async function fetchBetanoLiveOverviewAsChrome(): Promise<BetanoOverviewF
     parseError,
     totalEvents: events ? Object.keys(events).length : 0,
     baskLeagueIds: sports?.byIdLeagueIdList?.BASK ?? [],
+    footLeagueIds: sports?.byIdLeagueIdList?.FOOT ?? [],
     sportsAvailable: sports?.allIds ?? [],
   };
 }

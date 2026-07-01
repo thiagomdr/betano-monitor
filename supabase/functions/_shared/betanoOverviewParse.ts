@@ -1,5 +1,7 @@
 /** Parser do JSON overview/latest da Betano (Deno Edge Function). */
 
+export type Esporte = 'basquete' | 'futebol';
+
 export type GamePeriod =
   | 'Q1'
   | 'Q2'
@@ -7,11 +9,18 @@ export type GamePeriod =
   | 'Q4'
   | 'Intervalo'
   | 'OT'
+  | '1T'
+  | '2T'
+  | 'INT'
+  | 'FT'
   | 'unknown';
 
 const BETANO_ORIGIN = 'https://www.betano.bet.br';
+const FOOT_SPORT_IDS = new Set(['FOOT', 'SOCC', 'SOC']);
+const ULTIMOS_MINUTOS_FUTEBOL = 5;
 
 export interface ParsedGame {
+  esporte: Esporte;
   homeTeam: string;
   awayTeam: string;
   homeScore: number;
@@ -41,12 +50,14 @@ export function buildBetanoEventUrl(
   return null;
 }
 
-const SIMULATED_LEAGUE_PATTERN =
+const SIMULATED_BASKETBALL_PATTERN =
   /ebasketball|nba\s*2k|battle\s*\(|simulad|\(esports\)/i;
+const SIMULATED_FOOTBALL_PATTERN =
+  /efootball|e-football|fifa\s*\d|battle\s*\(|simulad|virtual|esports/i;
 const ESPORTS_TEAM_PATTERN = /\([^)]+\)/;
 const VENCEDOR_MARKET_TYPES = new Set(['HTOH', 'H2HT', 'STWN', 'STWT']);
-const VENCEDOR_MARKET_NAME = /vencedor|money\s*line|match\s*winner/i;
-const NON_VENCEDOR_MARKET = /handicap|total|pontos|over|under|mais de|menos de/i;
+const VENCEDOR_MARKET_NAME = /vencedor|money\s*line|match\s*winner|resultado\s*final/i;
+const NON_VENCEDOR_MARKET = /handicap|total|pontos|over|under|mais de|menos de|gols|escanteio/i;
 
 interface OverviewParticipant {
   name?: string;
@@ -93,6 +104,7 @@ interface OverviewLeague {
 export interface BetanoOverviewPayload {
   sports?: {
     byIdLeagueIdList?: Record<string, number[]>;
+    allIds?: string[];
   };
   leagues?: Record<string, OverviewLeague>;
   events?: Record<string, OverviewEvent>;
@@ -105,14 +117,14 @@ export function formatTempoRestante(
   period: GamePeriod,
 ): string | null {
   if (seconds == null || seconds < 0) return null;
-  if (period === 'Intervalo' || period === 'unknown') return null;
+  if (period === 'Intervalo' || period === 'INT' || period === 'unknown') return null;
   const total = Math.max(0, Math.floor(seconds));
   const m = Math.floor(total / 60);
   const s = total % 60;
   return `${m}:${String(s).padStart(2, '0')}`;
 }
 
-function normalizePeriod(raw: string | undefined): GamePeriod {
+function normalizeBasketballPeriod(raw: string | undefined): GamePeriod {
   if (!raw) return 'unknown';
   const upper = raw.trim().toUpperCase();
   if (upper === 'Q1') return 'Q1';
@@ -129,10 +141,36 @@ function normalizePeriod(raw: string | undefined): GamePeriod {
   return 'unknown';
 }
 
-function parseScore(value: string | undefined): number | null {
+export function parseMinuteFromPeriodDescription(raw: string | undefined): number | null {
+  if (!raw) return null;
+  const trimmed = raw.trim();
+  const quoted = trimmed.match(/(\d{1,3})\s*['′+]/);
+  if (quoted) return Number.parseInt(quoted[1], 10);
+  const clock = trimmed.match(/^(\d{1,3}):(\d{2})$/);
+  if (clock) return Number.parseInt(clock[1], 10);
+  return null;
+}
+
+export function normalizeFootballPeriod(raw: string | undefined): GamePeriod {
+  if (!raw) return 'unknown';
+  const trimmed = raw.trim();
+  const lower = trimmed.toLowerCase();
+  if (/intervalo|half\s*time|\bht\b|descanso/i.test(lower)) return 'INT';
+  if (/2[º°]?\s*time|2nd|segundo\s*time|^2t$/i.test(trimmed)) return '2T';
+  if (/1[º°]?\s*time|1st|primeiro\s*time|^1t$/i.test(trimmed)) return '1T';
+  if (/final|fim|\bft\b|encerr/i.test(lower)) return 'FT';
+  const minute = parseMinuteFromPeriodDescription(trimmed);
+  if (minute != null) {
+    if (minute > 45) return '2T';
+    if (minute >= 1) return '1T';
+  }
+  return 'unknown';
+}
+
+function parseScore(value: string | undefined, max: number): number | null {
   if (value == null || value === '') return null;
   const n = Number.parseInt(value, 10);
-  return Number.isFinite(n) && n >= 0 && n <= 200 ? n : null;
+  return Number.isFinite(n) && n >= 0 && n <= max ? n : null;
 }
 
 function parseOdd(value: number | undefined): number {
@@ -140,13 +178,26 @@ function parseOdd(value: number | undefined): number {
   return Math.round(value * 100) / 100;
 }
 
-function isSimulatedContext(
+function isSimulatedBasketballContext(
   league: string | null,
   homeTeam: string,
   awayTeam: string,
 ): boolean {
   const blob = `${league ?? ''} ${homeTeam} ${awayTeam}`;
-  if (SIMULATED_LEAGUE_PATTERN.test(blob)) return true;
+  if (SIMULATED_BASKETBALL_PATTERN.test(blob)) return true;
+  if (ESPORTS_TEAM_PATTERN.test(homeTeam) && ESPORTS_TEAM_PATTERN.test(awayTeam)) {
+    return true;
+  }
+  return false;
+}
+
+function isSimulatedFootballContext(
+  league: string | null,
+  homeTeam: string,
+  awayTeam: string,
+): boolean {
+  const blob = `${league ?? ''} ${homeTeam} ${awayTeam}`;
+  if (SIMULATED_FOOTBALL_PATTERN.test(blob)) return true;
   if (ESPORTS_TEAM_PATTERN.test(homeTeam) && ESPORTS_TEAM_PATTERN.test(awayTeam)) {
     return true;
   }
@@ -206,7 +257,44 @@ function extractVencedorOdds(
   return { homeOdd: 0, awayOdd: 0 };
 }
 
-function eventToGame(
+function formatFootballTempoRestante(
+  periodDescription: string | undefined,
+  period: GamePeriod,
+  clockSeconds: number | null | undefined,
+): string | null {
+  const minute = parseMinuteFromPeriodDescription(periodDescription);
+  if (minute != null && period === '2T') {
+    const restMin = Math.max(0, 90 - minute);
+    return `${restMin}:00`;
+  }
+  if (clockSeconds != null && period === '2T') {
+    const restHalf = Math.max(0, 45 * 60 - Math.floor(clockSeconds));
+    return formatTempoRestante(restHalf, period);
+  }
+  return formatTempoRestante(clockSeconds, period);
+}
+
+/** Futebol: coleta apenas nos últimos 5 minutos do 2º tempo. */
+export function isFutebolElegivelColeta(event: OverviewEvent): boolean {
+  const desc = event.liveData?.periodDescription;
+  const period = normalizeFootballPeriod(desc);
+  if (period !== '2T') return false;
+
+  const minute = parseMinuteFromPeriodDescription(desc);
+  if (minute != null) {
+    if (minute >= 90 - ULTIMOS_MINUTOS_FUTEBOL) return true;
+    if (minute >= 45 - ULTIMOS_MINUTOS_FUTEBOL && minute <= 45) return true;
+  }
+
+  const clockSeconds = event.liveData?.clock?.secondsSinceStart;
+  if (clockSeconds != null && clockSeconds >= (45 - ULTIMOS_MINUTOS_FUTEBOL) * 60) {
+    return true;
+  }
+
+  return false;
+}
+
+function eventToBasketballGame(
   event: OverviewEvent,
   leagues: Record<string, OverviewLeague>,
   markets: Record<string, OverviewMarket>,
@@ -220,17 +308,17 @@ function eventToGame(
   const away = participants.find((p) => !p.isHome);
   if (!home?.name || !away?.name) return null;
 
-  const homeScore = parseScore(event.liveData?.score?.home);
-  const awayScore = parseScore(event.liveData?.score?.away);
+  const homeScore = parseScore(event.liveData?.score?.home, 200);
+  const awayScore = parseScore(event.liveData?.score?.away, 200);
   if (homeScore == null || awayScore == null) return null;
 
   const leagueId = event.leagueId;
   const leagueName =
     leagueId != null ? leagues[String(leagueId)]?.name?.trim() ?? null : null;
 
-  if (isSimulatedContext(leagueName, home.name, away.name)) return null;
+  if (isSimulatedBasketballContext(leagueName, home.name, away.name)) return null;
 
-  const period = normalizePeriod(event.liveData?.periodDescription);
+  const period = normalizeBasketballPeriod(event.liveData?.periodDescription);
   const { homeOdd, awayOdd } = extractVencedorOdds(event, markets, selections);
   const tempoRestante = formatTempoRestante(
     event.liveData?.clock?.secondsSinceStart,
@@ -240,6 +328,7 @@ function eventToGame(
   const eventId = event.id ?? null;
 
   return {
+    esporte: 'basquete',
     homeTeam: home.name.trim(),
     awayTeam: away.name.trim(),
     homeScore,
@@ -254,10 +343,69 @@ function eventToGame(
   };
 }
 
-export function parseBasketballFromOverview(
+function eventToFootballGame(
+  event: OverviewEvent,
+  leagues: Record<string, OverviewLeague>,
+  markets: Record<string, OverviewMarket>,
+  selections: Record<string, OverviewSelection>,
+): ParsedGame | null {
+  const sportId = event.sportId ?? '';
+  if (!FOOT_SPORT_IDS.has(sportId)) return null;
+  if (event.isLive === false) return null;
+
+  const participants = event.participants ?? [];
+  const home = participants.find((p) => p.isHome);
+  const away = participants.find((p) => !p.isHome);
+  if (!home?.name || !away?.name) return null;
+
+  const homeScore = parseScore(event.liveData?.score?.home, 30);
+  const awayScore = parseScore(event.liveData?.score?.away, 30);
+  if (homeScore == null || awayScore == null) return null;
+
+  const leagueId = event.leagueId;
+  const leagueName =
+    leagueId != null ? leagues[String(leagueId)]?.name?.trim() ?? null : null;
+
+  if (isSimulatedFootballContext(leagueName, home.name, away.name)) return null;
+
+  const periodDesc = event.liveData?.periodDescription;
+  const period = normalizeFootballPeriod(periodDesc);
+  const { homeOdd, awayOdd } = extractVencedorOdds(event, markets, selections);
+  const tempoRestante = formatFootballTempoRestante(
+    periodDesc,
+    period,
+    event.liveData?.clock?.secondsSinceStart,
+  );
+
+  const eventId = event.id ?? null;
+
+  return {
+    esporte: 'futebol',
+    homeTeam: home.name.trim(),
+    awayTeam: away.name.trim(),
+    homeScore,
+    awayScore,
+    period,
+    league: leagueName,
+    homeOdd,
+    awayOdd,
+    tempoRestante,
+    eventId,
+    betanoUrl: buildBetanoEventUrl(event.url, eventId),
+  };
+}
+
+function parseGamesFromLeagues(
   payload: BetanoOverviewPayload,
+  leagueIds: number[],
+  toGame: (
+    event: OverviewEvent,
+    leagues: Record<string, OverviewLeague>,
+    markets: Record<string, OverviewMarket>,
+    selections: Record<string, OverviewSelection>,
+  ) => ParsedGame | null,
+  esporte: Esporte,
 ): ParsedGame[] {
-  const leagueIds = payload.sports?.byIdLeagueIdList?.BASK ?? [];
   if (leagueIds.length === 0) return [];
 
   const leagueSet = new Set(leagueIds);
@@ -270,7 +418,57 @@ export function parseBasketballFromOverview(
 
   for (const event of Object.values(events)) {
     if (!event.leagueId || !leagueSet.has(event.leagueId)) continue;
-    const game = eventToGame(event, leagues, markets, selections);
+    const game = toGame(event, leagues, markets, selections);
+    if (!game) continue;
+    const key = `${esporte}|${game.homeTeam}|${game.awayTeam}`.toLowerCase();
+    if (seen.has(key)) continue;
+    seen.add(key);
+    games.push(game);
+  }
+
+  return games;
+}
+
+export function parseBasketballFromOverview(
+  payload: BetanoOverviewPayload,
+): ParsedGame[] {
+  const leagueIds = payload.sports?.byIdLeagueIdList?.BASK ?? [];
+  return parseGamesFromLeagues(payload, leagueIds, eventToBasketballGame, 'basquete');
+}
+
+export function parseFootballFromOverview(
+  payload: BetanoOverviewPayload,
+): ParsedGame[] {
+  const leagueIds = payload.sports?.byIdLeagueIdList?.FOOT ?? [];
+  return parseGamesFromLeagues(payload, leagueIds, eventToFootballGame, 'futebol');
+}
+
+/** Todos os jogos de futebol ao vivo (sem filtro de janela de coleta). */
+export function parseFootballAoVivoFromOverview(
+  payload: BetanoOverviewPayload,
+): ParsedGame[] {
+  return parseFootballFromOverview(payload);
+}
+
+/** Apenas jogos elegíveis para persistência (últimos 5 min do 2º tempo). */
+export function filtrarFutebolElegivelColeta(
+  payload: BetanoOverviewPayload,
+): ParsedGame[] {
+  const leagueIds = payload.sports?.byIdLeagueIdList?.FOOT ?? [];
+  if (leagueIds.length === 0) return [];
+
+  const leagueSet = new Set(leagueIds);
+  const leagues = payload.leagues ?? {};
+  const events = payload.events ?? {};
+  const markets = payload.markets ?? {};
+  const selections = payload.selections ?? {};
+  const games: ParsedGame[] = [];
+  const seen = new Set<string>();
+
+  for (const event of Object.values(events)) {
+    if (!event.leagueId || !leagueSet.has(event.leagueId)) continue;
+    if (!isFutebolElegivelColeta(event)) continue;
+    const game = eventToFootballGame(event, leagues, markets, selections);
     if (!game) continue;
     const key = `${game.homeTeam}|${game.awayTeam}`.toLowerCase();
     if (seen.has(key)) continue;
@@ -279,4 +477,11 @@ export function parseBasketballFromOverview(
   }
 
   return games;
+}
+
+export function combinarJogosColeta(
+  basquete: ParsedGame[],
+  futebol: ParsedGame[],
+): ParsedGame[] {
+  return [...basquete, ...futebol];
 }
