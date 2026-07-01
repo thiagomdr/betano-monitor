@@ -2,7 +2,7 @@
 
 Progresso do **painel web + Supabase**. O Agent deve marcar `[x]` ao concluir cada item e atualizar a data abaixo.
 
-**Última atualização:** 2026-06-29 (futebol — lista todos ao vivo no JSON)
+**Última atualização:** 2026-06-29 (futebol — largura tabela + tempo de jogo e restante até 85')
 
 ---
 

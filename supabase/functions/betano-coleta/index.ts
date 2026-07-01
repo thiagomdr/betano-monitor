@@ -32,6 +32,7 @@ function scoutToJson(snap: ReturnType<typeof parseFootballScoutFromOverview>[num
     period: snap.period,
     periodDescription: snap.periodDescription,
     matchMinute: snap.matchMinute,
+    tempoDecorrido: snap.tempoDecorrido,
     minutesUntil85: snap.minutesUntil85,
     eta85: snap.eta85,
     inFinalWindow: snap.inFinalWindow,

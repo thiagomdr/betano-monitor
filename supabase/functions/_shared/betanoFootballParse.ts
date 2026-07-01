@@ -5,6 +5,7 @@
 import {
   type BetanoOverviewPayload,
   buildBetanoEventUrl,
+  formatTempoRestante,
   normalizeFootballPeriod,
   parseMinuteFromPeriodDescription,
   type GamePeriod,
@@ -67,6 +68,7 @@ export interface FootballScoutSnapshot {
   period: GamePeriod;
   periodDescription: string | null;
   matchMinute: number | null;
+  tempoDecorrido: string | null;
   homeScore: number;
   awayScore: number;
   minutesUntil85: number | null;
@@ -102,9 +104,33 @@ function isSimulatedFootballContext(
   return false;
 }
 
-/** Minuto de jogo (aprox.) a partir do relógio exibido. */
-export function getMatchMinute(periodDescription: string | undefined): number | null {
-  return parseMinuteFromPeriodDescription(periodDescription);
+/** Minuto de jogo (aprox.) a partir do relógio exibido ou do clock da API. */
+export function getMatchMinute(
+  periodDescription: string | undefined,
+  period: GamePeriod = 'unknown',
+  clockSeconds: number | null | undefined = null,
+): number | null {
+  const fromDesc = parseMinuteFromPeriodDescription(periodDescription);
+  if (fromDesc != null) return fromDesc;
+  if (clockSeconds == null || clockSeconds < 0) return null;
+  if (period === 'INT') return 45;
+  return Math.floor(clockSeconds / 60);
+}
+
+function formatarTempoDecorrido(
+  periodDescription: string | null | undefined,
+  period: GamePeriod,
+  matchMinute: number | null,
+  clockSeconds: number | null | undefined,
+): string | null {
+  const desc = periodDescription?.trim();
+  if (desc) return desc;
+  if (clockSeconds != null && clockSeconds >= 0 && period !== 'INT') {
+    const periodoRelogio = period === 'unknown' ? '2T' : period;
+    return formatTempoRestante(clockSeconds, periodoRelogio);
+  }
+  if (matchMinute != null) return `${matchMinute}'`;
+  return null;
 }
 
 /** Minutos até o minuto 85 (entrada na janela dos 5 finais). */
@@ -219,7 +245,9 @@ function eventToFootballScout(
 
   const periodDesc = event.liveData?.periodDescription ?? null;
   const period = normalizeFootballPeriod(periodDesc ?? undefined);
-  const matchMinute = getMatchMinute(periodDesc ?? undefined);
+  const clockSeconds = event.liveData?.clock?.secondsSinceStart;
+  const matchMinute = getMatchMinute(periodDesc ?? undefined, period, clockSeconds);
+  const tempoDecorrido = formatarTempoDecorrido(periodDesc, period, matchMinute, clockSeconds);
   const minutesUntil85 = estimarMinutosAte85(period, matchMinute);
   const eta85 = minutesUntil85 != null
     ? new Date(now.getTime() + minutesUntil85 * 60_000).toISOString()
@@ -246,6 +274,7 @@ function eventToFootballScout(
     period,
     periodDescription: periodDesc,
     matchMinute,
+    tempoDecorrido,
     homeScore,
     awayScore,
     minutesUntil85,

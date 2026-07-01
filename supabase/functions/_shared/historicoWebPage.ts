@@ -671,6 +671,7 @@ export function buildHistoricoTemplate(): string {
       background: #1a1a1a;
       border-radius: 10px;
       overflow: hidden;
+      table-layout: fixed;
     }
     .futebol-tabela th,
     .futebol-tabela td {
@@ -693,6 +694,7 @@ export function buildHistoricoTemplate(): string {
       .historico-stats-bar,
       .abas-esporte,
       .abas-historico,
+      .futebol-stats-wrap,
       .lista {
         max-width: 1100px;
       }
@@ -1834,10 +1836,30 @@ export function buildHistoricoTemplate(): string {
       return data;
     }
 
-    function formatarMinutosAte85(valor) {
-      if (valor == null || !Number.isFinite(Number(valor))) return '—';
-      const n = Math.round(Number(valor));
+    function rotuloPeriodoFutebol(periodo) {
+      if (periodo === '1T') return '1º tempo';
+      if (periodo === '2T') return '2º tempo';
+      if (periodo === 'INT') return 'Intervalo';
+      if (periodo === 'FT') return 'Final';
+      return null;
+    }
+
+    function formatarTempoJogo(p) {
+      const tempo = p.tempo_decorrido?.trim() || p.minuto_relogio?.trim();
+      const periodo = rotuloPeriodoFutebol(p.periodo_atual);
+      if (tempo && periodo) return tempo + ' · ' + periodo;
+      if (tempo) return tempo;
+      if (periodo) return periodo;
+      return '—';
+    }
+
+    function formatarRestanteAte85(minutos) {
+      if (minutos == null || !Number.isFinite(Number(minutos))) return '—';
+      const n = Math.round(Number(minutos));
       if (n <= 0) return '≤ 85\'';
+      const h = Math.floor(n / 60);
+      const m = n % 60;
+      if (h > 0) return '~' + h + 'h ' + m + ' min';
       return '~' + n + ' min';
     }
 
@@ -1897,7 +1919,8 @@ export function buildHistoricoTemplate(): string {
         liga: j.league,
         placar_casa_atual: j.homeScore,
         placar_fora_atual: j.awayScore,
-        minuto_relogio: j.periodDescription || (j.matchMinute != null ? j.matchMinute + "'" : null),
+        tempo_decorrido: j.tempoDecorrido || j.periodDescription || (j.matchMinute != null ? j.matchMinute + "'" : null),
+        minuto_relogio: j.periodDescription || j.tempoDecorrido || (j.matchMinute != null ? j.matchMinute + "'" : null),
         periodo_atual: j.period,
         minutos_ate_85: j.minutesUntil85,
         eta_85: j.eta85,
@@ -1912,6 +1935,7 @@ export function buildHistoricoTemplate(): string {
         liga: p.liga,
         placar_casa_atual: p.placar_casa_atual,
         placar_fora_atual: p.placar_fora_atual,
+        tempo_decorrido: p.minuto_relogio,
         minuto_relogio: p.minuto_relogio,
         periodo_atual: p.periodo_atual,
         minutos_ate_85: p.minutos_ate_85,
@@ -1942,14 +1966,13 @@ export function buildHistoricoTemplate(): string {
         const placar = (p.placar_casa_atual != null && p.placar_fora_atual != null)
           ? p.placar_casa_atual + '–' + p.placar_fora_atual
           : '—';
-        const minuto = p.minuto_relogio?.trim() || p.periodo_atual || '—';
         const status = p.em_janela ? 'Em janela (≥85\')' : 'Ao vivo';
         return '<tr>' +
           '<td>' + escapeHtml(p.time_casa) + ' x ' + escapeHtml(p.time_fora) + '</td>' +
           '<td>' + escapeHtml(p.liga || '—') + '</td>' +
-          '<td>' + escapeHtml(String(minuto)) + '</td>' +
+          '<td>' + escapeHtml(formatarTempoJogo(p)) + '</td>' +
           '<td>' + escapeHtml(placar) + '</td>' +
-          '<td>' + escapeHtml(formatarMinutosAte85(p.minutos_ate_85)) + '</td>' +
+          '<td>' + escapeHtml(formatarRestanteAte85(p.minutos_ate_85)) + '</td>' +
           '<td>' + escapeHtml(formatarDataCurta(p.eta_85)) + '</td>' +
           '<td>' + escapeHtml(status) + '</td>' +
         '</tr>';
@@ -1957,7 +1980,7 @@ export function buildHistoricoTemplate(): string {
       return '<h3 class="futebol-secao-titulo">Jogos ao vivo</h3>' +
         '<p style="color:#888;font-size:12px;margin:0 0 8px">Todos os jogos FOOT do JSON Betano, em qualquer minuto. Coleta ao abrir Futebol ou Coletar Agora.</p>' +
         '<table class="futebol-tabela"><thead><tr>' +
-        '<th>Partida</th><th>Liga</th><th>Minuto</th><th>Placar</th><th>Até 85\'</th><th>ETA ~85\'</th><th>Status</th>' +
+        '<th>Partida</th><th>Liga</th><th>Tempo de jogo</th><th>Placar</th><th>Restante até 85\'</th><th>ETA ~85\'</th><th>Status</th>' +
         '</tr></thead><tbody>' + linhas + '</tbody></table>';
     }
 

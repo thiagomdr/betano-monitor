@@ -146,7 +146,7 @@ function camposPartidaDoSnapshot(
     minutos_ate_85: snap.minutesUntil85,
     placar_casa_atual: snap.homeScore,
     placar_fora_atual: snap.awayScore,
-    minuto_relogio: snap.periodDescription ?? (snap.matchMinute != null ? `${snap.matchMinute}'` : null),
+    minuto_relogio: snap.periodDescription ?? snap.tempoDecorrido ?? (snap.matchMinute != null ? `${snap.matchMinute}'` : null),
     periodo_atual: snap.period,
     data_atualizacao: now.toISOString(),
   };
