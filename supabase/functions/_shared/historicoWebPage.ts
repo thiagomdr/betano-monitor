@@ -311,7 +311,7 @@ export function buildHistoricoTemplate(): string {
       font-size: 10px;
       font-weight: 600;
       padding: 4px 10px;
-      border-radius: 999px;
+      border-radius: 4px;
       line-height: 1.2;
       pointer-events: none;
       flex-shrink: 0;
@@ -323,7 +323,6 @@ export function buildHistoricoTemplate(): string {
     .status-badge.finalizado {
       background: #454545;
       color: #000;
-      border-radius: 4px;
     }
     .card-menu-wrap {
       position: relative;
