@@ -1,6 +1,6 @@
 export const HISTORICO_URL_PLACEHOLDER = '__SUPABASE_URL__';
 export const HISTORICO_ANON_KEY_PLACEHOLDER = '__SUPABASE_ANON_KEY__';
-export const PAINEL_BUILD_ID = 'futebol-filtro-gols-85-20260709';
+export const PAINEL_BUILD_ID = 'futebol-filtro-ate-1-gol-20260709';
 
 export function buildHistoricoTemplate(): string {
   const configJson = `{"url":"${HISTORICO_URL_PLACEHOLDER}","anonKey":"${HISTORICO_ANON_KEY_PLACEHOLDER}"}`;
@@ -2675,7 +2675,7 @@ export function buildHistoricoTemplate(): string {
     }
 
     function renderFutebolFiltroMaxGols(filtroMeta) {
-      const opcoes = [null, 2, 3, 4, 5, 6, 7, 8];
+      const opcoes = [null, 1, 2, 3, 4, 5, 6, 7, 8];
       const botoes = opcoes.map((max) => {
         const ativo = futebolFiltroMaxGols === max
           || (max == null && futebolFiltroMaxGols == null);

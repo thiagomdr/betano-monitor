@@ -4,7 +4,7 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1" />
   <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate" />
-  <meta name="painel-build" content="futebol-filtro-gols-85-20260709" />
+  <meta name="painel-build" content="futebol-filtro-ate-1-gol-20260709" />
   <title>Monitor Betano</title>
   <style>
     * { box-sizing: border-box; margin: 0; padding: 0; }
@@ -1162,7 +1162,7 @@
     const CHAVE_COLETA_PARADA = 'betano_coleta_parada_em';
     const CHAVE_ESPORTE_ATIVO = 'betano_esporte_ativo';
     const CHAVE_FUTEBOL_FILTRO_MAX_GOLS = 'betano_futebol_filtro_max_gols';
-    const PAINEL_BUILD_ID = 'futebol-filtro-gols-85-20260709';
+    const PAINEL_BUILD_ID = 'futebol-filtro-ate-1-gol-20260709';
 
     const OPCOES_PERIODO_BASQUETE = [
       { value: 'Q1', label: 'Q1 — desde o 1º quarto' },
@@ -2668,7 +2668,7 @@
     }
 
     function renderFutebolFiltroMaxGols(filtroMeta) {
-      const opcoes = [null, 2, 3, 4, 5, 6, 7, 8];
+      const opcoes = [null, 1, 2, 3, 4, 5, 6, 7, 8];
       const botoes = opcoes.map((max) => {
         const ativo = futebolFiltroMaxGols === max
           || (max == null && futebolFiltroMaxGols == null);
