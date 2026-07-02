@@ -2,7 +2,7 @@
 
 Progresso do **painel web + Supabase**. O Agent deve marcar `[x]` ao concluir cada item e atualizar a data abaixo.
 
-**Última atualização:** 2026-06-29 (filtro ODD manter + gols combinados no painel futebol)
+**Última atualização:** 2026-06-29 (estimativa de lucro futebol com filtros no painel)
 
 ---
 
@@ -35,6 +35,7 @@ Progresso do **painel web + Supabase**. O Agent deve marcar `[x]` ao concluir ca
 - [x] Gols por minuto clicáveis — balão com jogos (`futebol_eventos_gol` + join partidas)
 - [x] Filtro máx. gols antes da janela (placar aos 85′) com estatísticas recalculadas
 - [x] Filtro ODD manter placar aos 85′ (> X), combinável com filtro de gols
+- [x] Estimativa de lucro na janela (R$ 1 · ODD início · ganho/perda/líquido com filtros)
 - [x] Paginação `futebol_leituras` no painel futebol (evita limite 1000 do Supabase)
 
 ---

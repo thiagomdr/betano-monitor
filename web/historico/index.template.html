@@ -4,7 +4,7 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1" />
   <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate" />
-  <meta name="painel-build" content="futebol-placar-legenda-20260710" />
+  <meta name="painel-build" content="futebol-estimativa-lucro-20260710" />
   <title>Monitor Betano</title>
   <style>
     * { box-sizing: border-box; margin: 0; padding: 0; }
@@ -974,6 +974,18 @@
       font-weight: 500;
       margin-left: 4px;
     }
+    .futebol-estimativa-lucro {
+      margin-top: 16px;
+      padding-top: 14px;
+      border-top: 1px solid #333;
+    }
+    .futebol-estimativa-lucro h4 {
+      color: #ddd;
+      font-size: 14px;
+      margin-bottom: 6px;
+    }
+    .futebol-estimativa-lucro .positivo { color: #81c784; font-weight: 600; }
+    .futebol-estimativa-lucro .negativo { color: #e57373; font-weight: 600; }
     .futebol-historico-numero {
       flex-shrink: 0;
       min-width: 1.8em;
@@ -1196,7 +1208,7 @@
     const CHAVE_ESPORTE_ATIVO = 'betano_esporte_ativo';
     const CHAVE_FUTEBOL_FILTRO_MAX_GOLS = 'betano_futebol_filtro_max_gols';
     const CHAVE_FUTEBOL_FILTRO_ODD_MIN = 'betano_futebol_filtro_odd_min';
-    const PAINEL_BUILD_ID = 'futebol-placar-legenda-20260710';
+    const PAINEL_BUILD_ID = 'futebol-estimativa-lucro-20260710';
 
     const OPCOES_PERIODO_BASQUETE = [
       { value: 'Q1', label: 'Q1 — desde o 1º quarto' },
@@ -2782,6 +2794,95 @@
       };
     }
 
+    function partidaComGolNaJanelaEstimativa(partida) {
+      if (partida.gols_na_janela != null && Number.isFinite(Number(partida.gols_na_janela))) {
+        return Number(partida.gols_na_janela) > 0;
+      }
+      if (partida.gol_nos_ultimos_5_min === true) return true;
+      if (partida.gol_nos_ultimos_5_min === false) return false;
+      return null;
+    }
+
+    function calcularEstimativaLucroFutebol(historicoJanela, leiturasPorPartida) {
+      let ganho = 0;
+      let perdas = 0;
+      let vencedores = 0;
+      let perdedores = 0;
+      let semOdd = 0;
+      let emAberto = 0;
+
+      for (const p of historicoJanela ?? []) {
+        const odd = oddManterInicioJanela(p, leiturasPorPartida[p.id] ?? []);
+        if (odd == null) {
+          semOdd++;
+          continue;
+        }
+
+        const comGol = partidaComGolNaJanelaEstimativa(p);
+        if (p.status === 'em_janela' && comGol !== true) {
+          emAberto++;
+          continue;
+        }
+
+        if (comGol === true) {
+          perdas += 1;
+          perdedores++;
+        } else {
+          ganho += odd;
+          vencedores++;
+        }
+      }
+
+      return {
+        ganho,
+        perdas,
+        liquido: ganho - perdas,
+        vencedores,
+        perdedores,
+        semOdd,
+        emAberto,
+        jogosConsiderados: vencedores + perdedores,
+      };
+    }
+
+    function formatarEstimativaMoeda(valor, comSinalPositivo) {
+      const n = Number(valor);
+      if (!Number.isFinite(n)) return '—';
+      const abs = Math.abs(n).toFixed(2);
+      if (n < 0) return '-' + abs;
+      if (comSinalPositivo && n > 0) return '+' + abs;
+      return abs;
+    }
+
+    function renderEstimativaLucroFutebol(est) {
+      if (!est) return '';
+      const clsLiquido = est.liquido >= 0 ? 'positivo' : 'negativo';
+      const extras = [];
+      if (est.emAberto > 0) extras.push(est.emAberto + ' em aberto');
+      if (est.semOdd > 0) extras.push(est.semOdd + ' sem ODD na 1ª coleta');
+      const extrasTxt = extras.length
+        ? '<p style="color:#888;font-size:11px;margin:8px 0 0">' + escapeHtml(extras.join(' · ')) + '</p>'
+        : '';
+      const semJogos = est.jogosConsiderados === 0
+        ? '<p style="color:#888;font-size:12px;margin:4px 0 0">Nenhum jogo com resultado fechado e ODD para estimar.</p>'
+        : '';
+      return '<div class="futebol-estimativa-lucro">' +
+        '<h4>Estimativa de lucro</h4>' +
+        '<p style="color:#666;font-size:11px;margin:0 0 8px">Aposta de R$ 1 no manter placar (ODD da 1ª coleta aos 85\')</p>' +
+        '<p><strong>Ganho (sem gol na janela):</strong> ' +
+          '<span class="positivo">' + escapeHtml(formatarEstimativaMoeda(est.ganho, true)) + '</span>' +
+          ' <span style="color:#888;font-size:11px">(' + est.vencedores + ' jogos)</span></p>' +
+        '<p><strong>Perda (com gol na janela):</strong> ' +
+          '<span class="negativo">' + escapeHtml(formatarEstimativaMoeda(-est.perdas, false)) + '</span>' +
+          ' <span style="color:#888;font-size:11px">(' + est.perdedores + ' jogos, −R$ 1 cada)</span></p>' +
+        '<p><strong>Estimativa líquida:</strong> ' +
+          '<span class="' + clsLiquido + '">' + escapeHtml(formatarEstimativaMoeda(est.liquido, true)) + '</span>' +
+          ' <span style="color:#888;font-size:11px">(' + est.jogosConsiderados + ' jogos considerados)</span></p>' +
+        semJogos +
+        extrasTxt +
+      '</div>';
+    }
+
     function aplicarFiltroFutebol(payload, filtros) {
       const maxGols = filtros?.maxGols ?? null;
       const oddMinima = filtros?.oddMinima ?? null;
@@ -2913,7 +3014,7 @@
       return calcularMaisGolsLeitura(leitura, anterior, placarCasaInicio, placarForaInicio);
     }
 
-    function renderResumoHistoricoJanela(resumo, golsPorMinutoJogos, numerosPorPartida) {
+    function renderResumoHistoricoJanela(resumo, golsPorMinutoJogos, numerosPorPartida, estimativaLucro) {
       const jogosMap = golsPorMinutoJogos ?? {};
       const minutosComGol = Object.keys(resumo.golsPorMinuto)
         .map(Number)
@@ -2958,6 +3059,7 @@
         '<p><strong>Gols por minuto de jogo:</strong>' +
           ' <span style="color:#888;font-size:11px">(clique no minuto com gol para ver os jogos)</span></p>' +
         minutosHtml +
+        renderEstimativaLucroFutebol(estimativaLucro) +
       '</div>';
     }
 
@@ -3170,6 +3272,7 @@
         maxMinutoComGol: 87,
       };
       const numerosPorPartida = buildNumerosPorPartida(lista);
+      const estimativaLucro = calcularEstimativaLucroFutebol(lista, leiturasPorPartida);
       const blocos = lista.map((p, idx) => {
         const leituras = leiturasPorPartida[p.id] ?? [];
         const expandido = futebolHistoricoExpandidos.has(p.id);
@@ -3178,7 +3281,7 @@
       }).join('');
       return '<h3 class="futebol-secao-titulo">Histórico — janela final (85\' até o fim)</h3>' +
         renderFutebolFiltros(filtroMeta) +
-        renderResumoHistoricoJanela(resumo, golsPorMinutoJogos, numerosPorPartida) +
+        renderResumoHistoricoJanela(resumo, golsPorMinutoJogos, numerosPorPartida, estimativaLucro) +
         '<p style="color:#888;font-size:12px;margin:0 0 8px">Clique no jogo para ver as coletas. Verde = sem gol nos 5 min · Vermelho = com gol.</p>' +
         '<div class="futebol-historico-lista">' + blocos + '</div>';
     }
