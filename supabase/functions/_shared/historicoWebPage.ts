@@ -1,6 +1,6 @@
 export const HISTORICO_URL_PLACEHOLDER = '__SUPABASE_URL__';
 export const HISTORICO_ANON_KEY_PLACEHOLDER = '__SUPABASE_ANON_KEY__';
-export const PAINEL_BUILD_ID = 'futebol-filtro-ate-1-gol-20260709';
+export const PAINEL_BUILD_ID = 'futebol-leituras-paginacao-20260710';
 
 export function buildHistoricoTemplate(): string {
   const configJson = `{"url":"${HISTORICO_URL_PLACEHOLDER}","anonKey":"${HISTORICO_ANON_KEY_PLACEHOLDER}"}`;
@@ -2225,6 +2225,31 @@ export function buildHistoricoTemplate(): string {
       return '~' + n + ' min';
     }
 
+    async function buscarLeiturasPorPartidas(partidaIds) {
+      if (!partidaIds.length) return [];
+      const CHUNK_PARTIDAS = 40;
+      const PAGE_SIZE = 1000;
+      const todas = [];
+      for (let i = 0; i < partidaIds.length; i += CHUNK_PARTIDAS) {
+        const chunkIds = partidaIds.slice(i, i + CHUNK_PARTIDAS);
+        let offset = 0;
+        while (true) {
+          const { data, error } = await supabase
+            .from('futebol_leituras')
+            .select('*')
+            .in('partida_id', chunkIds)
+            .order('coletado_em', { ascending: true })
+            .range(offset, offset + PAGE_SIZE - 1);
+          if (error) throw new Error(error.message);
+          const pagina = data ?? [];
+          todas.push(...pagina);
+          if (pagina.length < PAGE_SIZE) break;
+          offset += PAGE_SIZE;
+        }
+      }
+      return todas;
+    }
+
     async function buscarEstatisticasFutebol() {
       const [
         { data: partidas, error },
@@ -2259,13 +2284,7 @@ export function buildHistoricoTemplate(): string {
 
       let leituras = [];
       if (partidaIds.length > 0) {
-        const { data: leiturasData, error: leiturasError } = await supabase
-          .from('futebol_leituras')
-          .select('*')
-          .in('partida_id', partidaIds)
-          .order('coletado_em', { ascending: true });
-        if (leiturasError) throw new Error(leiturasError.message);
-        leituras = leiturasData ?? [];
+        leituras = await buscarLeiturasPorPartidas(partidaIds);
       }
 
       const leiturasPorPartida = {};
@@ -2274,6 +2293,35 @@ export function buildHistoricoTemplate(): string {
         if (!leiturasPorPartida[pid]) leiturasPorPartida[pid] = [];
         leiturasPorPartida[pid].push(leitura);
       }
+
+      const recentesSemLeitura = historicoJanela.slice(0, 8).map((p) => ({
+        id: p.id,
+        times: p.time_casa + ' x ' + p.time_fora,
+        leiturasUi: (leiturasPorPartida[p.id] ?? []).length,
+        placarFinal: p.placar_casa_final != null
+          ? p.placar_casa_final + 'x' + p.placar_fora_final
+          : null,
+      }));
+      // #region agent log
+      fetch('http://127.0.0.1:7904/ingest/86615625-6ae5-4e98-a1da-0a5f0f15fc42', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'X-Debug-Session-Id': '94b3c3' },
+        body: JSON.stringify({
+          sessionId: '94b3c3',
+          runId: 'leituras-limite-fix',
+          hypothesisId: 'H1',
+          location: 'historicoWebPage.ts:buscarEstatisticasFutebol',
+          message: 'leituras carregadas',
+          data: {
+            partidasJanela: partidaIds.length,
+            leiturasTotal: leituras.length,
+            partidasComLeitura: Object.keys(leiturasPorPartida).length,
+            recentesSemLeitura,
+          },
+          timestamp: Date.now(),
+        }),
+      }).catch(() => {});
+      // #endregion
 
       return {
         partidas: lista,
