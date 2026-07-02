@@ -1,6 +1,6 @@
 export const HISTORICO_URL_PLACEHOLDER = '__SUPABASE_URL__';
 export const HISTORICO_ANON_KEY_PLACEHOLDER = '__SUPABASE_ANON_KEY__';
-export const PAINEL_BUILD_ID = 'futebol-gols-popover-linha-20260709';
+export const PAINEL_BUILD_ID = 'futebol-filtro-max-gols-20260709';
 
 export function buildHistoricoTemplate(): string {
   const configJson = `{"url":"${HISTORICO_URL_PLACEHOLDER}","anonKey":"${HISTORICO_ANON_KEY_PLACEHOLDER}"}`;
@@ -894,6 +894,49 @@ export function buildHistoricoTemplate(): string {
       font-weight: 600;
       margin-right: 4px;
     }
+    .futebol-filtro-max-gols {
+      background: #1a1a1a;
+      border: 1px solid #2a2a2a;
+      border-radius: 10px;
+      padding: 10px 12px;
+      margin: 0 0 12px;
+    }
+    .futebol-filtro-max-gols label {
+      display: block;
+      font-size: 12px;
+      font-weight: 600;
+      color: #ccc;
+      margin-bottom: 8px;
+    }
+    .futebol-filtro-opcoes {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 6px;
+    }
+    .futebol-filtro-btn {
+      background: #252525;
+      border: 1px solid #333;
+      border-radius: 8px;
+      color: #bbb;
+      cursor: pointer;
+      font-size: 12px;
+      font-weight: 600;
+      padding: 6px 10px;
+    }
+    .futebol-filtro-btn:hover {
+      border-color: #555;
+      color: #fff;
+    }
+    .futebol-filtro-btn.ativo {
+      background: #3d2800;
+      border-color: #c45c00;
+      color: #ffb74d;
+    }
+    .futebol-filtro-hint {
+      color: #777;
+      font-size: 11px;
+      margin-top: 8px;
+    }
     .futebol-historico-numero {
       flex-shrink: 0;
       min-width: 1.8em;
@@ -1114,6 +1157,7 @@ export function buildHistoricoTemplate(): string {
     const CHAVE_COLETA_ATIVADA = 'betano_coleta_ativada_em';
     const CHAVE_COLETA_PARADA = 'betano_coleta_parada_em';
     const CHAVE_ESPORTE_ATIVO = 'betano_esporte_ativo';
+    const CHAVE_FUTEBOL_FILTRO_MAX_GOLS = 'betano_futebol_filtro_max_gols';
     const PAINEL_BUILD_ID = '${PAINEL_BUILD_ID}';
 
     const OPCOES_PERIODO_BASQUETE = [
@@ -1169,6 +1213,13 @@ export function buildHistoricoTemplate(): string {
     let futebolAoVivoSecaoAberta = true;
     let ultimoPayloadFutebol = null;
     let futebolCarregando = false;
+    const filtroMaxGolsSalvo = localStorage.getItem(CHAVE_FUTEBOL_FILTRO_MAX_GOLS);
+    let futebolFiltroMaxGols = filtroMaxGolsSalvo === '' || filtroMaxGolsSalvo == null
+      ? null
+      : Number(filtroMaxGolsSalvo);
+    if (futebolFiltroMaxGols != null && (!Number.isFinite(futebolFiltroMaxGols) || futebolFiltroMaxGols < 0)) {
+      futebolFiltroMaxGols = null;
+    }
     let refreshTimer = null;
     let statusTimer = null;
     let realtimeChannel = null;
@@ -2219,6 +2270,7 @@ export function buildHistoricoTemplate(): string {
         leiturasPorPartida,
         resumoJanela: normalizarResumoJanelaDb(resumoJanelaRaw),
         golsPorMinutoJogos: montarGolsPorMinutoJogos(eventosGol),
+        eventosGol: eventosGol ?? [],
         agenda: agenda ?? null,
         stats: {
           finalizadas: finalizadas.length,
@@ -2497,6 +2549,135 @@ export function buildHistoricoTemplate(): string {
       return { casa: casaF, fora: foraF };
     }
 
+    function totalGolsNoJogo(partida, leituras) {
+      const pf = placarFinalPartida(partida, leituras);
+      if (!pf) return null;
+      return totalGolsPartida(pf.casa, pf.fora);
+    }
+
+    function partidaPassaFiltroMaxGols(partida, leituras, maxGols) {
+      if (maxGols == null) return true;
+      const total = totalGolsNoJogo(partida, leituras);
+      if (total == null) return false;
+      return total <= maxGols;
+    }
+
+    function jogoAoVivoPassaFiltroMaxGols(jogo, maxGols) {
+      if (maxGols == null) return true;
+      const c = jogo.placar_casa_atual;
+      const f = jogo.placar_fora_atual;
+      if (c == null || f == null) return false;
+      return Number(c) + Number(f) <= maxGols;
+    }
+
+    function calcularResumoJanelaFiltrado(historicoJanela, eventosGol) {
+      const golsPorMinuto = {};
+      let totalGolsNaJanela = 0;
+      let maxMinutoComGol = 87;
+      for (const ev of eventosGol ?? []) {
+        const min = Number(ev.minuto_jogo);
+        const q = Number(ev.quantidade ?? 0);
+        if (!Number.isFinite(min) || q <= 0) continue;
+        golsPorMinuto[min] = (golsPorMinuto[min] ?? 0) + q;
+        totalGolsNaJanela += q;
+        if (min > maxMinutoComGol) maxMinutoComGol = min;
+      }
+      const jogosComGolNaJanela = historicoJanela.filter(
+        (p) => Number(p.gols_na_janela ?? 0) > 0,
+      ).length;
+      return {
+        jogosColetados: historicoJanela.length,
+        jogosComGolNaJanela,
+        totalGolsNaJanela,
+        golsPorMinuto,
+        maxMinutoComGol: Math.max(87, maxMinutoComGol),
+      };
+    }
+
+    function calcularStatsFiltradas(partidas, historicoFiltrado) {
+      const finalizadas = historicoFiltrado.filter((p) => p.status === 'finalizado');
+      const comGol = finalizadas.filter((p) => p.gol_nos_ultimos_5_min === true);
+      const semGol = finalizadas.filter((p) => p.gol_nos_ultimos_5_min === false);
+      const emJanela = historicoFiltrado.filter((p) => p.status === 'em_janela').length;
+      const observadas = partidas.filter((p) => p.status === 'observado').length;
+      return {
+        finalizadas: finalizadas.length,
+        comGol: comGol.length,
+        semGol: semGol.length,
+        pctComGol: finalizadas.length
+          ? Math.round((1000 * comGol.length) / finalizadas.length) / 10
+          : null,
+        emJanela,
+        observadas,
+      };
+    }
+
+    function aplicarFiltroFutebol(payload, maxGols) {
+      if (maxGols == null) return payload;
+      const leiturasMap = payload.leiturasPorPartida ?? {};
+      const historico = payload.historicoJanela ?? [];
+      const historicoFiltrado = historico.filter((p) =>
+        partidaPassaFiltroMaxGols(p, leiturasMap[p.id] ?? [], maxGols),
+      );
+      const ids = new Set(historicoFiltrado.map((p) => p.id));
+      const eventosFiltrados = (payload.eventosGol ?? []).filter((e) => ids.has(e.partida_id));
+      const leiturasFiltradas = {};
+      for (const p of historicoFiltrado) {
+        if (leiturasMap[p.id]) leiturasFiltradas[p.id] = leiturasMap[p.id];
+      }
+      return {
+        ...payload,
+        historicoJanela: historicoFiltrado,
+        leiturasPorPartida: leiturasFiltradas,
+        resumoJanela: calcularResumoJanelaFiltrado(historicoFiltrado, eventosFiltrados),
+        golsPorMinutoJogos: montarGolsPorMinutoJogos(eventosFiltrados),
+        stats: calcularStatsFiltradas(payload.partidas ?? [], historicoFiltrado),
+        filtroMeta: {
+          maxGols,
+          totalAntes: historico.length,
+          totalDepois: historicoFiltrado.length,
+        },
+      };
+    }
+
+    function renderFutebolFiltroMaxGols(filtroMeta) {
+      const opcoes = [null, 2, 3, 4, 5, 6, 7, 8];
+      const botoes = opcoes.map((max) => {
+        const ativo = futebolFiltroMaxGols === max
+          || (max == null && futebolFiltroMaxGols == null);
+        const rotulo = max == null ? 'Todos' : '≤' + max;
+        const dataMax = max == null ? '' : String(max);
+        return '<button type="button" class="futebol-filtro-btn' + (ativo ? ' ativo' : '') + '" ' +
+          'data-max-gols="' + escapeHtml(dataMax) + '">' + escapeHtml(rotulo) + '</button>';
+      }).join('');
+      const hint = filtroMeta && filtroMeta.maxGols != null
+        ? 'Filtro ativo: máx. ' + filtroMeta.maxGols + ' gols no jogo · ' +
+          filtroMeta.totalDepois + ' de ' + filtroMeta.totalAntes + ' jogos na janela'
+        : 'Ex.: máx. 3 inclui 2x1, 3x0 e 1x1; estatísticas e lista abaixo seguem o filtro.';
+      return '<div class="futebol-filtro-max-gols">' +
+        '<label for="futebol-filtro-max-gols-opcoes">Máx. gols no jogo (placar total)</label>' +
+        '<div class="futebol-filtro-opcoes" id="futebol-filtro-max-gols-opcoes">' + botoes + '</div>' +
+        '<p class="futebol-filtro-hint">' + escapeHtml(hint) + '</p>' +
+      '</div>';
+    }
+
+    function wireFutebolFiltroMaxGols() {
+      elConteudo.querySelectorAll('.futebol-filtro-btn').forEach((btn) => {
+        btn.addEventListener('click', () => {
+          const raw = btn.getAttribute('data-max-gols');
+          const novo = raw === '' || raw == null ? null : Number(raw);
+          futebolFiltroMaxGols = Number.isFinite(novo) ? novo : null;
+          if (futebolFiltroMaxGols == null) {
+            localStorage.removeItem(CHAVE_FUTEBOL_FILTRO_MAX_GOLS);
+          } else {
+            localStorage.setItem(CHAVE_FUTEBOL_FILTRO_MAX_GOLS, String(futebolFiltroMaxGols));
+          }
+          fecharGolsMinutoPopovers();
+          if (ultimoPayloadFutebol) renderEstatisticasFutebol(ultimoPayloadFutebol);
+        });
+      });
+    }
+
     function formatarDeltaGolsLeitura(leitura, anterior, placarCasaInicio, placarForaInicio) {
       if (leitura.delta_gols != null && Number.isFinite(Number(leitura.delta_gols))) {
         const d = Number(leitura.delta_gols);
@@ -2736,10 +2917,15 @@ export function buildHistoricoTemplate(): string {
       }
     }
 
-    function renderTabelaHistoricoFutebol(historicoJanela, leiturasPorPartida, resumoJanela, golsPorMinutoJogos) {
+    function renderTabelaHistoricoFutebol(historicoJanela, leiturasPorPartida, resumoJanela, golsPorMinutoJogos, filtroMeta) {
       const lista = ordenarHistoricoJanela(historicoJanela);
       if (!lista.length) {
-        return '<p class="aviso" style="margin-top:12px">Nenhuma partida na janela final ainda. Com o monitor ativo, jogos ≥85\' aparecem aqui com coletas a cada 40–50 s.</p>';
+        const filtroTxt = filtroMeta?.maxGols != null
+          ? 'Nenhuma partida na janela com até ' + filtroMeta.maxGols + ' gols no placar total.'
+          : 'Nenhuma partida na janela final ainda. Com o monitor ativo, jogos ≥85\' aparecem aqui com coletas a cada 40–50 s.';
+        return '<h3 class="futebol-secao-titulo">Histórico — janela final (85\' até o fim)</h3>' +
+          renderFutebolFiltroMaxGols(filtroMeta) +
+          '<p class="aviso" style="margin-top:12px">' + escapeHtml(filtroTxt) + '</p>';
       }
       const resumo = resumoJanela ?? {
         jogosColetados: lista.length,
@@ -2756,6 +2942,7 @@ export function buildHistoricoTemplate(): string {
         return renderBlocoPartidaHistorico(p, leituras, expandido, numeroLinha);
       }).join('');
       return '<h3 class="futebol-secao-titulo">Histórico — janela final (85\' até o fim)</h3>' +
+        renderFutebolFiltroMaxGols(filtroMeta) +
         renderResumoHistoricoJanela(resumo, golsPorMinutoJogos, numerosPorPartida) +
         '<p style="color:#888;font-size:12px;margin:0 0 8px">Clique no jogo para ver as coletas. Verde = sem gol nos 5 min · Vermelho = com gol.</p>' +
         '<div class="futebol-historico-lista">' + blocos + '</div>';
@@ -2809,14 +2996,21 @@ export function buildHistoricoTemplate(): string {
     }
 
     function renderEstatisticasFutebol(payload) {
-      const { partidas, agenda, stats, aoVivoJson, historicoJanela, leiturasPorPartida, resumoJanela, golsPorMinutoJogos } = payload;
-      const aoVivo = ordenarJogosAoVivo(
+      const filtrado = aplicarFiltroFutebol(payload, futebolFiltroMaxGols);
+      const {
+        partidas, agenda, stats, aoVivoJson, historicoJanela, leiturasPorPartida,
+        resumoJanela, golsPorMinutoJogos, filtroMeta,
+      } = filtrado;
+      let aoVivo = ordenarJogosAoVivo(
         Array.isArray(aoVivoJson) && aoVivoJson.length
           ? aoVivoJson.map(normalizarJogoAoVivoJson)
           : partidas
             .filter((p) => p.status === 'observado' || p.status === 'em_janela')
             .map(normalizarJogoAoVivoDb),
       );
+      if (futebolFiltroMaxGols != null) {
+        aoVivo = aoVivo.filter((j) => jogoAoVivoPassaFiltroMaxGols(j, futebolFiltroMaxGols));
+      }
       const historico = historicoJanela ?? partidas.filter((p) => p.status === 'em_janela' || p.status === 'finalizado');
       const leiturasMap = leiturasPorPartida ?? {};
       const pct = stats.pctComGol != null
@@ -2838,12 +3032,13 @@ export function buildHistoricoTemplate(): string {
 
       elConteudo.innerHTML = '<div class="futebol-stats-wrap">' + resumo +
         renderTabelaAoVivoFutebol(aoVivo, futebolAoVivoSecaoAberta) +
-        renderTabelaHistoricoFutebol(historico, leiturasMap, resumoJanela, golsPorMinutoJogos) +
+        renderTabelaHistoricoFutebol(historico, leiturasMap, resumoJanela, golsPorMinutoJogos, filtroMeta) +
       '</div>';
       wireFutebolAoVivoToggle();
       wireFutebolHistoricoToggle();
       wireFutebolHistoricoExcluir();
       wireGolsPorMinutoPopover();
+      wireFutebolFiltroMaxGols();
       // #region agent log
       requestAnimationFrame(() => {
         const wrap = elConteudo.querySelector('.futebol-stats-wrap');
