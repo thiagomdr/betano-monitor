@@ -2,7 +2,7 @@
 
 Progresso do **painel web + Supabase**. O Agent deve marcar `[x]` ao concluir cada item e atualizar a data abaixo.
 
-**Última atualização:** 2026-06-29 (backfill futebol_eventos_gol histórico)
+**Última atualização:** 2026-06-29 (filtro ODD manter + gols combinados no painel futebol)
 
 ---
 
@@ -34,6 +34,7 @@ Progresso do **painel web + Supabase**. O Agent deve marcar `[x]` ao concluir ca
 - [x] Resumo janela futebol via RPC `futebol_resumo_janela` (sem agregação/parse no painel)
 - [x] Gols por minuto clicáveis — balão com jogos (`futebol_eventos_gol` + join partidas)
 - [x] Filtro máx. gols antes da janela (placar aos 85′) com estatísticas recalculadas
+- [x] Filtro ODD manter placar aos 85′ (> X), combinável com filtro de gols
 - [x] Paginação `futebol_leituras` no painel futebol (evita limite 1000 do Supabase)
 
 ---
