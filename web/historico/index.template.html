@@ -4,7 +4,7 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1" />
   <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate" />
-  <meta name="painel-build" content="futebol-filtro-odd-20260710" />
+  <meta name="painel-build" content="futebol-placar-legenda-20260710" />
   <title>Monitor Betano</title>
   <style>
     * { box-sizing: border-box; margin: 0; padding: 0; }
@@ -1196,7 +1196,7 @@
     const CHAVE_ESPORTE_ATIVO = 'betano_esporte_ativo';
     const CHAVE_FUTEBOL_FILTRO_MAX_GOLS = 'betano_futebol_filtro_max_gols';
     const CHAVE_FUTEBOL_FILTRO_ODD_MIN = 'betano_futebol_filtro_odd_min';
-    const PAINEL_BUILD_ID = 'futebol-filtro-odd-20260710';
+    const PAINEL_BUILD_ID = 'futebol-placar-legenda-20260710';
 
     const OPCOES_PERIODO_BASQUETE = [
       { value: 'Q1', label: 'Q1 — desde o 1º quarto' },
@@ -3032,7 +3032,7 @@
         ' <span style="color:#888">x</span> ' +
         '<span class="futebol-time-fora">' + escapeHtml(partida.time_fora) + '</span>' +
         ' <span class="futebol-historico-badge ' + badgeCls + '">' + badgeTxt + '</span>' +
-        ' <span class="futebol-placar-janela">I:' + escapeHtml(placarI) + rotuloGolsAntes + rotuloOddInicio + ' / F:' + escapeHtml(placarF) + '</span>';
+        ' <span class="futebol-placar-janela">I:' + escapeHtml(placarI) + ' / F:' + escapeHtml(placarF) + rotuloGolsAntes + rotuloOddInicio + '</span>';
       const resumoMeta = '<span class="futebol-historico-resumo-meta">' +
         (partida.liga ? escapeHtml(partida.liga) + ' · ' : '') +
         escapeHtml(leituras.length + ' coleta(s)') + '</span>';

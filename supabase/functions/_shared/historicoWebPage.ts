@@ -1,6 +1,6 @@
 export const HISTORICO_URL_PLACEHOLDER = '__SUPABASE_URL__';
 export const HISTORICO_ANON_KEY_PLACEHOLDER = '__SUPABASE_ANON_KEY__';
-export const PAINEL_BUILD_ID = 'futebol-filtro-odd-20260710';
+export const PAINEL_BUILD_ID = 'futebol-placar-legenda-20260710';
 
 export function buildHistoricoTemplate(): string {
   const configJson = `{"url":"${HISTORICO_URL_PLACEHOLDER}","anonKey":"${HISTORICO_ANON_KEY_PLACEHOLDER}"}`;
@@ -3039,7 +3039,7 @@ export function buildHistoricoTemplate(): string {
         ' <span style="color:#888">x</span> ' +
         '<span class="futebol-time-fora">' + escapeHtml(partida.time_fora) + '</span>' +
         ' <span class="futebol-historico-badge ' + badgeCls + '">' + badgeTxt + '</span>' +
-        ' <span class="futebol-placar-janela">I:' + escapeHtml(placarI) + rotuloGolsAntes + rotuloOddInicio + ' / F:' + escapeHtml(placarF) + '</span>';
+        ' <span class="futebol-placar-janela">I:' + escapeHtml(placarI) + ' / F:' + escapeHtml(placarF) + rotuloGolsAntes + rotuloOddInicio + '</span>';
       const resumoMeta = '<span class="futebol-historico-resumo-meta">' +
         (partida.liga ? escapeHtml(partida.liga) + ' · ' : '') +
         escapeHtml(leituras.length + ' coleta(s)') + '</span>';
