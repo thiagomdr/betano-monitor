@@ -1,6 +1,6 @@
 export const HISTORICO_URL_PLACEHOLDER = '__SUPABASE_URL__';
 export const HISTORICO_ANON_KEY_PLACEHOLDER = '__SUPABASE_ANON_KEY__';
-export const PAINEL_BUILD_ID = 'futebol-estimativa-lucro-20260710';
+export const PAINEL_BUILD_ID = 'futebol-lucro-odd-net-20260710';
 
 export function buildHistoricoTemplate(): string {
   const configJson = `{"url":"${HISTORICO_URL_PLACEHOLDER}","anonKey":"${HISTORICO_ANON_KEY_PLACEHOLDER}"}`;
@@ -2835,7 +2835,7 @@ export function buildHistoricoTemplate(): string {
           perdas += 1;
           perdedores++;
         } else {
-          ganho += odd;
+          ganho += odd - 1;
           vencedores++;
         }
       }
@@ -2875,8 +2875,8 @@ export function buildHistoricoTemplate(): string {
         : '';
       return '<div class="futebol-estimativa-lucro">' +
         '<h4>Estimativa de lucro</h4>' +
-        '<p style="color:#666;font-size:11px;margin:0 0 8px">Aposta de R$ 1 no manter placar (ODD da 1ª coleta aos 85\')</p>' +
-        '<p><strong>Ganho (sem gol na janela):</strong> ' +
+        '<p style="color:#666;font-size:11px;margin:0 0 8px">Aposta de R$ 1 no manter placar (ODD da 1ª coleta aos 85\'). Lucro por vitória = ODD − 1.</p>' +
+        '<p><strong>Ganho líquido (sem gol na janela):</strong> ' +
           '<span class="positivo">' + escapeHtml(formatarEstimativaMoeda(est.ganho, true)) + '</span>' +
           ' <span style="color:#888;font-size:11px">(' + est.vencedores + ' jogos)</span></p>' +
         '<p><strong>Perda (com gol na janela):</strong> ' +
