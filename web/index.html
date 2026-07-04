@@ -224,8 +224,8 @@
 
     <section class="panel" id="panel-history">
       <p class="hint">
-        Histórico dos jogos monitorados · filtre por <strong>gols a partir do minuto X</strong>
-        (ex.: 85 = só jogos que tiveram gol aos 85' ou depois)
+        Histórico de <strong>todos os jogos monitorados</strong> · use o filtro para destacar
+        <strong>gols a partir do minuto X</strong> na coluna correspondente (ex.: 85')
       </p>
       <div class="history-filters">
         <label>
@@ -409,7 +409,7 @@
         goalsByEvent.set(g.event_id, list);
       }
 
-      const filtered = games
+      const items = games
         .map((game) => {
           const allGoals = (goalsByEvent.get(game.event_id) || [])
             .slice()
@@ -417,18 +417,17 @@
           const lateGoals = allGoals.filter((g) => (g.minute ?? -1) >= fromMinute);
           return { game, allGoals, lateGoals };
         })
-        .filter((item) => item.lateGoals.length > 0)
         .sort((a, b) => String(b.game.last_seen_at || '').localeCompare(String(a.game.last_seen_at || '')));
 
-      if (!filtered.length) {
+      if (!items.length) {
         tbody.innerHTML =
-          `<tr><td colspan="12" class="empty">Nenhum jogo com gol a partir dos ${fromMinute}' no histórico.</td></tr>`;
+          '<tr><td colspan="12" class="empty">Nenhum jogo no histórico.</td></tr>';
         return;
       }
 
       const fmtStat = (n) => (n == null ? '<span class="muted">—</span>' : `<strong>${n}</strong>`);
 
-      tbody.innerHTML = filtered.map((item, i) => {
+      tbody.innerHTML = items.map((item, i) => {
         const { game, allGoals, lateGoals } = item;
         const match = `${game.home || '—'} x ${game.away || '—'}`;
         const league = [game.country, game.league].filter(Boolean).join(' · ') || '—';
@@ -442,7 +441,9 @@
         const allHtml = allGoals.length
           ? `<div class="goals-list">${allGoals.map(fmtGoal).join('<br>')}</div>`
           : '<span class="muted">—</span>';
-        const lateHtml = `<div class="goals-list">${lateGoals.map(fmtGoal).join('<br>')}</div>`;
+        const lateHtml = lateGoals.length
+          ? `<div class="goals-list">${lateGoals.map(fmtGoal).join('<br>')}</div>`
+          : '<span class="muted">—</span>';
         const status = game.is_live ? 'live' : 'encerrado';
         return `<tr>
           <td>${i + 1}</td>
