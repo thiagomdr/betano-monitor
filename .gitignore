@@ -1,29 +1,27 @@
-# dependencies
-node_modules/
-
-# debug
-npm-debug.*
-yarn-debug.*
-yarn-error.*
-debug-*.log
-.expo/
-expo-start-log.txt
-expo-test-err.txt
-expo-test-out.txt
-
-# local env
 .env
-.env*.local
+betano_session.json
+*.session.json
 
-# macOS
+.venv/
+venv/
+__pycache__/
+*.py[cod]
+*.egg-info/
+dist/
+build/
+
+data/*.db
+data/*.csv
+web/data/*.json
+
+logs/*
+!logs/.gitkeep
+
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+
 .DS_Store
+Thumbs.db
 
-# historico web (gerado com chaves do .env ou supabase.config.json)
-web/historico/index.html
-
-# supabase CLI temp
 supabase/.temp/
-
-# typescript
-*.tsbuildinfo
-tmp-module.mjs

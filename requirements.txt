@@ -1,0 +1,2 @@
+# Projeto usa apenas biblioteca padrão do Python (urllib, json).
+# Nenhuma dependencia obrigatoria.

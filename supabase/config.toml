@@ -1,13 +1,4 @@
-# Supabase local / Edge Functions — betano-monitor
+# Supabase Edge Functions — betano-monitor
 
-[functions.betano-probe]
-verify_jwt = false
-
-[functions.betano-coleta]
-verify_jwt = false
-
-[functions.betano-coleta-cron]
-verify_jwt = false
-
-[functions.betano-alertas-avaliar]
+[functions.betano-futebol-live]
 verify_jwt = false

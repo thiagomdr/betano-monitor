@@ -1,0 +1,549 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Futebol Live · Manter Placar (Betano)</title>
+  <style>
+    :root {
+      --bg: #0b0f14;
+      --panel: #121a24;
+      --border: #243044;
+      --text: #e8eef7;
+      --muted: #8fa3bf;
+      --accent: #3dd68c;
+      --warn: #ffd166;
+      --low: rgba(61, 214, 140, 0.16);
+      --mid: rgba(255, 209, 102, 0.14);
+      --high: rgba(220, 53, 69, 0.18);
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      font-family: "Segoe UI", system-ui, sans-serif;
+      background: var(--bg);
+      color: var(--text);
+      min-height: 100vh;
+    }
+    header {
+      padding: 1rem 1.25rem;
+      border-bottom: 1px solid var(--border);
+    }
+    h1 { margin: 0 0 0.25rem; font-size: 1.35rem; }
+    .subtitle { color: var(--muted); font-size: 0.9rem; margin: 0; }
+    .status {
+      margin-top: 0.75rem;
+      font-size: 0.85rem;
+      color: var(--muted);
+    }
+    .status.error { color: #ff6b6b; }
+    main { padding: 1rem 1.25rem 2rem; }
+    .hint {
+      color: var(--muted);
+      font-size: 0.85rem;
+      margin: 0 0 0.75rem;
+    }
+    .summary {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+      gap: 0.75rem;
+      margin-bottom: 1rem;
+    }
+    .summary-card {
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      background: var(--panel);
+      padding: 0.75rem;
+    }
+    .summary-label {
+      color: var(--muted);
+      font-size: 0.75rem;
+      text-transform: uppercase;
+      letter-spacing: 0.04em;
+    }
+    .summary-value {
+      margin-top: 0.25rem;
+      font-size: 1.1rem;
+      font-weight: 700;
+    }
+    .table-wrap {
+      overflow: auto;
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      background: var(--panel);
+    }
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: 0.84rem;
+    }
+    th, td {
+      padding: 0.5rem 0.65rem;
+      text-align: left;
+      border-bottom: 1px solid var(--border);
+      white-space: nowrap;
+    }
+    th {
+      color: var(--muted);
+      font-size: 0.7rem;
+      text-transform: uppercase;
+      letter-spacing: 0.04em;
+      position: sticky;
+      top: 0;
+      background: var(--panel);
+    }
+    tr:last-child td { border-bottom: none; }
+    tr.risk-low td { background: var(--low); }
+    tr.risk-mid td { background: var(--mid); }
+    tr.risk-high td { background: var(--high); }
+    tr.risk-study td { background: rgba(50, 130, 255, 0.12); }
+    tr.risk-study td:first-child { box-shadow: inset 3px 0 0 #5eb3ff; }
+    tr.risk-low td:first-child { box-shadow: inset 3px 0 0 #3dd68c; }
+    tr.risk-mid td:first-child { box-shadow: inset 3px 0 0 #ffd166; }
+    tr.risk-high td:first-child { box-shadow: inset 3px 0 0 #dc3545; }
+    .muted { color: var(--muted); }
+    .odd { color: var(--accent); font-weight: 600; }
+    .empty { text-align: center; color: var(--muted); padding: 2rem; }
+    .notes {
+      margin-top: 0.75rem;
+      color: var(--warn);
+      font-size: 0.82rem;
+    }
+    a { color: var(--accent); }
+    .tabs {
+      display: flex;
+      gap: 0.5rem;
+      margin-bottom: 1rem;
+    }
+    .tab-btn {
+      background: var(--panel);
+      border: 1px solid var(--border);
+      color: var(--muted);
+      padding: 0.45rem 0.9rem;
+      border-radius: 6px;
+      cursor: pointer;
+      font-size: 0.88rem;
+    }
+    .tab-btn.active {
+      color: var(--text);
+      border-color: var(--accent);
+      color: var(--accent);
+    }
+    .panel { display: none; }
+    .panel.active { display: block; }
+    .history-filters {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 0.75rem;
+      align-items: end;
+      margin-bottom: 0.75rem;
+    }
+    .history-filters label {
+      display: flex;
+      flex-direction: column;
+      gap: 0.25rem;
+      font-size: 0.8rem;
+      color: var(--muted);
+    }
+    .history-filters input {
+      background: var(--panel);
+      border: 1px solid var(--border);
+      color: var(--text);
+      padding: 0.4rem 0.55rem;
+      border-radius: 6px;
+      width: 5rem;
+    }
+    .history-filters button {
+      background: var(--accent);
+      color: #062416;
+      border: none;
+      border-radius: 6px;
+      padding: 0.45rem 0.9rem;
+      font-weight: 600;
+      cursor: pointer;
+    }
+    .goals-list {
+      font-size: 0.82rem;
+      line-height: 1.45;
+    }
+    .goals-list .late { color: #ff8f5e; font-weight: 600; }
+  </style>
+</head>
+<body>
+  <header>
+    <h1 id="game-title">Futebol Live · Manter Placar</h1>
+    <p class="subtitle" id="game-subtitle">Betano via Supabase (IP nuvem)</p>
+    <div class="status" id="status"></div>
+  </header>
+  <main>
+    <div class="tabs">
+      <button type="button" class="tab-btn active" data-tab="live">Ao vivo</button>
+      <button type="button" class="tab-btn" data-tab="history">Histórico</button>
+    </div>
+
+    <section class="panel active" id="panel-live">
+      <p class="hint">
+        Todos os jogos <strong>live</strong> da Betano (para estudar antes) ·
+        destaque a partir dos <strong>85'</strong> para manter placar ·
+        números em <span style="color:#3dd68c">verde</span> = <strong>odds Under Betano</strong>
+        (Odd 0 = sem mais gols · Odd +1 · Odd +2) ·
+        fundo da linha: <span style="color:#5eb3ff">azul</span> em estudo ·
+        <span style="color:#3dd68c">verde</span> pressão baixa ·
+        <span style="color:#ffd166">amarelo</span> média ·
+        <span style="color:#ff6b6b">vermelho</span> alta ·
+        stats <code>---</code> = sem cobertura Sportradar nesse jogo
+      </p>
+      <section class="summary" id="summary"></section>
+      <div class="table-wrap">
+        <table>
+          <thead>
+            <tr>
+              <th>#</th>
+              <th>Min</th>
+              <th>Placar</th>
+              <th>Jogo</th>
+              <th>Liga</th>
+              <th title="Soma casa + fora">Chutes a gol</th>
+              <th title="Soma casa + fora">Escanteios</th>
+              <th title="Soma casa + fora">Tiros de meta</th>
+              <th title="Soma de Chutes a gol + Tiros de meta + Escanteios">CTE</th>
+              <th title="Under: sem mais gols ate o fim (gols atuais + 0,5)">Odd 0</th>
+              <th title="Under: no maximo +1 gol ate o fim (gols atuais + 1,5)">Odd +1</th>
+              <th title="Under: no maximo +2 gols ate o fim (gols atuais + 2,5)">Odd +2</th>
+              <th title="Em estudo (&lt;85') ou manter placar (≥85')">Sinal</th>
+              <th>Link</th>
+            </tr>
+          </thead>
+          <tbody id="tbody">
+            <tr><td colspan="13" class="empty">Carregando...</td></tr>
+          </tbody>
+        </table>
+      </div>
+      <p class="notes" id="notes"></p>
+    </section>
+
+    <section class="panel" id="panel-history">
+      <p class="hint">
+        Histórico dos jogos monitorados · filtre por <strong>gols a partir do minuto X</strong>
+        (ex.: 85 = só jogos que tiveram gol aos 85' ou depois)
+      </p>
+      <div class="history-filters">
+        <label>
+          Gols a partir do minuto
+          <input type="number" id="goal-from-minute" min="0" max="130" value="85" />
+        </label>
+        <button type="button" id="history-filter-btn">Buscar</button>
+      </div>
+      <div class="table-wrap">
+        <table>
+          <thead>
+            <tr>
+              <th>#</th>
+              <th>Placar</th>
+              <th>Jogo</th>
+              <th>Liga</th>
+              <th title="Soma chutes a gol">Chutes a gol</th>
+              <th title="Soma escanteios">Escanteios</th>
+              <th title="Soma tiros de meta">Tiros de meta</th>
+              <th title="Soma Chutes + Tiros + Escanteios">CTE</th>
+              <th>Gols (minuto)</th>
+              <th>Gols a partir do filtro</th>
+              <th>Status</th>
+              <th>Atualizado</th>
+            </tr>
+          </thead>
+          <tbody id="history-tbody">
+            <tr><td colspan="12" class="empty">Carregando histórico...</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </section>
+  </main>
+  <script>
+    function formatNumber(n) {
+      if (n == null || Number.isNaN(Number(n))) return '—';
+      return Number(n).toLocaleString('pt-BR', { maximumFractionDigits: 2 });
+    }
+
+    function formatDate(iso) {
+      if (!iso) return '—';
+      const d = new Date(iso);
+      if (Number.isNaN(d.getTime())) return iso;
+      return d.toLocaleString('pt-BR');
+    }
+
+    function pair(home, away) {
+      if (home == null && away == null) return '<span class="muted">—</span>';
+      return `${home ?? '—'}-${away ?? '—'}`;
+    }
+
+    function sumPair(home, away) {
+      if (home == null && away == null) return null;
+      return (home ?? 0) + (away ?? 0);
+    }
+
+    function formatSum(home, away) {
+      const total = sumPair(home, away);
+      if (total == null) return '<span class="muted">—</span>';
+      return `<strong>${total}</strong>`;
+    }
+
+    function formatCte(row) {
+      const shots = sumPair(row.home_shots_on_target, row.away_shots_on_target);
+      const corners = sumPair(row.home_corners, row.away_corners);
+      const kicks = sumPair(row.home_goal_kicks, row.away_goal_kicks);
+      if (shots == null && corners == null && kicks == null) {
+        return '<span class="muted">—</span>';
+      }
+      const cte = (shots ?? 0) + (corners ?? 0) + (kicks ?? 0);
+      return `<strong>${cte}</strong>`;
+    }
+
+    function formatOdd(n) {
+      if (n == null) return '<span class="muted">—</span>';
+      return `<span class="odd">${formatNumber(n)}</span>`;
+    }
+
+    function riskClass(signal, minute) {
+      const s = String(signal || '').toLowerCase();
+      if (s.includes('em estudo') || (minute != null && minute < 85)) return 'risk-study';
+      if (s.includes('pressao alta')) return 'risk-high';
+      if (s.includes('pressao media')) return 'risk-mid';
+      if (s.includes('pressao baixa')) return 'risk-low';
+      return '';
+    }
+
+    function renderSummary(meta, rows) {
+      const ready = rows.filter((r) => (r.minute ?? 0) >= 85).length;
+      const withStats = rows.filter((r) => r.stats_available || r.home_shots_on_target != null || r.home_corners != null).length;
+      const low = rows.filter((r) => riskClass(r.signal, r.minute) === 'risk-low').length;
+      document.getElementById('summary').innerHTML = `
+        <div class="summary-card">
+          <div class="summary-label">Jogos live</div>
+          <div class="summary-value">${formatNumber(meta.total ?? rows.length)}</div>
+        </div>
+        <div class="summary-card">
+          <div class="summary-label">Prontos (85'+)</div>
+          <div class="summary-value">${formatNumber(meta.candidates ?? ready)}</div>
+        </div>
+        <div class="summary-card">
+          <div class="summary-label">Com stats</div>
+          <div class="summary-value">${formatNumber(withStats)}</div>
+        </div>
+        <div class="summary-card">
+          <div class="summary-label">Pressão baixa</div>
+          <div class="summary-value">${formatNumber(low)}</div>
+        </div>
+      `;
+    }
+
+    function formatUnderOdd(odd, line) {
+      if (odd == null) return '<span class="muted">—</span>';
+      const lineLabel = line != null ? ` <span class="muted">(${formatNumber(line)})</span>` : '';
+      return `${formatOdd(odd)}${lineLabel}`;
+    }
+
+    function renderRows(rows) {
+      const tbody = document.getElementById('tbody');
+      if (!rows.length) {
+        tbody.innerHTML = '<tr><td colspan="13" class="empty">Nenhum jogo live no momento. Aguarde o cron (2 min) ou dispare a Edge Function.</td></tr>';
+        return;
+      }
+      tbody.innerHTML = rows.map((row, i) => {
+        const minLabel = row.injury_time
+          ? `${row.minute}'+${row.injury_time}`
+          : `${row.minute ?? '—'}'`;
+        const league = [row.country, row.league].filter(Boolean).join(' · ') || '—';
+        const match = `${row.home || '—'} x ${row.away || '—'}`;
+        const link = row.betano_url
+          ? `<a href="${row.betano_url}" target="_blank" rel="noopener">abrir</a>`
+          : '—';
+        // fallback: under_odd antigo = Odd 0
+        const odd0 = row.under_0_odd ?? row.under_odd;
+        const line0 = row.under_0_line ?? row.under_line;
+        return `<tr class="${riskClass(row.signal, row.minute)}">
+          <td>${i + 1}</td>
+          <td>${minLabel}</td>
+          <td><strong>${row.score || '—'}</strong></td>
+          <td>${match}</td>
+          <td>${league}</td>
+          <td>${formatSum(row.home_shots_on_target, row.away_shots_on_target)}</td>
+          <td>${formatSum(row.home_corners, row.away_corners)}</td>
+          <td>${formatSum(row.home_goal_kicks, row.away_goal_kicks)}</td>
+          <td>${formatCte(row)}</td>
+          <td>${formatUnderOdd(odd0, line0)}</td>
+          <td>${formatUnderOdd(row.under_1_odd, row.under_1_line)}</td>
+          <td>${formatUnderOdd(row.under_2_odd, row.under_2_line)}</td>
+          <td>${row.signal || '—'}</td>
+          <td>${link}</td>
+        </tr>`;
+      }).join('');
+    }
+
+    async function supabaseGet(url, anonKey, path) {
+      const res = await fetch(`${url}/rest/v1/${path}`, {
+        headers: {
+          apikey: anonKey,
+          Authorization: `Bearer ${anonKey}`,
+          Accept: 'application/json',
+        },
+      });
+      if (!res.ok) {
+        const text = await res.text();
+        throw new Error(`Supabase ${res.status}: ${text.slice(0, 200)}`);
+      }
+      return res.json();
+    }
+
+    let appCfg = null;
+    let historyCache = { games: [], goals: [] };
+
+    function renderHistory(fromMinute) {
+      const tbody = document.getElementById('history-tbody');
+      const games = historyCache.games || [];
+      const goals = historyCache.goals || [];
+      const goalsByEvent = new Map();
+      for (const g of goals) {
+        const list = goalsByEvent.get(g.event_id) || [];
+        list.push(g);
+        goalsByEvent.set(g.event_id, list);
+      }
+
+      const filtered = games
+        .map((game) => {
+          const allGoals = (goalsByEvent.get(game.event_id) || [])
+            .slice()
+            .sort((a, b) => (a.minute ?? 0) - (b.minute ?? 0));
+          const lateGoals = allGoals.filter((g) => (g.minute ?? -1) >= fromMinute);
+          return { game, allGoals, lateGoals };
+        })
+        .filter((item) => item.lateGoals.length > 0)
+        .sort((a, b) => String(b.game.last_seen_at || '').localeCompare(String(a.game.last_seen_at || '')));
+
+      if (!filtered.length) {
+        tbody.innerHTML =
+          `<tr><td colspan="12" class="empty">Nenhum jogo com gol a partir dos ${fromMinute}' no histórico.</td></tr>`;
+        return;
+      }
+
+      const fmtStat = (n) => (n == null ? '<span class="muted">—</span>' : `<strong>${n}</strong>`);
+
+      tbody.innerHTML = filtered.map((item, i) => {
+        const { game, allGoals, lateGoals } = item;
+        const match = `${game.home || '—'} x ${game.away || '—'}`;
+        const league = [game.country, game.league].filter(Boolean).join(' · ') || '—';
+        const fmtGoal = (g) => {
+          const side = g.team || (g.team_side === 'home' ? game.home : g.team_side === 'away' ? game.away : '?');
+          const label = `${g.minute}' ${side}${g.player ? ` (${g.player})` : ''}`;
+          return (g.minute ?? 0) >= fromMinute
+            ? `<span class="late">${label}</span>`
+            : label;
+        };
+        const allHtml = allGoals.length
+          ? `<div class="goals-list">${allGoals.map(fmtGoal).join('<br>')}</div>`
+          : '<span class="muted">—</span>';
+        const lateHtml = `<div class="goals-list">${lateGoals.map(fmtGoal).join('<br>')}</div>`;
+        const status = game.is_live ? 'live' : 'encerrado';
+        return `<tr>
+          <td>${i + 1}</td>
+          <td><strong>${game.score || '—'}</strong></td>
+          <td>${match}</td>
+          <td>${league}</td>
+          <td>${fmtStat(game.shots_on_target)}</td>
+          <td>${fmtStat(game.corners)}</td>
+          <td>${fmtStat(game.goal_kicks)}</td>
+          <td>${fmtStat(game.cte)}</td>
+          <td>${allHtml}</td>
+          <td>${lateHtml}</td>
+          <td>${status}</td>
+          <td>${formatDate(game.last_seen_at)}</td>
+        </tr>`;
+      }).join('');
+    }
+
+    async function loadHistory() {
+      if (!appCfg) return;
+      const fromMinute = Number(document.getElementById('goal-from-minute').value || 85);
+      const games = await supabaseGet(
+        appCfg.url,
+        appCfg.anonKey,
+        'futebol_historico_jogos?select=*&order=last_seen_at.desc&limit=200',
+      );
+      const goals = await supabaseGet(
+        appCfg.url,
+        appCfg.anonKey,
+        'futebol_historico_gols?select=*&order=minute.asc&limit=2000',
+      );
+      historyCache = { games, goals };
+      renderHistory(fromMinute);
+    }
+
+    async function initLive() {
+      const status = document.getElementById('status');
+      try {
+        if (!appCfg) {
+          const cfgRes = await fetch('./supabase.config.json');
+          if (!cfgRes.ok) throw new Error('web/supabase.config.json não encontrado');
+          appCfg = await cfgRes.json();
+          if (!appCfg.url || !appCfg.anonKey || appCfg.anonKey.includes('COLE_AQUI')) {
+            throw new Error('Configure url e anonKey em web/supabase.config.json');
+          }
+        }
+
+        const metaRows = await supabaseGet(appCfg.url, appCfg.anonKey, 'futebol_live_meta?id=eq.1&select=*');
+        const meta = metaRows[0] || {};
+        if (meta.last_error) {
+          status.className = 'status error';
+          status.textContent = `Ultimo erro da coleta: ${meta.last_error}`;
+        }
+
+        const rows = await supabaseGet(
+          appCfg.url,
+          appCfg.anonKey,
+          'futebol_live_rows?select=*&order=minute.desc.nullslast',
+        );
+
+        renderSummary(meta, rows);
+        renderRows(rows);
+        document.getElementById('notes').textContent = (meta.notes || []).join(' ');
+        if (!meta.last_error) {
+          status.textContent =
+            `${formatNumber(rows.length)} jogos · atualizado ${formatDate(meta.fetched_at)} · fonte ${meta.source || 'betano-danae'} (Supabase)`;
+        }
+      } catch (err) {
+        status.className = 'status error';
+        status.textContent = err.message || String(err);
+        document.getElementById('tbody').innerHTML =
+          `<tr><td colspan="13" class="empty">${status.textContent}</td></tr>`;
+      }
+    }
+
+    document.querySelectorAll('.tab-btn').forEach((btn) => {
+      btn.addEventListener('click', async () => {
+        document.querySelectorAll('.tab-btn').forEach((b) => b.classList.remove('active'));
+        document.querySelectorAll('.panel').forEach((p) => p.classList.remove('active'));
+        btn.classList.add('active');
+        const tab = btn.dataset.tab;
+        document.getElementById(`panel-${tab}`).classList.add('active');
+        if (tab === 'history') {
+          try {
+            if (!appCfg) await initLive();
+            await loadHistory();
+          } catch (err) {
+            document.getElementById('history-tbody').innerHTML =
+              `<tr><td colspan="12" class="empty">${err.message || err}</td></tr>`;
+          }
+        }
+      });
+    });
+
+    document.getElementById('history-filter-btn').addEventListener('click', () => {
+      const fromMinute = Number(document.getElementById('goal-from-minute').value || 85);
+      renderHistory(fromMinute);
+    });
+
+    initLive();
+    setInterval(initLive, 60000);
+  </script>
+</body>
+</html>

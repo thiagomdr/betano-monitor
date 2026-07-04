@@ -1,0 +1,27 @@
+---
+description: Modelo padrao — Futebol live Betano via Supabase Edge Function
+alwaysApply: true
+---
+
+# Futebol Live Betano (Supabase)
+
+## Escopo
+
+- Coleta **Betano** (`danae-webapi`) na **Edge Function** `betano-futebol-live`.
+- **Nao** coletar do IP da casa do usuario (evitar risco de conta/IP).
+- **Nao** usar cookie/sessao de conta Betano na function.
+- Painel `web/` le `futebol_live_rows` / `futebol_live_meta` via anon key.
+- Foco: jogos **>= 85'** para aposta de manter placar.
+
+## Fluxo
+
+1. Deploy migration + `supabase functions deploy betano-futebol-live --no-verify-jwt`
+2. Cron `*/2 * * * *` chama a function
+3. `web/supabase.config.json` com url + anonKey
+4. `scripts/serve-monitor.ps1` → localhost:8080
+
+## Codigo
+
+- Function: `supabase/functions/betano-futebol-live/`
+- Tabelas: `futebol_live_*`
+- Nao reintroduzir coleta local Betano no PC do usuario
