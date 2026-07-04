@@ -345,29 +345,57 @@ function extractMlOdds(
   return { home: null, draw: null, away: null };
 }
 
-/** Under por gols restantes: 0 = sem mais gols, +1, +2. */
-function extractUnderGoalsRemaining(
-  eventId: string,
-  event: Json,
-  overview: Json,
-  goalsTotal: number,
-): {
+/** Totais Under/Over por gols restantes nas linhas +0.5, +1.5, +2.5. */
+type TotalsOdds = {
   under_0_line: number | null;
   under_0_odd: number | null;
   under_1_line: number | null;
   under_1_odd: number | null;
   under_2_line: number | null;
   under_2_odd: number | null;
-} {
+  over_0_line: number | null;
+  over_0_odd: number | null;
+  over_1_line: number | null;
+  over_1_odd: number | null;
+  over_2_line: number | null;
+  over_2_odd: number | null;
+};
+
+const EMPTY_TOTALS_ODDS: TotalsOdds = {
+  under_0_line: null,
+  under_0_odd: null,
+  under_1_line: null,
+  under_1_odd: null,
+  under_2_line: null,
+  under_2_odd: null,
+  over_0_line: null,
+  over_0_odd: null,
+  over_1_line: null,
+  over_1_odd: null,
+  over_2_line: null,
+  over_2_odd: null,
+};
+
+function extractTotalsOdds(
+  eventId: string,
+  event: Json,
+  overview: Json,
+  goalsTotal: number,
+): TotalsOdds {
   const targets = [
-    goalsTotal + 0.5, // 0 gols a mais
-    goalsTotal + 1.5, // ate +1
-    goalsTotal + 2.5, // ate +2
+    goalsTotal + 0.5,
+    goalsTotal + 1.5,
+    goalsTotal + 2.5,
   ];
-  const found: Array<{ line: number | null; under: number | null }> = [
-    { line: null, under: null },
-    { line: null, under: null },
-    { line: null, under: null },
+  const foundUnder: Array<{ line: number | null; odd: number | null }> = [
+    { line: null, odd: null },
+    { line: null, odd: null },
+    { line: null, odd: null },
+  ];
+  const foundOver: Array<{ line: number | null; odd: number | null }> = [
+    { line: null, odd: null },
+    { line: null, odd: null },
+    { line: null, odd: null },
   ];
 
   const markets = asRecord(overview.markets) ?? {};
@@ -394,7 +422,6 @@ function extractUnderGoalsRemaining(
       name.includes("mais") ||
       name.includes("menos") ||
       typeName.includes("total");
-    // mesmo sem nome util, tenta se houver handicap/line
     const line = toNum(rec.handicap ?? rec.line ?? rec.points);
     const selIds = Array.isArray(rec.selectionIdList)
       ? rec.selectionIdList.map(String)
@@ -410,8 +437,13 @@ function extractUnderGoalsRemaining(
         sname === "below" ||
         sname.startsWith("u ") ||
         sname.startsWith("u(");
-      if (!isUnder && looksTotal === false) continue;
-      if (!isUnder) continue;
+      const isOver =
+        sname.includes("over") ||
+        sname.includes("mais") ||
+        sname === "above" ||
+        sname.startsWith("o ") ||
+        sname.startsWith("o(");
+      if (!isUnder && !isOver && !looksTotal) continue;
 
       const price = toNum(sel.price ?? sel.odds ?? sel.decimalOdds);
       const selLine = toNum(sel.handicap ?? sel.line ?? sel.points) ?? line;
@@ -419,7 +451,8 @@ function extractUnderGoalsRemaining(
 
       for (let i = 0; i < targets.length; i++) {
         if (Math.abs(selLine - targets[i]) < 0.01) {
-          found[i] = { line: selLine, under: price };
+          if (isUnder) foundUnder[i] = { line: selLine, odd: price };
+          if (isOver) foundOver[i] = { line: selLine, odd: price };
         }
       }
     }
@@ -430,8 +463,7 @@ function extractUnderGoalsRemaining(
     if (rec) considerMarket(mid, rec);
   }
 
-  // fallback: varre todos os mercados/selecoes do overview (alguns packs nao ligam eventId)
-  if (found.every((f) => f.under == null)) {
+  if (foundUnder.every((f) => f.odd == null) && foundOver.every((f) => f.odd == null)) {
     for (const [mid, market] of Object.entries(markets)) {
       const rec = asRecord(market);
       if (!rec) continue;
@@ -440,40 +472,64 @@ function extractUnderGoalsRemaining(
   }
 
   return {
-    under_0_line: found[0].line,
-    under_0_odd: found[0].under,
-    under_1_line: found[1].line,
-    under_1_odd: found[1].under,
-    under_2_line: found[2].line,
-    under_2_odd: found[2].under,
+    under_0_line: foundUnder[0].line,
+    under_0_odd: foundUnder[0].odd,
+    under_1_line: foundUnder[1].line,
+    under_1_odd: foundUnder[1].odd,
+    under_2_line: foundUnder[2].line,
+    under_2_odd: foundUnder[2].odd,
+    over_0_line: foundOver[0].line,
+    over_0_odd: foundOver[0].odd,
+    over_1_line: foundOver[1].line,
+    over_1_odd: foundOver[1].odd,
+    over_2_line: foundOver[2].line,
+    over_2_odd: foundOver[2].odd,
   };
 }
 
-/** Busca mercados extras do evento (totais Under) quando o overview nao traz. */
-async function fetchEventUnderOdds(
+/** Under por gols restantes: linhas +0.5, +1.5, +2.5. */
+function extractUnderGoalsRemaining(
+  eventId: string,
+  event: Json,
+  overview: Json,
+  goalsTotal: number,
+): Pick<
+  TotalsOdds,
+  "under_0_line" | "under_0_odd" | "under_1_line" | "under_1_odd" | "under_2_line" | "under_2_odd"
+> {
+  const t = extractTotalsOdds(eventId, event, overview, goalsTotal);
+  return {
+    under_0_line: t.under_0_line,
+    under_0_odd: t.under_0_odd,
+    under_1_line: t.under_1_line,
+    under_1_odd: t.under_1_odd,
+    under_2_line: t.under_2_line,
+    under_2_odd: t.under_2_odd,
+  };
+}
+
+function hasAnyTotalsOdds(t: TotalsOdds): boolean {
+  return [
+    t.under_0_odd, t.under_1_odd, t.under_2_odd,
+    t.over_0_odd, t.over_1_odd, t.over_2_odd,
+  ].some((v) => v != null);
+}
+
+/** Busca mercados extras do evento (totais Under/Over) quando o overview nao traz. */
+async function fetchEventTotalsOdds(
   eventId: string,
   goalsTotal: number,
-): Promise<{
-  under_0_line: number | null;
-  under_0_odd: number | null;
-  under_1_line: number | null;
-  under_1_odd: number | null;
-  under_2_line: number | null;
-  under_2_odd: number | null;
-}> {
-  const empty = {
-    under_0_line: null,
-    under_0_odd: null,
-    under_1_line: null,
-    under_1_odd: null,
-    under_2_line: null,
-    under_2_odd: null,
-  };
+): Promise<TotalsOdds> {
   const targets = [goalsTotal + 0.5, goalsTotal + 1.5, goalsTotal + 2.5];
-  const found: Array<{ line: number | null; under: number | null }> = [
-    { line: null, under: null },
-    { line: null, under: null },
-    { line: null, under: null },
+  const foundUnder: Array<{ line: number | null; odd: number | null }> = [
+    { line: null, odd: null },
+    { line: null, odd: null },
+    { line: null, odd: null },
+  ];
+  const foundOver: Array<{ line: number | null; odd: number | null }> = [
+    { line: null, odd: null },
+    { line: null, odd: null },
+    { line: null, odd: null },
   ];
 
   const urls = [
@@ -485,47 +541,83 @@ async function fetchEventUnderOdds(
     try {
       const data = await betanoGet(url);
       const text = JSON.stringify(data);
-      // procura padroes de under com linha
-      // ex: "menos de 1.5" / under 1.5
       for (let i = 0; i < targets.length; i++) {
         const t = targets[i];
-        const patterns = [
-          new RegExp(`menos\\s*de\\s*${t.toString().replace(".", "\\.")}[^0-9]{0,40}([0-9]+(?:[.,][0-9]+)?)`, "i"),
-          new RegExp(`under[^0-9]{0,10}${t.toString().replace(".", "\\.")}[^0-9]{0,40}([0-9]+(?:[.,][0-9]+)?)`, "i"),
-          new RegExp(`"handicap"\\s*:\\s*${t.toString().replace(".", "\\.")}[^\\}]{0,120}"price"\\s*:\\s*([0-9]+(?:\\.[0-9]+)?)`, "i"),
-          new RegExp(`"line"\\s*:\\s*${t.toString().replace(".", "\\.")}[^\\}]{0,120}"price"\\s*:\\s*([0-9]+(?:\\.[0-9]+)?)`, "i"),
+        const tEsc = t.toString().replace(".", "\\.");
+        const underPatterns = [
+          new RegExp(`menos\\s*de\\s*${tEsc}[^0-9]{0,40}([0-9]+(?:[.,][0-9]+)?)`, "i"),
+          new RegExp(`under[^0-9]{0,10}${tEsc}[^0-9]{0,40}([0-9]+(?:[.,][0-9]+)?)`, "i"),
         ];
-        for (const re of patterns) {
+        const overPatterns = [
+          new RegExp(`mais\\s*de\\s*${tEsc}[^0-9]{0,40}([0-9]+(?:[.,][0-9]+)?)`, "i"),
+          new RegExp(`over[^0-9]{0,10}${tEsc}[^0-9]{0,40}([0-9]+(?:[.,][0-9]+)?)`, "i"),
+        ];
+        for (const re of underPatterns) {
           const m = text.match(re);
           if (m?.[1]) {
             const price = toNum(m[1].replace(",", "."));
-            if (price != null) found[i] = { line: t, under: price };
+            if (price != null) foundUnder[i] = { line: t, odd: price };
+          }
+        }
+        for (const re of overPatterns) {
+          const m = text.match(re);
+          if (m?.[1]) {
+            const price = toNum(m[1].replace(",", "."));
+            if (price != null) foundOver[i] = { line: t, odd: price };
           }
         }
       }
 
-      // estrutura tipica markets/selections
       const rec = asRecord(data) ?? {};
       const markets = asRecord(rec.markets) ?? asRecord(asRecord(rec.data)?.markets) ?? {};
       const selections = asRecord(rec.selections) ?? asRecord(asRecord(rec.data)?.selections) ?? {};
       const fakeOverview = { markets, selections };
-      const fromStruct = extractUnderGoalsRemaining(eventId, { marketIdList: Object.keys(markets) }, fakeOverview, goalsTotal);
-      if (fromStruct.under_0_odd != null || fromStruct.under_1_odd != null || fromStruct.under_2_odd != null) {
-        return fromStruct;
-      }
+      const fromStruct = extractTotalsOdds(
+        eventId,
+        { marketIdList: Object.keys(markets) },
+        fakeOverview,
+        goalsTotal,
+      );
+      if (hasAnyTotalsOdds(fromStruct)) return fromStruct;
     } catch {
       // tenta proximo
     }
   }
 
-  if (found.every((f) => f.under == null)) return empty;
+  if (foundUnder.every((f) => f.odd == null) && foundOver.every((f) => f.odd == null)) {
+    return EMPTY_TOTALS_ODDS;
+  }
   return {
-    under_0_line: found[0].line,
-    under_0_odd: found[0].under,
-    under_1_line: found[1].line,
-    under_1_odd: found[1].under,
-    under_2_line: found[2].line,
-    under_2_odd: found[2].under,
+    under_0_line: foundUnder[0].line,
+    under_0_odd: foundUnder[0].odd,
+    under_1_line: foundUnder[1].line,
+    under_1_odd: foundUnder[1].odd,
+    under_2_line: foundUnder[2].line,
+    under_2_odd: foundUnder[2].odd,
+    over_0_line: foundOver[0].line,
+    over_0_odd: foundOver[0].odd,
+    over_1_line: foundOver[1].line,
+    over_1_odd: foundOver[1].odd,
+    over_2_line: foundOver[2].line,
+    over_2_odd: foundOver[2].odd,
+  };
+}
+
+async function fetchEventUnderOdds(
+  eventId: string,
+  goalsTotal: number,
+): Promise<Pick<
+  TotalsOdds,
+  "under_0_line" | "under_0_odd" | "under_1_line" | "under_1_odd" | "under_2_line" | "under_2_odd"
+>> {
+  const t = await fetchEventTotalsOdds(eventId, goalsTotal);
+  return {
+    under_0_line: t.under_0_line,
+    under_0_odd: t.under_0_odd,
+    under_1_line: t.under_1_line,
+    under_1_odd: t.under_1_odd,
+    under_2_line: t.under_2_line,
+    under_2_odd: t.under_2_odd,
   };
 }
 
@@ -654,14 +746,133 @@ type GoalEvent = {
   score_away: number | null;
 };
 
+function dedupeGoals(goals: GoalEvent[]): GoalEvent[] {
+  const seen = new Set<string>();
+  return goals.filter((g) => {
+    const key = `${g.minute}|${g.team_side ?? ""}|${g.player ?? ""}|${g.score_home ?? ""}-${g.score_away ?? ""}`;
+    if (seen.has(key)) return false;
+    seen.add(key);
+    return true;
+  });
+}
+
+function extractBetradarMatchId(event: Json): string | null {
+  const direct =
+    event.betradarMatchId ??
+      event.betradarId ??
+      event.betRadarMatchId ??
+      event.sportradarMatchId ??
+      event.statsId;
+  if (direct != null && direct !== "") return String(direct);
+
+  const liveData = asRecord(event.liveData) ?? asRecord(event.live);
+  const fromLive =
+    liveData?.betradarMatchId ?? liveData?.betradarId ?? liveData?.sportradarMatchId;
+  if (fromLive != null && fromLive !== "") return String(fromLive);
+
+  const providers = asRecord(event.providerIds) ?? asRecord(event.externalIds);
+  if (providers?.betradar != null && providers.betradar !== "") {
+    return String(providers.betradar);
+  }
+  return null;
+}
+
+function inferGoalsFromScoreDelta(
+  eventId: string,
+  prevHome: number,
+  prevAway: number,
+  currHome: number,
+  currAway: number,
+  minute: number | null,
+  homeName: string | null,
+  awayName: string | null,
+): GoalEvent[] {
+  if (minute == null) return [];
+  const goals: GoalEvent[] = [];
+  const homeDelta = Math.max(0, currHome - prevHome);
+  const awayDelta = Math.max(0, currAway - prevAway);
+
+  for (let i = 0; i < homeDelta; i++) {
+    goals.push({
+      event_id: eventId,
+      minute,
+      team: homeName,
+      team_side: "home",
+      player: null,
+      score_home: prevHome + i + 1,
+      score_away: prevAway,
+    });
+  }
+  for (let i = 0; i < awayDelta; i++) {
+    goals.push({
+      event_id: eventId,
+      minute,
+      team: awayName,
+      team_side: "away",
+      player: null,
+      score_home: currHome,
+      score_away: prevAway + i + 1,
+    });
+  }
+  return goals;
+}
+
+async function persistEventGoals(
+  supabase: ReturnType<typeof createClient>,
+  eventId: string,
+  timelineGoals: GoalEvent[],
+  inferredGoals: GoalEvent[],
+  goalsTotal: number,
+): Promise<{ saved: number; source: string }> {
+  let merged: GoalEvent[];
+  let source = "none";
+
+  if (timelineGoals.length > 0) {
+    merged = dedupeGoals(timelineGoals);
+    source = "timeline";
+  } else {
+    const { data: existing } = await supabase
+      .from("futebol_historico_gols")
+      .select("event_id,minute,team,team_side,player,score_home,score_away")
+      .eq("event_id", eventId);
+    const existingGoals = (existing ?? []) as GoalEvent[];
+    merged = dedupeGoals([...existingGoals, ...inferredGoals]);
+    if (inferredGoals.length > 0) source = existingGoals.length > 0 ? "inferred+existing" : "inferred";
+    else if (existingGoals.length > 0) source = "preserved";
+  }
+
+  if (merged.length === 0) {
+    return { saved: 0, source: goalsTotal > 0 ? "missing" : "none" };
+  }
+
+  const goalRows = merged.map((g) => ({
+    event_id: g.event_id,
+    minute: g.minute,
+    team: g.team,
+    team_side: g.team_side ?? "unk",
+    player: g.player,
+    score_home: g.score_home,
+    score_away: g.score_away,
+  }));
+
+  await supabase.from("futebol_historico_gols").delete().eq("event_id", eventId);
+  const { error } = await supabase
+    .from("futebol_historico_gols")
+    .upsert(goalRows, { onConflict: "event_id,minute,team_side" });
+  if (error) return { saved: 0, source: "error" };
+  return { saved: merged.length, source };
+}
+
 /** Gols com minuto via Sportradar match_timeline. */
 async function fetchGoalsTimeline(
   eventId: string,
   betradarMatchId: string | number | null,
   homeName: string | null,
   awayName: string | null,
-): Promise<GoalEvent[]> {
-  if (betradarMatchId == null || betradarMatchId === "") return [];
+): Promise<{ goals: GoalEvent[]; eventsTotal: number }> {
+  if (betradarMatchId == null || betradarMatchId === "") {
+    return { goals: [], eventsTotal: 0 };
+  }
 
   const url =
     `https://stats.fn.sportradar.com/common/en/Europe:Berlin/gismo/match_timeline/${betradarMatchId}`;
@@ -674,13 +885,13 @@ async function fetchGoalsTimeline(
         Referer: "https://www.betano.bet.br/",
       },
     });
-    if (!res.ok) return [];
+    if (!res.ok) return { goals: [], eventsTotal: 0 };
     const data = asRecord(await res.json());
     const doc0 = Array.isArray(data?.doc) ? asRecord(data.doc[0]) : null;
-    if (String(doc0?.event ?? "") === "exception") return [];
+    if (String(doc0?.event ?? "") === "exception") return { goals: [], eventsTotal: 0 };
     const payload = asRecord(doc0?.data) ?? {};
     const events = payload.events ?? payload.event ?? payload.timeline;
-    if (!Array.isArray(events)) return [];
+    if (!Array.isArray(events)) return { goals: [], eventsTotal: 0 };
 
     const goals: GoalEvent[] = [];
     for (const item of events) {
@@ -688,6 +899,7 @@ async function fetchGoalsTimeline(
       if (!rec) continue;
       const type = String(rec.type ?? rec._type ?? rec.event ?? "").toLowerCase();
       const typeId = toInt(rec.typeid ?? rec._typeid ?? rec.type_id);
+      const docType = String(rec._doctype ?? "").toLowerCase();
       const desc = String(rec.name ?? rec.description ?? rec.text ?? "").toLowerCase();
       // evita goal kick / disallowed / cancel
       const blocked =
@@ -706,19 +918,25 @@ async function fetchGoalsTimeline(
         type === "goal" ||
         type === "goals" ||
         type === "score_change" ||
-        typeId === 30;
+        typeId === 30 ||
+        String(rec._typeid ?? "") === "30" ||
+        docType === "goal";
       const isGoalDesc =
         (desc === "goal" || desc.startsWith("goal ") || desc.includes(" scored")) &&
         !desc.includes("own goal attempt");
       if (!isGoalType && !isGoalDesc) continue;
 
-      const minute = toInt(
-        rec.minute ??
-          rec.time ??
+      let minute = toInt(
+        rec.time ??
+          rec.minute ??
           rec.matchtime ??
           asRecord(rec.timeinfo)?.played ??
           rec.m,
       );
+      if (minute == null) {
+        const sec = toInt(rec.seconds);
+        if (sec != null) minute = Math.floor(sec / 60);
+      }
       if (minute == null) continue;
 
       let teamSide: string | null = null;
@@ -758,16 +976,9 @@ async function fetchGoalsTimeline(
       });
     }
 
-    // dedupe por minuto+lado
-    const seen = new Set<string>();
-    return goals.filter((g) => {
-      const key = `${g.minute}|${g.team_side ?? ""}|${g.player ?? ""}`;
-      if (seen.has(key)) return false;
-      seen.add(key);
-      return true;
-    });
+    return { goals: dedupeGoals(goals), eventsTotal: events.length };
   } catch {
-    return [];
+    return { goals: [], eventsTotal: 0 };
   }
 }
 
@@ -886,6 +1097,10 @@ Deno.serve(async (req) => {
     let readyCount = 0;
     let statsOk = 0;
     let goalsSaved = 0;
+    let goalsTimelineOk = 0;
+    let goalsTimelineEmpty = 0;
+    let goalsInferred = 0;
+    let goalsMissing = 0;
     const liveIds: string[] = [];
 
     for (const event of candidates) {
@@ -897,16 +1112,13 @@ Deno.serve(async (req) => {
       const injury = extractInjuryTime(event);
       const ml = extractMlOdds(eventId, overview);
       const goalsTotal = (score.home ?? 0) + (score.away ?? 0);
-      let under = extractUnderGoalsRemaining(eventId, event, overview, goalsTotal);
-      if (
-        under.under_0_odd == null &&
-        under.under_1_odd == null &&
-        under.under_2_odd == null
-      ) {
-        under = await fetchEventUnderOdds(eventId, goalsTotal);
+      let totals = extractTotalsOdds(eventId, event, overview, goalsTotal);
+      if (!hasAnyTotalsOdds(totals)) {
+        totals = await fetchEventTotalsOdds(eventId, goalsTotal);
       }
+      const under = totals;
 
-      const betradarId = event.betradarMatchId ?? event.betradarId ?? null;
+      const betradarId = extractBetradarMatchId(event);
       const stats = await tryFetchStats(
         betradarId != null ? String(betradarId) : null,
       );
@@ -960,6 +1172,12 @@ Deno.serve(async (req) => {
         under_1_odd: under.under_1_odd,
         under_2_line: under.under_2_line,
         under_2_odd: under.under_2_odd,
+        over_0_line: totals.over_0_line,
+        over_0_odd: totals.over_0_odd,
+        over_1_line: totals.over_1_line,
+        over_1_odd: totals.over_1_odd,
+        over_2_line: totals.over_2_line,
+        over_2_odd: totals.over_2_odd,
         signal,
         betano_url: url,
         stats_available: stats.available,
@@ -973,6 +1191,17 @@ Deno.serve(async (req) => {
 
       // Historico persistente (nao apaga quando o jogo sai do live)
       const nowIso = new Date().toISOString();
+
+      const { data: prevGame } = await supabase
+        .from("futebol_historico_jogos")
+        .select("home_score,away_score,odds_85_captured_at")
+        .eq("event_id", eventId)
+        .maybeSingle();
+      const prevHome = prevGame?.home_score ?? 0;
+      const prevAway = prevGame?.away_score ?? 0;
+      const currHome = score.home ?? 0;
+      const currAway = score.away ?? 0;
+
       const shotsSum =
         stats.home_shots_on_target != null || stats.away_shots_on_target != null
           ? (stats.home_shots_on_target ?? 0) + (stats.away_shots_on_target ?? 0)
@@ -1011,32 +1240,64 @@ Deno.serve(async (req) => {
         updated_at: nowIso,
       }, { onConflict: "event_id" });
 
-      // first_seen_at: so na insercao — upsert nao sobrescreve se usarmos ignoreDuplicates parcial
-      // garante first_seen via update only last fields; se linha nova, default now()
+      // Congela odds aos 85' (primeira coleta >= 85); nao altera depois
+      if (
+        minute != null &&
+        minute >= MIN_MINUTE_DEFAULT &&
+        !prevGame?.odds_85_captured_at
+      ) {
+        let snap = totals;
+        if (!hasAnyTotalsOdds(snap)) {
+          snap = await fetchEventTotalsOdds(eventId, goalsTotal);
+        }
+        await supabase
+          .from("futebol_historico_jogos")
+          .update({
+            odd_under_05: snap.under_0_odd,
+            odd_under_15: snap.under_1_odd,
+            odd_under_25: snap.under_2_odd,
+            odd_over_05: snap.over_0_odd,
+            odd_over_15: snap.over_1_odd,
+            odd_over_25: snap.over_2_odd,
+            odds_85_minute: minute,
+            odds_85_score: score.text,
+            odds_85_captured_at: nowIso,
+          })
+          .eq("event_id", eventId)
+          .is("odds_85_captured_at", null);
+      }
 
-      const goals = await fetchGoalsTimeline(
+      const timelineResult = await fetchGoalsTimeline(
         eventId,
         betradarId != null ? String(betradarId) : null,
         teams.home,
         teams.away,
       );
-      // substitui gols do evento (evita lixo de parsers antigos)
-      await supabase.from("futebol_historico_gols").delete().eq("event_id", eventId);
-      if (goals.length > 0) {
-        const goalRows = goals.map((g) => ({
-          event_id: g.event_id,
-          minute: g.minute,
-          team: g.team,
-          team_side: g.team_side ?? "unk",
-          player: g.player,
-          score_home: g.score_home,
-          score_away: g.score_away,
-        }));
-        const { error: goalsErr } = await supabase
-          .from("futebol_historico_gols")
-          .upsert(goalRows, { onConflict: "event_id,minute,team_side" });
-        if (!goalsErr) goalsSaved += goals.length;
-      }
+      const timelineGoals = timelineResult.goals;
+      if (timelineGoals.length > 0) goalsTimelineOk += 1;
+      else if (betradarId != null && goalsTotal > 0) goalsTimelineEmpty += 1;
+
+      const inferredGoals = inferGoalsFromScoreDelta(
+        eventId,
+        prevHome,
+        prevAway,
+        currHome,
+        currAway,
+        minute,
+        teams.home,
+        teams.away,
+      );
+      if (inferredGoals.length > 0) goalsInferred += inferredGoals.length;
+
+      const persist = await persistEventGoals(
+        supabase,
+        eventId,
+        timelineGoals,
+        inferredGoals,
+        goalsTotal,
+      );
+      if (persist.saved > 0) goalsSaved += persist.saved;
+      if (persist.source === "missing") goalsMissing += 1;
     }
 
     // jogos que sairam do live: marca is_live=false
@@ -1079,6 +1340,7 @@ Deno.serve(async (req) => {
         `Stats ok em ${statsOk}/${rows.length} jogos.`,
         `Prontos para manter placar (>=85'): ${readyCount}.`,
         `Gols gravados no historico nesta rodada: ${goalsSaved}.`,
+        `Gols timeline ok: ${goalsTimelineOk}, timeline vazia c/ placar: ${goalsTimelineEmpty}, inferidos: ${goalsInferred}, sem gols c/ placar: ${goalsMissing}.`,
       ],
       last_error: null,
       updated_at: new Date().toISOString(),
