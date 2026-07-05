@@ -22,8 +22,8 @@ alwaysApply: true
 ## Integridade de odds (obrigatorio)
 
 - Slots 0/1/2 = placar + 0,5 / +1,5 / +2,5 (aceita linha absoluta ou gols restantes 0,5/1,5/2,5 na API).
-- Validacao **fixTotalsOddsMonotonicity**: Under odd_0 >= odd_1 >= odd_2; Over odd_0 <= odd_1 <= odd_2.
-- Sem regex em JSON.stringify para odds — apenas mercados/selecoes estruturados.
+- Validacao **reorderSideOdds** + monotonicidade: Under odd_0 >= odd_1 >= odd_2; Over odd_0 <= odd_1 <= odd_2; invalido = null no BD.
+- Um mercado de gols por evento (nao misturar mercados); modo `remaining` vs `absolute` separados.
 
 ## Integridade de gols (obrigatorio)
 

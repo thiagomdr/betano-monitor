@@ -361,7 +361,7 @@ type TotalsOdds = {
   over_2_odd: number | null;
 };
 
-type OddSlot = { line: number | null; odd: number | null; kind: "absolute" | "remaining" | null };
+type OddSlot = { line: number | null; odd: number | null; kind: MarketLineMode | null };
 
 const EMPTY_TOTALS_ODDS: TotalsOdds = {
   under_0_line: null,
@@ -380,26 +380,74 @@ const EMPTY_TOTALS_ODDS: TotalsOdds = {
 
 const REMAINING_LINES = [0.5, 1.5, 2.5];
 
-function parseLineFromText(text: string): number | null {
-  const m = String(text).match(/(\d+[.,]\d+|\d+)/);
+type MarketLineMode = "remaining" | "absolute";
+
+function parseGoalLineFromSelectionName(text: string): number | null {
+  const t = String(text).toLowerCase();
+  if (
+    !t.includes("menos") && !t.includes("mais") && !t.includes("under") &&
+    !t.includes("over")
+  ) {
+    return null;
+  }
+  const m = t.match(/(\d+[.,]\d+|\d+)/);
   if (!m) return null;
   return toNum(m[1].replace(",", "."));
 }
 
-/** Mapeia linha Betano (absoluta ou gols restantes) para slot 0/1/2. */
+function marketLineMode(rec: Json): MarketLineMode | null {
+  const name = String(rec.name ?? rec.typeName ?? rec.marketType ?? "").toLowerCase();
+  const typeName = String(rec.typeName ?? "").toLowerCase();
+  const combined = `${name} ${typeName}`;
+
+  if (
+    combined.includes("escanteio") || combined.includes("corner") ||
+    combined.includes("cartão") || combined.includes("cartao") || combined.includes("card") ||
+    combined.includes("chute") && !combined.includes("gol") ||
+    combined.includes("shot") && !combined.includes("goal")
+  ) {
+    return null;
+  }
+
+  if (
+    combined.includes("restante") || combined.includes("remaining") ||
+    combined.includes("rest of") || combined.includes("restantes")
+  ) {
+    return "remaining";
+  }
+
+  if (
+    (combined.includes("total") || combined.includes("gols") || combined.includes("goal")) &&
+    (combined.includes("gol") || combined.includes("goal") || combined.includes("gols"))
+  ) {
+    return "absolute";
+  }
+
+  if (
+    (combined.includes("mais") || combined.includes("menos") || combined.includes("over") ||
+      combined.includes("under")) &&
+    (combined.includes("gol") || combined.includes("goal"))
+  ) {
+    return "remaining";
+  }
+
+  return null;
+}
+
+/** Mapeia linha Betano para slot 0/1/2 conforme modo do mercado. */
 function slotForLine(
   selLine: number,
   goalsTotal: number,
-): { slot: number; kind: "absolute" | "remaining" } | null {
-  for (let i = 0; i < 3; i++) {
-    if (Math.abs(selLine - (goalsTotal + REMAINING_LINES[i])) < 0.01) {
-      return { slot: i, kind: "absolute" };
+  mode: MarketLineMode,
+): number | null {
+  if (mode === "remaining") {
+    for (let i = 0; i < 3; i++) {
+      if (Math.abs(selLine - REMAINING_LINES[i]) < 0.01) return i;
     }
+    return null;
   }
   for (let i = 0; i < 3; i++) {
-    if (Math.abs(selLine - REMAINING_LINES[i]) < 0.01) {
-      return { slot: i, kind: "remaining" };
-    }
+    if (Math.abs(selLine - (goalsTotal + REMAINING_LINES[i])) < 0.01) return i;
   }
   return null;
 }
@@ -409,7 +457,7 @@ function assignOddSlot(
   slot: number,
   line: number,
   odd: number,
-  kind: "absolute" | "remaining",
+  kind: MarketLineMode,
 ) {
   const cur = slots[slot];
   if (cur.odd == null) {
@@ -421,72 +469,110 @@ function assignOddSlot(
   }
 }
 
+function countFilledSlots(slots: OddSlot[]): number {
+  return slots.filter((s) => s.odd != null).length;
+}
+
+function sideOddsMonotonic(odds: (number | null)[], side: "under" | "over"): boolean {
+  let prev: number | null = null;
+  for (const o of odds) {
+    if (o == null) continue;
+    if (prev != null) {
+      if (side === "under" && o > prev) return false;
+      if (side === "over" && o < prev) return false;
+    }
+    prev = o;
+  }
+  return true;
+}
+
+/** Reordena odds entre slots preenchidos: Under desc, Over asc. */
+function reorderSideOdds(slots: OddSlot[], side: "under" | "over"): OddSlot[] {
+  const out = slots.map((s) => ({ ...s }));
+  const filled = out
+    .map((s, i) => ({ i, odd: s.odd }))
+    .filter((x) => x.odd != null) as Array<{ i: number; odd: number }>;
+  if (filled.length <= 1) return out;
+
+  const sortedOdds = filled.map((f) => f.odd).sort((a, b) =>
+    side === "under" ? b - a : a - b
+  );
+  filled.sort((a, b) => a.i - b.i);
+  for (let j = 0; j < filled.length; j++) {
+    out[filled[j].i] = { ...out[filled[j].i], odd: sortedOdds[j] };
+  }
+  return out;
+}
+
 function slotsToTotalsOdds(
   underSlots: OddSlot[],
   overSlots: OddSlot[],
   goalsTotal: number,
 ): TotalsOdds {
   const canonicalLines = REMAINING_LINES.map((r) => goalsTotal + r);
+  let u = reorderSideOdds(underSlots, "under");
+  let o = reorderSideOdds(overSlots, "over");
+
   const pick = (slots: OddSlot[], i: number) => ({
     line: slots[i].odd != null ? canonicalLines[i] : null,
     odd: slots[i].odd,
   });
-  let t: TotalsOdds = {
-    under_0_line: pick(underSlots, 0).line,
-    under_0_odd: pick(underSlots, 0).odd,
-    under_1_line: pick(underSlots, 1).line,
-    under_1_odd: pick(underSlots, 1).odd,
-    under_2_line: pick(underSlots, 2).line,
-    under_2_odd: pick(underSlots, 2).odd,
-    over_0_line: pick(overSlots, 0).line,
-    over_0_odd: pick(overSlots, 0).odd,
-    over_1_line: pick(overSlots, 1).line,
-    over_1_odd: pick(overSlots, 1).odd,
-    over_2_line: pick(overSlots, 2).line,
-    over_2_odd: pick(overSlots, 2).odd,
-  };
-  t = fixTotalsOddsMonotonicity(t);
+
+  const build = (us: OddSlot[], os: OddSlot[]): TotalsOdds => ({
+    under_0_line: pick(us, 0).line,
+    under_0_odd: pick(us, 0).odd,
+    under_1_line: pick(us, 1).line,
+    under_1_odd: pick(us, 1).odd,
+    under_2_line: pick(us, 2).line,
+    under_2_odd: pick(us, 2).odd,
+    over_0_line: pick(os, 0).line,
+    over_0_odd: pick(os, 0).odd,
+    over_1_line: pick(os, 1).line,
+    over_1_odd: pick(os, 1).odd,
+    over_2_line: pick(os, 2).line,
+    over_2_odd: pick(os, 2).odd,
+  });
+
+  let t = build(u, o);
+
+  const underOdds = [t.under_0_odd, t.under_1_odd, t.under_2_odd];
+  const overOdds = [t.over_0_odd, t.over_1_odd, t.over_2_odd];
+  if (!sideOddsMonotonic(underOdds, "under")) {
+    for (const i of [0, 1, 2] as const) {
+      (t as Record<string, number | null>)[`under_${i}_odd`] = null;
+      (t as Record<string, number | null>)[`under_${i}_line`] = null;
+    }
+  }
+  if (!sideOddsMonotonic(overOdds, "over")) {
+    for (const i of [0, 1, 2] as const) {
+      (t as Record<string, number | null>)[`over_${i}_odd`] = null;
+      (t as Record<string, number | null>)[`over_${i}_line`] = null;
+    }
+  }
+
   return t;
 }
 
-/** Under mais restrito = odd maior; Over mais restrito = odd maior. Corrige inversao 0↔1. */
-function fixTotalsOddsMonotonicity(t: TotalsOdds): TotalsOdds {
-  const out = { ...t };
-  const swapUnder = (a: 0 | 1, b: 1 | 2) => {
-    const oa = out[`under_${a}_odd` as keyof TotalsOdds] as number | null;
-    const ob = out[`under_${b}_odd` as keyof TotalsOdds] as number | null;
-    if (oa == null || ob == null || oa >= ob) return;
-    const la = out[`under_${a}_line` as keyof TotalsOdds] as number | null;
-    const lb = out[`under_${b}_line` as keyof TotalsOdds] as number | null;
-    (out as Record<string, number | null>)[`under_${a}_odd`] = ob;
-    (out as Record<string, number | null>)[`under_${b}_odd`] = oa;
-    (out as Record<string, number | null>)[`under_${a}_line`] = lb;
-    (out as Record<string, number | null>)[`under_${b}_line`] = la;
-  };
-  const swapOver = (a: 0 | 1, b: 1 | 2) => {
-    const oa = out[`over_${a}_odd` as keyof TotalsOdds] as number | null;
-    const ob = out[`over_${b}_odd` as keyof TotalsOdds] as number | null;
-    if (oa == null || ob == null || oa <= ob) return;
-    const la = out[`over_${a}_line` as keyof TotalsOdds] as number | null;
-    const lb = out[`over_${b}_line` as keyof TotalsOdds] as number | null;
-    (out as Record<string, number | null>)[`over_${a}_odd`] = ob;
-    (out as Record<string, number | null>)[`over_${b}_odd`] = oa;
-    (out as Record<string, number | null>)[`over_${a}_line`] = lb;
-    (out as Record<string, number | null>)[`over_${b}_line`] = la;
-  };
-  swapUnder(0, 1);
-  swapUnder(1, 2);
-  swapOver(0, 1);
-  swapOver(1, 2);
-  return out;
+function scoreMarketOdds(underSlots: OddSlot[], overSlots: OddSlot[], goalsTotal: number): number {
+  const t = slotsToTotalsOdds(underSlots, overSlots, goalsTotal);
+  let score = 0;
+  for (const o of [t.under_0_odd, t.under_1_odd, t.under_2_odd, t.over_0_odd, t.over_1_odd, t.over_2_odd]) {
+    if (o != null) score += 1;
+  }
+  if (sideOddsMonotonic([t.under_0_odd, t.under_1_odd, t.under_2_odd], "under")) score += 3;
+  if (sideOddsMonotonic([t.over_0_odd, t.over_1_odd, t.over_2_odd], "over")) score += 3;
+  return score;
 }
 
-function extractTotalsOdds(
-  eventId: string,
-  event: Json,
-  overview: Json,
+function extractOddsFromMarket(
+  mid: string,
+  rec: Json,
+  selections: Record<string, Json>,
   goalsTotal: number,
-): TotalsOdds {
+): { under: OddSlot[]; over: OddSlot[] } | null {
+  const mode = marketLineMode(rec);
+  if (!mode) return null;
+
   const underSlots: OddSlot[] = [
     { line: null, odd: null, kind: null },
     { line: null, odd: null, kind: null },
@@ -498,6 +584,47 @@ function extractTotalsOdds(
     { line: null, odd: null, kind: null },
   ];
 
+  const marketLine = toNum(rec.handicap ?? rec.line ?? rec.points);
+  const selIds = Array.isArray(rec.selectionIdList)
+    ? rec.selectionIdList.map(String)
+    : Object.keys(selections).filter((sid) =>
+      String(asRecord(selections[sid])?.marketId ?? "") === mid
+    );
+
+  for (const sid of selIds) {
+    const sel = asRecord(selections[sid]);
+    if (!sel) continue;
+    const sname = String(sel.name ?? sel.shortName ?? "").toLowerCase();
+    const isUnder =
+      sname.includes("under") || sname.includes("menos") || sname === "below" ||
+      sname.startsWith("u ") || sname.startsWith("u(");
+    const isOver =
+      sname.includes("over") || sname.includes("mais") || sname === "above" ||
+      sname.startsWith("o ") || sname.startsWith("o(");
+    if (!isUnder && !isOver) continue;
+
+    const price = toNum(sel.price ?? sel.odds ?? sel.decimalOdds);
+    let selLine = toNum(sel.handicap ?? sel.line ?? sel.points) ?? marketLine;
+    if (selLine == null) selLine = parseGoalLineFromSelectionName(sname);
+    if (price == null || selLine == null || price < 1.01 || price > 100) continue;
+
+    const slot = slotForLine(selLine, goalsTotal, mode);
+    if (slot == null) continue;
+
+    if (isUnder) assignOddSlot(underSlots, slot, selLine, price, mode);
+    if (isOver) assignOddSlot(overSlots, slot, selLine, price, mode);
+  }
+
+  if (countFilledSlots(underSlots) === 0 && countFilledSlots(overSlots) === 0) return null;
+  return { under: underSlots, over: overSlots };
+}
+
+function extractTotalsOdds(
+  eventId: string,
+  event: Json,
+  overview: Json,
+  goalsTotal: number,
+): TotalsOdds {
   const markets = asRecord(overview.markets) ?? {};
   const selections = asRecord(overview.selections) ?? {};
 
@@ -511,67 +638,72 @@ function extractTotalsOdds(
     if (String(rec.eventId ?? rec.eventID ?? "") === eventId) marketIds.add(mid);
   }
 
-  const considerMarket = (mid: string, rec: Json) => {
-    const name = String(rec.name ?? rec.typeName ?? rec.marketType ?? "").toLowerCase();
-    const typeName = String(rec.typeName ?? "").toLowerCase();
-    const looksTotal =
-      name.includes("total") ||
-      name.includes("gols") ||
-      name.includes("over") ||
-      name.includes("under") ||
-      name.includes("mais") ||
-      name.includes("menos") ||
-      typeName.includes("total");
-    const marketLine = toNum(rec.handicap ?? rec.line ?? rec.points);
-    const selIds = Array.isArray(rec.selectionIdList)
-      ? rec.selectionIdList.map(String)
-      : Object.keys(selections).filter((sid) => String(asRecord(selections[sid])?.marketId ?? "") === mid);
+  const emptySlots = (): OddSlot[] => [
+    { line: null, odd: null, kind: null },
+    { line: null, odd: null, kind: null },
+    { line: null, odd: null, kind: null },
+  ];
 
-    for (const sid of selIds) {
-      const sel = asRecord(selections[sid]);
-      if (!sel) continue;
-      const sname = String(sel.name ?? sel.shortName ?? "").toLowerCase();
-      const isUnder =
-        sname.includes("under") ||
-        sname.includes("menos") ||
-        sname === "below" ||
-        sname.startsWith("u ") ||
-        sname.startsWith("u(");
-      const isOver =
-        sname.includes("over") ||
-        sname.includes("mais") ||
-        sname === "above" ||
-        sname.startsWith("o ") ||
-        sname.startsWith("o(");
-      if (!isUnder && !isOver && !looksTotal) continue;
+  const byMode: Record<MarketLineMode, { under: OddSlot[]; over: OddSlot[] }> = {
+    remaining: { under: emptySlots(), over: emptySlots() },
+    absolute: { under: emptySlots(), over: emptySlots() },
+  };
 
-      const price = toNum(sel.price ?? sel.odds ?? sel.decimalOdds);
-      let selLine = toNum(sel.handicap ?? sel.line ?? sel.points) ?? marketLine;
-      if (selLine == null) selLine = parseLineFromText(sname);
-      if (price == null || selLine == null) continue;
-
-      const mapped = slotForLine(selLine, goalsTotal);
-      if (!mapped) continue;
-
-      if (isUnder) assignOddSlot(underSlots, mapped.slot, selLine, price, mapped.kind);
-      if (isOver) assignOddSlot(overSlots, mapped.slot, selLine, price, mapped.kind);
+  const tryMarket = (mid: string, rec: Json) => {
+    const mode = marketLineMode(rec);
+    if (!mode) return;
+    const extracted = extractOddsFromMarket(mid, rec, selections as Record<string, Json>, goalsTotal);
+    if (!extracted) return;
+    const bucket = byMode[mode];
+    for (let i = 0; i < 3; i++) {
+      const u = extracted.under[i];
+      const o = extracted.over[i];
+      if (u.odd != null && u.line != null) assignOddSlot(bucket.under, i, u.line, u.odd, mode);
+      if (o.odd != null && o.line != null) assignOddSlot(bucket.over, i, o.line, o.odd, mode);
     }
   };
 
   for (const mid of marketIds) {
     const rec = asRecord(markets[mid]);
-    if (rec) considerMarket(mid, rec);
+    if (rec) tryMarket(mid, rec);
   }
 
-  if (underSlots.every((f) => f.odd == null) && overSlots.every((f) => f.odd == null)) {
-    for (const [mid, market] of Object.entries(markets)) {
-      const rec = asRecord(market);
-      if (!rec) continue;
-      considerMarket(mid, rec);
+  let bestScore = -1;
+  let bestMode: MarketLineMode | null = null;
+  let bestUnder = emptySlots();
+  let bestOver = emptySlots();
+
+  for (const mode of ["remaining", "absolute"] as MarketLineMode[]) {
+    const score = scoreMarketOdds(byMode[mode].under, byMode[mode].over, goalsTotal);
+    const prefer = mode === "remaining" && score === bestScore;
+    if (score > bestScore || prefer) {
+      bestScore = score;
+      bestMode = mode;
+      bestUnder = byMode[mode].under.map((s) => ({ ...s }));
+      bestOver = byMode[mode].over.map((s) => ({ ...s }));
     }
   }
 
-  return slotsToTotalsOdds(underSlots, overSlots, goalsTotal);
+  if (bestScore < 0) {
+    for (const [mid, market] of Object.entries(markets)) {
+      const rec = asRecord(market);
+      if (!rec) continue;
+      tryMarket(mid, rec);
+    }
+    for (const mode of ["remaining", "absolute"] as MarketLineMode[]) {
+      const score = scoreMarketOdds(byMode[mode].under, byMode[mode].over, goalsTotal);
+      const prefer = mode === "remaining" && score === bestScore;
+      if (score > bestScore || prefer) {
+        bestScore = score;
+        bestMode = mode;
+        bestUnder = byMode[mode].under.map((s) => ({ ...s }));
+        bestOver = byMode[mode].over.map((s) => ({ ...s }));
+      }
+    }
+  }
+
+  if (bestScore < 0 || bestMode == null) return EMPTY_TOTALS_ODDS;
+  return slotsToTotalsOdds(bestUnder, bestOver, goalsTotal);
 }
 
 /** Under por gols restantes: linhas +0.5, +1.5, +2.5. */
