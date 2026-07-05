@@ -487,6 +487,17 @@
       }).join('');
     }
 
+    async function fetchGoalsForGames(url, anonKey, games) {
+      const ids = (games || []).map((g) => g.event_id).filter(Boolean);
+      if (!ids.length) return [];
+      const quoted = ids.map((id) => `"${id}"`).join(',');
+      return supabaseGet(
+        url,
+        anonKey,
+        `futebol_historico_gols?select=*&event_id=in.(${quoted})&order=minute.asc`,
+      );
+    }
+
     async function loadHistory() {
       if (!appCfg) return;
       const fromMinute = Number(document.getElementById('goal-from-minute').value || 85);
@@ -495,11 +506,7 @@
         appCfg.anonKey,
         'futebol_historico_jogos?select=*&is_live=eq.false&order=finished_at.desc&limit=200',
       );
-      const goals = await supabaseGet(
-        appCfg.url,
-        appCfg.anonKey,
-        'futebol_historico_gols?select=*&order=minute.asc&limit=2000',
-      );
+      const goals = await fetchGoalsForGames(appCfg.url, appCfg.anonKey, games);
       historyCache = { games, goals };
       renderHistory(fromMinute);
     }
