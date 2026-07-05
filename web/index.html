@@ -217,6 +217,44 @@
       opacity: 0.55;
       cursor: wait;
     }
+    .history-simulation {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+      gap: 0.75rem;
+      margin-bottom: 0.75rem;
+    }
+    .history-sim-card {
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      background: var(--panel);
+      padding: 0.75rem;
+    }
+    .history-sim-title {
+      font-size: 0.78rem;
+      color: var(--muted);
+      text-transform: uppercase;
+      letter-spacing: 0.04em;
+      margin-bottom: 0.35rem;
+    }
+    .history-sim-market {
+      font-size: 0.92rem;
+      font-weight: 700;
+      margin-bottom: 0.5rem;
+    }
+    .history-sim-row {
+      font-size: 0.82rem;
+      color: var(--muted);
+      line-height: 1.5;
+    }
+    .history-sim-row strong { color: var(--text); }
+    .history-sim-profit.positive { color: var(--accent); font-weight: 700; }
+    .history-sim-profit.negative { color: #ff6b6b; font-weight: 700; }
+    .history-sim-note {
+      grid-column: 1 / -1;
+      font-size: 0.78rem;
+      color: var(--muted);
+      margin: 0;
+    }
   </style>
 </head>
 <body>
@@ -292,6 +330,7 @@
         <button type="button" id="history-filter-btn">Buscar</button>
         <span id="history-filter-result" class="history-filter-result"></span>
       </div>
+      <section class="history-simulation" id="history-simulation" aria-live="polite"></section>
       <div class="table-wrap">
         <table>
           <thead>
@@ -559,6 +598,83 @@
       return `${from}'–${to}'`;
     }
 
+    function parseScoreTotal(text) {
+      const m = String(text || '').match(/(\d+)\D+(\d+)/);
+      if (!m) return null;
+      return Number(m[1]) + Number(m[2]);
+    }
+
+    /** Gols com minuto estritamente apos 85'. Fallback: placar final - placar aos 85'. */
+    function goalsAfter85(allGoals, game) {
+      const fromTimeline = allGoals.filter((g) => (g.minute ?? 0) > 85).length;
+      if (fromTimeline > 0) return fromTimeline;
+      const at85 = parseScoreTotal(game.odds_85_score);
+      if (at85 == null) return 0;
+      const final = (game.home_score ?? 0) + (game.away_score ?? 0);
+      return Math.max(0, final - at85);
+    }
+
+    function simulateHistoryBet(items, oddKey, winIf) {
+      let bets = 0;
+      let greens = 0;
+      let profit = 0;
+      for (const { game, allGoals } of items) {
+        const odd = Number(game[oddKey]);
+        if (!Number.isFinite(odd) || odd < 1.01) continue;
+        bets += 1;
+        const after85 = goalsAfter85(allGoals, game);
+        const win = winIf(after85);
+        if (win) {
+          greens += 1;
+          profit += odd - 1;
+        } else {
+          profit -= 1;
+        }
+      }
+      return {
+        bets,
+        greens,
+        reds: bets - greens,
+        profit,
+        roi: bets > 0 ? (100 * profit) / bets : 0,
+      };
+    }
+
+    function formatSimProfit(value) {
+      const rounded = Math.round(value * 100) / 100;
+      const sign = rounded > 0 ? '+' : '';
+      return `${sign}${formatNumber(rounded)} u`;
+    }
+
+    function renderHistorySimulation(items) {
+      const el = document.getElementById('history-simulation');
+      if (!el) return;
+
+      if (!items.length) {
+        el.innerHTML = '';
+        return;
+      }
+
+      const under = simulateHistoryBet(items, 'odd_under_05', (g) => g === 0);
+      const over = simulateHistoryBet(items, 'odd_over_05', (g) => g >= 1);
+
+      const card = (title, market, sim) => {
+        const profitClass = sim.profit >= 0 ? 'positive' : 'negative';
+        const hitRate = sim.bets > 0 ? formatNumber((100 * sim.greens) / sim.bets) : '—';
+        return `<div class="history-sim-card">
+          <div class="history-sim-title">${title}</div>
+          <div class="history-sim-market">${market}</div>
+          <div class="history-sim-row"><strong>${sim.bets}</strong> apostas · ${sim.greens}G / ${sim.reds}R · acerto ${hitRate}%</div>
+          <div class="history-sim-row">Lucro <span class="history-sim-profit ${profitClass}">${formatSimProfit(sim.profit)}</span> · ROI ${formatNumber(sim.roi)}%</div>
+        </div>`;
+      };
+
+      el.innerHTML =
+        card('Simulacao 1u/jogo', 'Under -0,5 · sem gol apos 85\'', under) +
+        card('Simulacao 1u/jogo', 'Over +0,5 · 1 gol ou mais apos 85\'', over) +
+        `<p class="history-sim-note">Base: ${items.length} jogo(s) carregados · liquidacao por gols apos 85' · jogos sem odd ignorados na respectiva aposta</p>`;
+    }
+
     function renderHistory() {
       const { from, to } = getHistoryMinuteRange();
       const tbody = document.getElementById('history-tbody');
@@ -590,6 +706,8 @@
         filterResultEl.textContent =
           `${matchedCount} jogo(s) com gol · ${formatMinuteRangeLabel(from, to)} · ${items.length} exibido(s)`;
       }
+
+      renderHistorySimulation(items);
 
       if (!items.length) {
         tbody.innerHTML =
