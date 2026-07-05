@@ -859,8 +859,74 @@ async function persistEventGoals(
   const { error } = await supabase
     .from("futebol_historico_gols")
     .upsert(goalRows, { onConflict: "event_id,minute,team_side" });
-  if (error) return { saved: 0, source: "error" };
+  if (error) {
+    // #region agent log
+    console.error("persistEventGoals upsert failed", { eventId, error: error.message, rows: goalRows.length });
+    // #endregion
+    return { saved: 0, source: "error" };
+  }
   return { saved: merged.length, source };
+}
+
+function inferGoalsFromFinalScore(
+  eventId: string,
+  homeScore: number,
+  awayScore: number,
+  homeName: string | null,
+  awayName: string | null,
+  minute: number = 90,
+): GoalEvent[] {
+  return inferGoalsFromScoreDelta(eventId, 0, 0, homeScore, awayScore, minute, homeName, awayName);
+}
+
+async function backfillMissingHistoricGoals(
+  supabase: ReturnType<typeof createClient>,
+  limit = 30,
+): Promise<number> {
+  const { data: games } = await supabase
+    .from("futebol_historico_jogos")
+    .select("event_id,home,away,home_score,away_score,betradar_match_id,last_minute")
+    .eq("is_live", false)
+    .order("finished_at", { ascending: false })
+    .limit(120);
+
+  let backfilled = 0;
+  for (const game of games ?? []) {
+    if (backfilled >= limit) break;
+    const home = game.home_score ?? 0;
+    const away = game.away_score ?? 0;
+    if (home + away <= 0) continue;
+
+    const { count } = await supabase
+      .from("futebol_historico_gols")
+      .select("*", { count: "exact", head: true })
+      .eq("event_id", game.event_id);
+    if (count != null && count > 0) continue;
+
+    const betradarId = game.betradar_match_id;
+    const timelineResult = await fetchGoalsTimeline(
+      game.event_id,
+      betradarId,
+      game.home,
+      game.away,
+    );
+    let goals = timelineResult.goals;
+    if (goals.length === 0) {
+      goals = inferGoalsFromFinalScore(
+        game.event_id,
+        home,
+        away,
+        game.home,
+        game.away,
+        game.last_minute ?? 90,
+      );
+    }
+    if (goals.length === 0) continue;
+
+    const persist = await persistEventGoals(supabase, game.event_id, goals, [], home + away);
+    if (persist.saved > 0) backfilled += 1;
+  }
+  return backfilled;
 }
 
 /** Gols com minuto via Sportradar match_timeline. */
@@ -926,18 +992,23 @@ async function fetchGoalsTimeline(
         !desc.includes("own goal attempt");
       if (!isGoalType && !isGoalDesc) continue;
 
-      let minute = toInt(
-        rec.time ??
+      let minute: number | null = null;
+      const timeField = toInt(rec.time);
+      const secondsField = toInt(rec.seconds);
+      if (timeField != null && timeField >= 0) {
+        minute = timeField;
+      } else {
+        minute = toInt(
           rec.minute ??
-          rec.matchtime ??
-          asRecord(rec.timeinfo)?.played ??
-          rec.m,
-      );
-      if (minute == null) {
-        const sec = toInt(rec.seconds);
-        if (sec != null) minute = Math.floor(sec / 60);
+            rec.matchtime ??
+            asRecord(rec.timeinfo)?.played ??
+            rec.m,
+        );
+        if ((minute == null || minute < 0) && secondsField != null && secondsField >= 0) {
+          minute = Math.floor(secondsField / 60);
+        }
       }
-      if (minute == null) continue;
+      if (minute == null || minute < 0) continue;
 
       let teamSide: string | null = null;
       const teamField = rec.team ?? rec.side ?? rec.teams;
@@ -1300,6 +1371,8 @@ Deno.serve(async (req) => {
       if (persist.source === "missing") goalsMissing += 1;
     }
 
+    const goalsBackfilled = await backfillMissingHistoricGoals(supabase, 30);
+
     // jogos que sairam do live: marca is_live=false
     if (liveIds.length > 0) {
       await supabase
@@ -1341,6 +1414,7 @@ Deno.serve(async (req) => {
         `Prontos para manter placar (>=85'): ${readyCount}.`,
         `Gols gravados no historico nesta rodada: ${goalsSaved}.`,
         `Gols timeline ok: ${goalsTimelineOk}, timeline vazia c/ placar: ${goalsTimelineEmpty}, inferidos: ${goalsInferred}, sem gols c/ placar: ${goalsMissing}.`,
+        `Backfill historico nesta rodada: ${goalsBackfilled} jogos.`,
       ],
       last_error: null,
       updated_at: new Date().toISOString(),
