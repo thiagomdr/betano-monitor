@@ -738,6 +738,7 @@ async function tryFetchStats(betradarMatchId: string | number | null): Promise<T
 
 type GoalEvent = {
   event_id: string;
+  sportradar_goal_id: string | null;
   minute: number;
   team: string | null;
   team_side: string | null;
@@ -746,14 +747,61 @@ type GoalEvent = {
   score_away: number | null;
 };
 
+function goalRowFromEvent(g: GoalEvent) {
+  return {
+    event_id: g.event_id,
+    sportradar_goal_id: g.sportradar_goal_id,
+    minute: g.minute,
+    team: g.team,
+    team_side: g.team_side ?? "unk",
+    player: g.player,
+    score_home: g.score_home,
+    score_away: g.score_away,
+  };
+}
+
 function dedupeGoals(goals: GoalEvent[]): GoalEvent[] {
   const seen = new Set<string>();
   return goals.filter((g) => {
-    const key = `${g.minute}|${g.team_side ?? ""}|${g.player ?? ""}|${g.score_home ?? ""}-${g.score_away ?? ""}`;
+    const key = g.sportradar_goal_id
+      ? `sr:${g.sportradar_goal_id}`
+      : `${g.minute}|${g.team_side ?? ""}|${g.score_home ?? ""}-${g.score_away ?? ""}`;
     if (seen.has(key)) return false;
     seen.add(key);
     return true;
   });
+}
+
+async function syncGoalsIntegrity(
+  supabase: ReturnType<typeof createClient>,
+  eventId: string,
+  homeScore: number | null,
+  awayScore: number | null,
+): Promise<string> {
+  const expected = (homeScore ?? 0) + (awayScore ?? 0);
+  const { count } = await supabase
+    .from("futebol_historico_gols")
+    .select("*", { count: "exact", head: true })
+    .eq("event_id", eventId);
+  const recorded = count ?? 0;
+  let status = "ok";
+  if (expected === 0 && recorded === 0) status = "ok";
+  else if (recorded === 0) status = "missing";
+  else if (recorded < expected) status = "partial";
+  else if (recorded > expected) status = "mismatch";
+  else status = "ok";
+
+  await supabase
+    .from("futebol_historico_jogos")
+    .update({
+      goals_expected: expected,
+      goals_recorded: recorded,
+      goals_status: status,
+      updated_at: new Date().toISOString(),
+    })
+    .eq("event_id", eventId);
+
+  return status;
 }
 
 function extractBetradarMatchId(event: Json): string | null {
@@ -795,6 +843,7 @@ function inferGoalsFromScoreDelta(
   for (let i = 0; i < homeDelta; i++) {
     goals.push({
       event_id: eventId,
+      sportradar_goal_id: null,
       minute,
       team: homeName,
       team_side: "home",
@@ -806,6 +855,7 @@ function inferGoalsFromScoreDelta(
   for (let i = 0; i < awayDelta; i++) {
     goals.push({
       event_id: eventId,
+      sportradar_goal_id: null,
       minute,
       team: awayName,
       team_side: "away",
@@ -822,8 +872,9 @@ async function persistEventGoals(
   eventId: string,
   timelineGoals: GoalEvent[],
   inferredGoals: GoalEvent[],
-  goalsTotal: number,
-): Promise<{ saved: number; source: string }> {
+  homeScore: number | null,
+  awayScore: number | null,
+): Promise<{ saved: number; source: string; status: string }> {
   let merged: GoalEvent[];
   let source = "none";
 
@@ -833,7 +884,7 @@ async function persistEventGoals(
   } else {
     const { data: existing } = await supabase
       .from("futebol_historico_gols")
-      .select("event_id,minute,team,team_side,player,score_home,score_away")
+      .select("event_id,sportradar_goal_id,minute,team,team_side,player,score_home,score_away")
       .eq("event_id", eventId);
     const existingGoals = (existing ?? []) as GoalEvent[];
     merged = dedupeGoals([...existingGoals, ...inferredGoals]);
@@ -841,31 +892,51 @@ async function persistEventGoals(
     else if (existingGoals.length > 0) source = "preserved";
   }
 
+  let saved = 0;
+  const upsertErrors: string[] = [];
+  if (merged.length > 0) {
+    for (const g of merged) {
+      const row = goalRowFromEvent(g);
+      if (g.sportradar_goal_id) {
+        const { error } = await supabase
+          .from("futebol_historico_gols")
+          .upsert(row, { onConflict: "event_id,sportradar_goal_id" });
+        if (!error) saved += 1;
+        else {
+          console.error("upsert sportradar goal", eventId, error.message);
+          upsertErrors.push(error.message);
+        }
+      } else {
+        const { error } = await supabase
+          .from("futebol_historico_gols")
+          .upsert(row, { onConflict: "event_id,minute,team_side,score_home,score_away" });
+        if (!error) saved += 1;
+        else {
+          console.error("upsert placar goal", eventId, error.message);
+          upsertErrors.push(error.message);
+        }
+      }
+    }
+
+    if (source === "timeline") {
+      const srIds = merged.map((g) => g.sportradar_goal_id).filter(Boolean) as string[];
+      if (srIds.length > 0) {
+        const quoted = srIds.map((id) => `"${id}"`).join(",");
+        await supabase
+          .from("futebol_historico_gols")
+          .delete()
+          .eq("event_id", eventId)
+          .not("sportradar_goal_id", "in", `(${quoted})`);
+      }
+    }
+  }
+
+  const status = await syncGoalsIntegrity(supabase, eventId, homeScore, awayScore);
+  const goalsTotal = (homeScore ?? 0) + (awayScore ?? 0);
   if (merged.length === 0) {
-    return { saved: 0, source: goalsTotal > 0 ? "missing" : "none" };
+    return { saved: 0, source: goalsTotal > 0 ? "missing" : "none", status };
   }
-
-  const goalRows = merged.map((g) => ({
-    event_id: g.event_id,
-    minute: g.minute,
-    team: g.team,
-    team_side: g.team_side ?? "unk",
-    player: g.player,
-    score_home: g.score_home,
-    score_away: g.score_away,
-  }));
-
-  await supabase.from("futebol_historico_gols").delete().eq("event_id", eventId);
-  const { error } = await supabase
-    .from("futebol_historico_gols")
-    .upsert(goalRows, { onConflict: "event_id,minute,team_side" });
-  if (error) {
-    // #region agent log
-    console.error("persistEventGoals upsert failed", { eventId, error: error.message, rows: goalRows.length });
-    // #endregion
-    return { saved: 0, source: "error" };
-  }
-  return { saved: merged.length, source };
+  return { saved, source, status };
 }
 
 function inferGoalsFromFinalScore(
@@ -879,34 +950,50 @@ function inferGoalsFromFinalScore(
   return inferGoalsFromScoreDelta(eventId, 0, 0, homeScore, awayScore, minute, homeName, awayName);
 }
 
-async function backfillMissingHistoricGoals(
+async function reconcileHistoricGoals(
   supabase: ReturnType<typeof createClient>,
-  limit = 30,
-): Promise<number> {
+  limit = 120,
+): Promise<{ backfilled: number; fixed: number; scanned: number }> {
   const { data: games } = await supabase
     .from("futebol_historico_jogos")
-    .select("event_id,home,away,home_score,away_score,betradar_match_id,last_minute")
+    .select("event_id,home,away,home_score,away_score,betradar_match_id,last_minute,goals_status,goals_recorded")
     .eq("is_live", false)
+    .or("goals_status.neq.ok,goals_status.is.null,goals_status.eq.unknown")
     .order("finished_at", { ascending: false })
-    .limit(120);
+    .limit(limit);
 
   let backfilled = 0;
+  let fixed = 0;
+  let scanned = 0;
+
   for (const game of games ?? []) {
-    if (backfilled >= limit) break;
+    scanned += 1;
     const home = game.home_score ?? 0;
     const away = game.away_score ?? 0;
-    if (home + away <= 0) continue;
+    const expected = home + away;
+    if (expected <= 0) {
+      await syncGoalsIntegrity(supabase, game.event_id, home, away);
+      continue;
+    }
 
-    const { count } = await supabase
-      .from("futebol_historico_gols")
-      .select("*", { count: "exact", head: true })
-      .eq("event_id", game.event_id);
-    if (count != null && count > 0) continue;
+    const needsWork =
+      game.goals_status === "missing" ||
+      game.goals_status === "partial" ||
+      game.goals_status === "mismatch" ||
+      game.goals_status === "unknown" ||
+      game.goals_status == null ||
+      (game.goals_recorded ?? 0) < expected ||
+      (game.goals_recorded ?? 0) > expected;
 
-    const betradarId = game.betradar_match_id;
+    if (!needsWork) continue;
+
+    if (game.goals_status === "mismatch" || (game.goals_recorded ?? 0) > expected) {
+      await supabase.from("futebol_historico_gols").delete().eq("event_id", game.event_id);
+    }
+
     const timelineResult = await fetchGoalsTimeline(
       game.event_id,
-      betradarId,
+      game.betradar_match_id,
       game.home,
       game.away,
     );
@@ -921,12 +1008,24 @@ async function backfillMissingHistoricGoals(
         game.last_minute ?? 90,
       );
     }
-    if (goals.length === 0) continue;
+    if (goals.length === 0) {
+      await syncGoalsIntegrity(supabase, game.event_id, home, away);
+      continue;
+    }
 
-    const persist = await persistEventGoals(supabase, game.event_id, goals, [], home + away);
-    if (persist.saved > 0) backfilled += 1;
+    const persist = await persistEventGoals(
+      supabase,
+      game.event_id,
+      goals,
+      [],
+      home,
+      away,
+    );
+    if (persist.status === "ok") fixed += 1;
+    else if (persist.saved > 0) backfilled += 1;
   }
-  return backfilled;
+
+  return { backfilled, fixed, scanned };
 }
 
 /** Gols com minuto via Sportradar match_timeline. */
@@ -963,34 +1062,17 @@ async function fetchGoalsTimeline(
     for (const item of events) {
       const rec = asRecord(item);
       if (!rec) continue;
-      const type = String(rec.type ?? rec._type ?? rec.event ?? "").toLowerCase();
+      const type = String(rec.type ?? "").toLowerCase();
       const typeId = toInt(rec.typeid ?? rec._typeid ?? rec.type_id);
       const docType = String(rec._doctype ?? "").toLowerCase();
-      const desc = String(rec.name ?? rec.description ?? rec.text ?? "").toLowerCase();
-      // evita goal kick / disallowed / cancel
-      const blocked =
-        type.includes("kick") ||
-        type.includes("disallowed") ||
-        type.includes("cancel") ||
-        type.includes("var") ||
-        desc.includes("kick") ||
-        desc.includes("disallowed") ||
-        desc.includes("anulado") ||
-        desc.includes("cancel");
-      if (blocked) continue;
-
-      // Sportradar gismo: type "goal" ou typeid conhecido de gol
-      const isGoalType =
+      // BD-first: aceita apenas eventos Sportradar tipados como gol
+      const isGoal =
+        docType === "goal" ||
         type === "goal" ||
-        type === "goals" ||
-        type === "score_change" ||
         typeId === 30 ||
-        String(rec._typeid ?? "") === "30" ||
-        docType === "goal";
-      const isGoalDesc =
-        (desc === "goal" || desc.startsWith("goal ") || desc.includes(" scored")) &&
-        !desc.includes("own goal attempt");
-      if (!isGoalType && !isGoalDesc) continue;
+        String(rec._typeid ?? "") === "30";
+      if (!isGoal) continue;
+      if (Number(rec.disabled ?? 0) !== 0) continue;
 
       let minute: number | null = null;
       const timeField = toInt(rec.time);
@@ -1036,8 +1118,10 @@ async function fetchGoalsTimeline(
         : player;
 
       const result = asRecord(rec.result) ?? asRecord(rec.score);
+      const srId = rec._id != null ? String(rec._id) : null;
       goals.push({
         event_id: eventId,
+        sportradar_goal_id: srId,
         minute,
         team: teamName,
         team_side: teamSide,
@@ -1365,13 +1449,16 @@ Deno.serve(async (req) => {
         eventId,
         timelineGoals,
         inferredGoals,
-        goalsTotal,
+        score.home,
+        score.away,
       );
       if (persist.saved > 0) goalsSaved += persist.saved;
-      if (persist.source === "missing") goalsMissing += 1;
+      if (persist.source === "missing" || persist.status === "missing" || persist.status === "partial") {
+        goalsMissing += 1;
+      }
     }
 
-    const goalsBackfilled = await backfillMissingHistoricGoals(supabase, 30);
+    const reconcile = await reconcileHistoricGoals(supabase, 120);
 
     // jogos que sairam do live: marca is_live=false
     if (liveIds.length > 0) {
@@ -1414,7 +1501,7 @@ Deno.serve(async (req) => {
         `Prontos para manter placar (>=85'): ${readyCount}.`,
         `Gols gravados no historico nesta rodada: ${goalsSaved}.`,
         `Gols timeline ok: ${goalsTimelineOk}, timeline vazia c/ placar: ${goalsTimelineEmpty}, inferidos: ${goalsInferred}, sem gols c/ placar: ${goalsMissing}.`,
-        `Backfill historico nesta rodada: ${goalsBackfilled} jogos.`,
+        `Reconciliacao historico: ${reconcile.scanned} analisados, ${reconcile.fixed} ok, ${reconcile.backfilled} parcial/missing.`,
       ],
       last_error: null,
       updated_at: new Date().toISOString(),

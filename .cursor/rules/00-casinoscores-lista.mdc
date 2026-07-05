@@ -1,21 +1,43 @@
 ---
-description: Modelo padrao — Futebol live Betano via Supabase Edge Function
+description: Modelo padrao — Futebol live Betano via Supabase (BD-first)
 alwaysApply: true
 ---
 
-# Futebol Live Betano (Supabase)
+# Futebol Live Betano (Supabase) — BD-first
+
+## Principio
+
+- **Fonte da verdade = PostgreSQL (Supabase)**. Painel so le tabelas/views; nunca parseia JSON bruto.
+- **Minimo de parser** na Edge Function: extrair campos estruturados da API e **gravar no BD**; logica de negocio e validacao preferencialmente em **colunas + views SQL**.
+- **Nunca confiar na UI** para corrigir dados faltantes — corrigir na coleta/persistencia e marcar `goals_status` no BD.
 
 ## Escopo
 
-- Coleta **Betano** (`danae-webapi`) na **Edge Function** `betano-futebol-live`.
-- **Nao** coletar do IP da casa do usuario (evitar risco de conta/IP).
+- Coleta **Betano** (`danae-webapi`) + **Sportradar** (`betradarMatchId`) na Edge Function `betano-futebol-live`.
+- **Nao** coletar do IP da casa do usuario.
 - **Nao** usar cookie/sessao de conta Betano na function.
-- Painel `web/` le `futebol_live_rows` / `futebol_live_meta` via anon key.
-- Foco: jogos **>= 85'** para aposta de manter placar.
+- Painel `web/` le `futebol_live_*`, `futebol_historico_*` e view `futebol_historico_validacao` via anon key.
+- Odds Under/Over congeladas aos **85'** em `futebol_historico_jogos` (`odds_85_captured_at`).
+
+## Integridade de gols (obrigatorio)
+
+- Tabela `futebol_historico_gols`: **UNIQUE CONSTRAINT** (nao indice parcial) — `(event_id, sportradar_goal_id)` e `(event_id, minute, team_side, score_home, score_away)` — PostgREST upsert exige constraint nomeada.
+- Colunas em `futebol_historico_jogos`: `goals_expected`, `goals_recorded`, `goals_status` (`ok` | `missing` | `partial` | `mismatch`).
+- View `futebol_historico_validacao` para auditoria sem parser no frontend.
+- Apos cada persistencia de gols: **syncGoalsIntegrity** atualiza contadores e status no BD.
+- Backfill/reconciliacao na function para jogos com `goals_status != 'ok'`.
+
+## Parser (permitido vs evitar)
+
+| Permitido | Evitar |
+|-----------|--------|
+| Campos JSON tipados (`event.betradarMatchId`, `values["125"]`) | Regex em JSON.stringify para odds/gols |
+| `_doctype === 'goal'` + `_id` + `result.home/away` na timeline | Heuristicas frageis de texto (`desc.includes("goal")`) |
+| Upsert idempotente no BD | delete-all + insert que apaga dados se upsert falhar |
 
 ## Fluxo
 
-1. Deploy migration + `supabase functions deploy betano-futebol-live --no-verify-jwt`
+1. Migration + `supabase functions deploy betano-futebol-live --no-verify-jwt`
 2. Cron `*/2 * * * *` chama a function
 3. `web/supabase.config.json` com url + anonKey
 4. `scripts/serve-monitor.ps1` → localhost:8080
@@ -23,5 +45,5 @@ alwaysApply: true
 ## Codigo
 
 - Function: `supabase/functions/betano-futebol-live/`
-- Tabelas: `futebol_live_*`
+- Tabelas: `futebol_live_*`, `futebol_historico_*`
 - Nao reintroduzir coleta local Betano no PC do usuario

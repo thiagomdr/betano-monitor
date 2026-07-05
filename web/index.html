@@ -101,6 +101,12 @@
     tr.risk-low td:first-child { box-shadow: inset 3px 0 0 #3dd68c; }
     tr.risk-mid td:first-child { box-shadow: inset 3px 0 0 #ffd166; }
     tr.risk-high td:first-child { box-shadow: inset 3px 0 0 #dc3545; }
+    tr.goals-missing td { background: rgba(220, 53, 69, 0.12); }
+    tr.goals-partial td { background: rgba(255, 209, 102, 0.1); }
+    .goals-status { font-size: 0.78rem; font-weight: 600; }
+    .goals-status.ok { color: var(--accent); }
+    .goals-status.partial { color: var(--warn); }
+    .goals-status.missing, .goals-status.mismatch { color: #ff6b6b; }
     .muted { color: var(--muted); }
     .odd { color: var(--accent); font-weight: 600; }
     .empty { text-align: center; color: var(--muted); padding: 2rem; }
@@ -173,6 +179,32 @@
     #panel-history tbody tr:hover td {
       background: rgba(232, 238, 247, 0.08);
     }
+    .history-load-more-wrap {
+      display: flex;
+      flex-wrap: wrap;
+      align-items: center;
+      justify-content: center;
+      gap: 0.75rem;
+      margin-top: 1rem;
+    }
+    .history-load-more-wrap button {
+      background: var(--panel);
+      border: 1px solid var(--border);
+      color: var(--text);
+      border-radius: 6px;
+      padding: 0.55rem 1.25rem;
+      font-size: 0.9rem;
+      font-weight: 600;
+      cursor: pointer;
+    }
+    .history-load-more-wrap button:hover:not(:disabled) {
+      border-color: var(--accent);
+      color: var(--accent);
+    }
+    .history-load-more-wrap button:disabled {
+      opacity: 0.55;
+      cursor: wait;
+    }
   </style>
 </head>
 <body>
@@ -233,8 +265,8 @@
 
     <section class="panel" id="panel-history">
       <p class="hint">
-        Histórico de <strong>jogos já finalizados</strong> · odds Under/Over
-        <strong>congeladas na primeira coleta ≥ 85'</strong> · filtre gols a partir do minuto X
+        Histórico de <strong>jogos já finalizados</strong> · coluna <strong>Gols BD</strong> mostra
+        se os gols gravados batem com o placar (ok / parcial / faltando)
       </p>
       <div class="history-filters">
         <label>
@@ -262,14 +294,19 @@
               <th title="Over congelado aos 85' (linha placar + 1,5)">ODD +1,5</th>
               <th title="Over congelado aos 85' (linha placar + 2,5)">ODD +2,5</th>
               <th>Gols (minuto)</th>
+              <th title="Validacao BD: registrados vs placar">Gols BD</th>
               <th>Gols a partir do filtro</th>
               <th>Encerrado</th>
             </tr>
           </thead>
           <tbody id="history-tbody">
-            <tr><td colspan="17" class="empty">Carregando histórico...</td></tr>
+            <tr><td colspan="18" class="empty">Carregando histórico...</td></tr>
           </tbody>
         </table>
+      </div>
+      <div class="history-load-more-wrap">
+        <button type="button" id="history-load-more-btn" hidden>Carregar Mais</button>
+        <span id="history-load-more-status" class="muted"></span>
       </div>
     </section>
   </main>
@@ -411,7 +448,64 @@
     }
 
     let appCfg = null;
+    const HISTORY_PAGE_SIZE = 200;
     let historyCache = { games: [], goals: [] };
+    let historyPagination = { offset: 0, hasMore: true, loading: false };
+
+    function mergeGoals(existing, incoming) {
+      const seen = new Set();
+      const merged = [];
+      for (const g of [...existing, ...incoming]) {
+        const key = g.id != null ? String(g.id) : `${g.event_id}|${g.minute}|${g.team_side}|${g.score_home}-${g.score_away}`;
+        if (seen.has(key)) continue;
+        seen.add(key);
+        merged.push(g);
+      }
+      return merged;
+    }
+
+    function updateLoadMoreUi() {
+      const btn = document.getElementById('history-load-more-btn');
+      const statusEl = document.getElementById('history-load-more-status');
+      if (!btn || !statusEl) return;
+      const loaded = historyCache.games.length;
+      if (historyPagination.loading) {
+        btn.hidden = false;
+        btn.disabled = true;
+        btn.textContent = 'Carregando…';
+        statusEl.textContent = `${loaded} jogos carregados`;
+        return;
+      }
+      if (historyPagination.hasMore) {
+        btn.hidden = false;
+        btn.disabled = false;
+        btn.textContent = 'Carregar Mais';
+        statusEl.textContent = `${loaded} jogos carregados · mais disponíveis no BD`;
+      } else if (loaded > 0) {
+        btn.hidden = true;
+        statusEl.textContent = `${loaded} jogos carregados · fim da lista`;
+      } else {
+        btn.hidden = true;
+        statusEl.textContent = '';
+      }
+    }
+
+    function goalsStatusLabel(game, goalCount) {
+      const expected = (game.goals_expected ?? ((game.home_score ?? 0) + (game.away_score ?? 0)));
+      const recorded = game.goals_recorded ?? goalCount;
+      const status = game.goals_status || (recorded >= expected && expected > 0 ? 'ok' : recorded === 0 && expected > 0 ? 'missing' : recorded < expected ? 'partial' : 'ok');
+      const text = `${recorded}/${expected} ${status}`;
+      return `<span class="goals-status ${status}">${text}</span>`;
+    }
+
+    function goalsRowClass(game, goalCount) {
+      const expected = (game.goals_expected ?? ((game.home_score ?? 0) + (game.away_score ?? 0)));
+      const recorded = game.goals_recorded ?? goalCount;
+      const status = game.goals_status || (recorded >= expected ? 'ok' : recorded === 0 ? 'missing' : 'partial');
+      if (expected > 0 && status === 'missing') return 'goals-missing';
+      if (expected > 0 && (status === 'partial' || status === 'mismatch')) return 'goals-partial';
+      return '';
+    }
 
     function renderHistory(fromMinute) {
       const tbody = document.getElementById('history-tbody');
@@ -439,8 +533,22 @@
 
       if (!items.length) {
         tbody.innerHTML =
-          '<tr><td colspan="17" class="empty">Nenhum jogo finalizado no histórico.</td></tr>';
+          '<tr><td colspan="18" class="empty">Nenhum jogo finalizado no histórico.</td></tr>';
         return;
+      }
+
+      const integrityIssues = items.filter(({ game, allGoals }) => {
+        const expected = (game.home_score ?? 0) + (game.away_score ?? 0);
+        const recorded = game.goals_recorded ?? allGoals.length;
+        const status = game.goals_status;
+        return expected > 0 && (status !== 'ok' || recorded < expected);
+      }).length;
+      const hintEl = document.querySelector('#panel-history .hint');
+      if (hintEl) {
+        const base = 'Histórico de <strong>jogos já finalizados</strong> · coluna <strong>Gols BD</strong> mostra se os gols gravados batem com o placar (ok / parcial / faltando)';
+        hintEl.innerHTML = integrityIssues > 0
+          ? `Histórico · <strong style="color:#ff6b6b">${integrityIssues} jogo(s) com gols incompletos no BD</strong> · coluna Gols BD indica confiabilidade`
+          : base;
       }
 
       const fmtStat = (n) => (n == null ? '<span class="muted">—</span>' : `<strong>${n}</strong>`);
@@ -465,7 +573,7 @@
         const odds85 = game.odds_85_score
           ? ` <span class="muted" title="Placar aos ${game.odds_85_minute ?? 85}'">${game.odds_85_score}</span>`
           : '';
-        return `<tr>
+        return `<tr class="${goalsRowClass(game, allGoals.length)}">
           <td>${i + 1}</td>
           <td><strong>${game.score || '—'}</strong>${odds85}</td>
           <td>${match}</td>
@@ -481,6 +589,7 @@
           <td>${formatOdd(game.odd_over_15)}</td>
           <td>${formatOdd(game.odd_over_25)}</td>
           <td>${allHtml}</td>
+          <td>${goalsStatusLabel(game, allGoals.length)}</td>
           <td>${lateHtml}</td>
           <td>${formatDate(game.finished_at || game.last_seen_at)}</td>
         </tr>`;
@@ -498,17 +607,40 @@
       );
     }
 
-    async function loadHistory() {
-      if (!appCfg) return;
+    async function loadHistory(reset = true) {
+      if (!appCfg || historyPagination.loading) return;
+      if (!reset && !historyPagination.hasMore) return;
+
+      if (reset) {
+        historyPagination = { offset: 0, hasMore: true, loading: false };
+        historyCache = { games: [], goals: [] };
+      }
+
+      historyPagination.loading = true;
+      updateLoadMoreUi();
+
       const fromMinute = Number(document.getElementById('goal-from-minute').value || 85);
-      const games = await supabaseGet(
-        appCfg.url,
-        appCfg.anonKey,
-        'futebol_historico_jogos?select=*&is_live=eq.false&order=finished_at.desc&limit=200',
-      );
-      const goals = await fetchGoalsForGames(appCfg.url, appCfg.anonKey, games);
-      historyCache = { games, goals };
+      const offset = historyPagination.offset;
+
+      try {
+        const batch = await supabaseGet(
+          appCfg.url,
+          appCfg.anonKey,
+          `futebol_historico_jogos?select=*&is_live=eq.false&order=finished_at.desc&limit=${HISTORY_PAGE_SIZE}&offset=${offset}`,
+        );
+        const batchGoals = await fetchGoalsForGames(appCfg.url, appCfg.anonKey, batch);
+
+        historyCache.games = reset ? batch : historyCache.games.concat(batch);
+        historyCache.goals = reset ? batchGoals : mergeGoals(historyCache.goals, batchGoals);
+
+        historyPagination.offset += batch.length;
+        historyPagination.hasMore = batch.length === HISTORY_PAGE_SIZE;
+      } finally {
+        historyPagination.loading = false;
+      }
+
       renderHistory(fromMinute);
+      updateLoadMoreUi();
     }
 
     async function initLive() {
@@ -561,10 +693,15 @@
         if (tab === 'history') {
           try {
             if (!appCfg) await initLive();
-            await loadHistory();
+            if (historyCache.games.length === 0) {
+              await loadHistory(true);
+            } else {
+              renderHistory(Number(document.getElementById('goal-from-minute').value || 85));
+              updateLoadMoreUi();
+            }
           } catch (err) {
             document.getElementById('history-tbody').innerHTML =
-              `<tr><td colspan="12" class="empty">${err.message || err}</td></tr>`;
+              `<tr><td colspan="18" class="empty">${err.message || err}</td></tr>`;
           }
         }
       });
@@ -573,6 +710,12 @@
     document.getElementById('history-filter-btn').addEventListener('click', () => {
       const fromMinute = Number(document.getElementById('goal-from-minute').value || 85);
       renderHistory(fromMinute);
+    });
+
+    document.getElementById('history-load-more-btn').addEventListener('click', () => {
+      loadHistory(false).catch((err) => {
+        document.getElementById('history-load-more-status').textContent = err.message || String(err);
+      });
     });
 
     initLive();
