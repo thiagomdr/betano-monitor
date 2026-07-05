@@ -255,6 +255,28 @@
       color: var(--muted);
       margin: 0;
     }
+    .history-sim-toolbar {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 0.75rem;
+      align-items: end;
+      margin-bottom: 0.5rem;
+    }
+    .history-sim-toolbar label {
+      display: flex;
+      flex-direction: column;
+      gap: 0.25rem;
+      font-size: 0.8rem;
+      color: var(--muted);
+    }
+    .history-sim-toolbar select {
+      background: var(--panel);
+      border: 1px solid var(--border);
+      color: var(--text);
+      padding: 0.4rem 0.55rem;
+      border-radius: 6px;
+      min-width: 11rem;
+    }
   </style>
 </head>
 <body>
@@ -329,6 +351,14 @@
         </label>
         <button type="button" id="history-filter-btn">Buscar</button>
         <span id="history-filter-result" class="history-filter-result"></span>
+      </div>
+      <div class="history-sim-toolbar">
+        <label>
+          Simulacao por dia
+          <select id="history-sim-day">
+            <option value="all">Todos os carregados</option>
+          </select>
+        </label>
       </div>
       <section class="history-simulation" id="history-simulation" aria-live="polite"></section>
       <div class="table-wrap">
@@ -646,17 +676,70 @@
       return `${sign}${formatNumber(rounded)} u`;
     }
 
+    const SIM_DAY_TZ = 'America/Sao_Paulo';
+
+    function gameFinishedDayKey(game) {
+      const iso = game.finished_at || game.last_seen_at;
+      if (!iso) return null;
+      const d = new Date(iso);
+      if (Number.isNaN(d.getTime())) return null;
+      return d.toLocaleDateString('en-CA', { timeZone: SIM_DAY_TZ });
+    }
+
+    function formatSimDayLabel(dayKey) {
+      const parts = String(dayKey).split('-');
+      if (parts.length !== 3) return dayKey;
+      return `${parts[2]}/${parts[1]}/${parts[0]}`;
+    }
+
+    function collectHistorySimDays(items) {
+      const counts = new Map();
+      for (const { game } of items) {
+        const key = gameFinishedDayKey(game);
+        if (!key) continue;
+        counts.set(key, (counts.get(key) || 0) + 1);
+      }
+      return [...counts.entries()]
+        .sort((a, b) => b[0].localeCompare(a[0]))
+        .map(([key, count]) => ({ key, count, label: formatSimDayLabel(key) }));
+    }
+
+    function syncHistorySimDaySelect(items) {
+      const sel = document.getElementById('history-sim-day');
+      if (!sel) return 'all';
+      const prev = sel.value || 'all';
+      const days = collectHistorySimDays(items);
+      sel.innerHTML = `<option value="all">Todos os carregados (${items.length})</option>` +
+        days.map(({ key, count, label }) =>
+          `<option value="${key}">${label} (${count} jogo${count === 1 ? '' : 's'})</option>`,
+        ).join('');
+      if (prev === 'all' || days.some((d) => d.key === prev)) {
+        sel.value = prev;
+      } else {
+        sel.value = 'all';
+      }
+      return sel.value;
+    }
+
+    function filterItemsBySimDay(items, dayKey) {
+      if (!dayKey || dayKey === 'all') return items;
+      return items.filter(({ game }) => gameFinishedDayKey(game) === dayKey);
+    }
+
     function renderHistorySimulation(items) {
       const el = document.getElementById('history-simulation');
       if (!el) return;
+
+      const dayKey = syncHistorySimDaySelect(items);
+      const scoped = filterItemsBySimDay(items, dayKey);
 
       if (!items.length) {
         el.innerHTML = '';
         return;
       }
 
-      const under = simulateHistoryBet(items, 'odd_under_05', (g) => g === 0);
-      const over = simulateHistoryBet(items, 'odd_over_05', (g) => g >= 1);
+      const under = simulateHistoryBet(scoped, 'odd_under_05', (g) => g === 0);
+      const over = simulateHistoryBet(scoped, 'odd_over_05', (g) => g >= 1);
 
       const card = (title, market, sim) => {
         const profitClass = sim.profit >= 0 ? 'positive' : 'negative';
@@ -669,10 +752,14 @@
         </div>`;
       };
 
+      const dayNote = dayKey === 'all'
+        ? `${items.length} jogo(s) carregados`
+        : `${scoped.length} jogo(s) em ${formatSimDayLabel(dayKey)} · ${items.length} carregados no total`;
+
       el.innerHTML =
         card('Simulacao 1u/jogo', 'Under -0,5 · sem gol apos 85\'', under) +
         card('Simulacao 1u/jogo', 'Over +0,5 · 1 gol ou mais apos 85\'', over) +
-        `<p class="history-sim-note">Base: ${items.length} jogo(s) carregados · liquidacao por gols apos 85' · jogos sem odd ignorados na respectiva aposta</p>`;
+        `<p class="history-sim-note">Base: ${dayNote} · liquidacao por gols apos 85' · jogos sem odd ignorados na respectiva aposta</p>`;
     }
 
     function renderHistory() {
@@ -886,6 +973,10 @@
     });
 
     document.getElementById('history-filter-btn').addEventListener('click', () => {
+      renderHistory();
+    });
+
+    document.getElementById('history-sim-day')?.addEventListener('change', () => {
       renderHistory();
     });
 
