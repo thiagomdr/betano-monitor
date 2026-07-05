@@ -294,6 +294,9 @@
     .resultado-badge.pending { background: rgba(255, 209, 102, 0.2); color: var(--warn); }
     .resultado-badge.win { background: rgba(61, 214, 140, 0.2); color: var(--accent); }
     .resultado-badge.loss { background: rgba(220, 53, 69, 0.2); color: #ff6b6b; }
+    .resultado-badge.sem-linha { background: rgba(143, 163, 191, 0.2); color: var(--muted); }
+    .resultado-badge.excluido { background: rgba(143, 163, 191, 0.12); color: var(--muted); }
+    .resultado-badge.watching { background: rgba(94, 179, 255, 0.15); color: #5eb3ff; }
     #panel-mercado-05 tbody tr:hover td {
       background: rgba(232, 238, 247, 0.08);
     }
@@ -419,11 +422,10 @@
 
     <section class="panel" id="panel-mercado-05">
       <p class="hint">
-        Registro automático quando a linha <strong>Over +0,5</strong> surge após fase inicial só com aposta mínima
-        <strong>+2 gols</strong> (Over +1,5/+2,5). Simulação <strong>1u</strong> em Over +0,5:
-        <span style="color:var(--accent)">GREEN</span> ao sair gol após a captura ·
-        <span style="color:#ff6b6b">RED</span> se o jogo encerrar sem gol após a captura.
-        Só jogos monitorados após a implementação.
+        Registro de <strong>todos os jogos novos</strong> monitorados desde a implementação.
+        <strong>Sem +0,5 no jogo</strong> = Over +0,5 nunca apareceu no tempo total ·
+        <strong>Excluído</strong> = +0,5 já existia na 1ª coleta (fora do perfil) ·
+        <strong>Captura</strong> = +0,5 surgiu após fase só com +1,5/+2,5 (simulação 1u Over +0,5).
       </p>
       <section class="mercado-summary" id="mercado-05-summary" aria-live="polite"></section>
       <div class="table-wrap">
@@ -442,7 +444,7 @@
               <th>Resultado</th>
               <th>Lucro 1u</th>
               <th>Placar final</th>
-              <th>Capturado</th>
+              <th>Encerrado</th>
               <th>Link</th>
             </tr>
           </thead>
@@ -602,11 +604,22 @@
         pending: 'Pendente',
         win: 'GREEN',
         loss: 'RED',
+        sem_linha_05: 'Sem +0,5 no jogo',
+        excluido: 'Excluído',
+        watching: 'Monitorando',
+        skipped: 'Sem +0,5 no jogo',
+      };
+      const badgeCls = {
+        pending: 'pending',
+        win: 'win',
+        loss: 'loss',
+        sem_linha_05: 'sem-linha',
+        excluido: 'excluido',
+        watching: 'watching',
+        skipped: 'sem-linha',
       };
       const text = map[resultado] || resultado || '—';
-      const cls = resultado === 'win' || resultado === 'loss' || resultado === 'pending'
-        ? resultado
-        : '';
+      const cls = badgeCls[resultado];
       return cls
         ? `<span class="resultado-badge ${cls}">${text}</span>`
         : text;
@@ -632,17 +645,34 @@
       const el = document.getElementById('mercado-05-summary');
       if (!el) return;
       const settled = rows.filter((r) => r.resultado === 'win' || r.resultado === 'loss');
+      const capturas = rows.filter((r) => r.captured_at != null).length;
+      const semLinha = rows.filter((r) =>
+        r.resultado === 'sem_linha_05' || r.resultado === 'skipped',
+      ).length;
+      const excluidos = rows.filter((r) => r.resultado === 'excluido').length;
       const greens = rows.filter((r) => r.resultado === 'win').length;
       const reds = rows.filter((r) => r.resultado === 'loss').length;
-      const pending = rows.filter((r) => r.resultado === 'pending').length;
+      const pending = rows.filter((r) => r.resultado === 'pending' || r.resultado === 'watching').length;
       const profit = settled.reduce((sum, r) => sum + (mercadoSimProfit(r) ?? 0), 0);
       const roi = settled.length > 0 ? (100 * profit) / settled.length : 0;
       const profitClass = profit >= 0 ? 'positive' : 'negative';
       const sign = profit > 0 ? '+' : '';
       el.innerHTML = `
         <div class="summary-card">
-          <div class="summary-label">Oportunidades</div>
+          <div class="summary-label">Jogos monitorados</div>
           <div class="summary-value">${formatNumber(rows.length)}</div>
+        </div>
+        <div class="summary-card">
+          <div class="summary-label">Capturas +0,5</div>
+          <div class="summary-value">${formatNumber(capturas)}</div>
+        </div>
+        <div class="summary-card">
+          <div class="summary-label">Sem +0,5 no jogo</div>
+          <div class="summary-value">${formatNumber(semLinha)}</div>
+        </div>
+        <div class="summary-card">
+          <div class="summary-label">Excluídos</div>
+          <div class="summary-value">${formatNumber(excluidos)}</div>
         </div>
         <div class="summary-card">
           <div class="summary-label">GREEN / RED</div>
@@ -663,22 +693,36 @@
       `;
     }
 
+    function mercadoSortKey(row) {
+      return row.updated_at || row.captured_at || row.created_at || '';
+    }
+
+    function mercadoEncerradoLabel(row) {
+      if (row.captured_at) return formatDate(row.captured_at);
+      if (row.placar_final && row.updated_at) return formatDate(row.updated_at);
+      if (row.resultado === 'watching') return '<span class="muted">ao vivo</span>';
+      return formatDate(row.updated_at || row.created_at);
+    }
+
     function renderMercado05() {
       const tbody = document.getElementById('mercado-05-tbody');
       if (!tbody) return;
       const rows = mercado05Cache.slice().sort((a, b) =>
-        String(b.captured_at || '').localeCompare(String(a.captured_at || '')),
+        String(mercadoSortKey(b)).localeCompare(String(mercadoSortKey(a))),
       );
       renderMercado05Summary(rows);
       if (!rows.length) {
         tbody.innerHTML =
-          '<tr><td colspan="14" class="empty">Nenhuma oportunidade registrada ainda. Novos jogos serao monitorados automaticamente.</td></tr>';
+          '<tr><td colspan="14" class="empty">Nenhum jogo monitorado ainda. Novos jogos serao registrados automaticamente.</td></tr>';
         return;
       }
       tbody.innerHTML = rows.map((row, i) => {
         const match = `${row.home || '—'} x ${row.away || '—'}`;
         const league = [row.country, row.league].filter(Boolean).join(' · ') || '—';
-        const semAte = row.indisponivel_ate_minuto != null ? `${row.indisponivel_ate_minuto}'` : '—';
+        const semLinha = row.resultado === 'sem_linha_05' || row.resultado === 'skipped';
+        const semAte = row.indisponivel_ate_minuto != null
+          ? (semLinha ? `${row.indisponivel_ate_minuto}' (jogo inteiro)` : `${row.indisponivel_ate_minuto}'`)
+          : '—';
         const surgiu = row.disponivel_desde_minuto != null ? `${row.disponivel_desde_minuto}'` : '—';
         const link = row.betano_url
           ? `<a href="${row.betano_url}" target="_blank" rel="noopener">abrir</a>`
@@ -698,7 +742,7 @@
           <td>${mercadoResultadoLabel(row.resultado)}</td>
           <td>${formatMercadoProfit(mercadoSimProfit(row))}</td>
           <td>${row.placar_final || '—'}</td>
-          <td>${formatDate(row.captured_at)}</td>
+          <td>${mercadoEncerradoLabel(row)}</td>
           <td>${link}</td>
         </tr>`;
       }).join('');
@@ -712,7 +756,7 @@
         mercado05Cache = await supabaseGet(
           appCfg.url,
           appCfg.anonKey,
-          'futebol_mercado_gols_05?select=*&captured_at=not.is.null&order=captured_at.desc&limit=500',
+          'futebol_mercado_gols_05?select=*&order=updated_at.desc&limit=500',
         );
         renderMercado05();
       } catch (err) {
