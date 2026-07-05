@@ -1307,6 +1307,210 @@ function pressureLabel(pressure: number, thresholds: [number, number]): string {
   return "pressao alta";
 }
 
+type MercadoGols05Row = {
+  event_id: string;
+  resultado: string;
+  captured_at: string | null;
+  disponivel_desde_minuto: number | null;
+  indisponivel_ate_minuto: number | null;
+  had_min_plus2_before: boolean;
+  over_05_odd: number | null;
+};
+
+type MercadoGols05Context = {
+  home: string | null;
+  away: string | null;
+  league: string | null;
+  country: string | null;
+  betano_url: string;
+  minute: number | null;
+  score_text: string;
+};
+
+/** Over +0,5 disponivel agora e antes so havia linha minima +1,5 (+2 gols). */
+function shouldCaptureMercadoGols05(
+  totals: TotalsOdds,
+  hadMinPlus2: boolean,
+): boolean {
+  return totals.over_0_odd != null && hadMinPlus2;
+}
+
+async function countGoalsAfterMinute(
+  supabase: ReturnType<typeof createClient>,
+  eventId: string,
+  afterMinute: number,
+): Promise<{ count: number; firstMinute: number | null }> {
+  const { data: goals } = await supabase
+    .from("futebol_historico_gols")
+    .select("minute")
+    .eq("event_id", eventId)
+    .gt("minute", afterMinute)
+    .order("minute", { ascending: true });
+  const list = goals ?? [];
+  if (!list.length) return { count: 0, firstMinute: null };
+  return { count: list.length, firstMinute: toInt(list[0].minute) };
+}
+
+async function settleMercadoGols05Pending(
+  supabase: ReturnType<typeof createClient>,
+  row: MercadoGols05Row,
+  scoreText: string,
+  forceFinal: boolean,
+): Promise<"win" | "loss" | null> {
+  if (row.resultado !== "pending" || row.disponivel_desde_minuto == null) return null;
+  const { count, firstMinute } = await countGoalsAfterMinute(
+    supabase,
+    row.event_id,
+    row.disponivel_desde_minuto,
+  );
+  const nowIso = new Date().toISOString();
+  if (count >= 1) {
+    await supabase.from("futebol_mercado_gols_05").update({
+      resultado: "win",
+      gols_apos_captura: count,
+      gol_green_minute: firstMinute,
+      settled_at: nowIso,
+      placar_final: scoreText,
+      updated_at: nowIso,
+    }).eq("event_id", row.event_id).eq("resultado", "pending");
+    return "win";
+  }
+  if (forceFinal) {
+    await supabase.from("futebol_mercado_gols_05").update({
+      resultado: "loss",
+      gols_apos_captura: 0,
+      settled_at: nowIso,
+      placar_final: scoreText,
+      updated_at: nowIso,
+    }).eq("event_id", row.event_id).eq("resultado", "pending");
+    return "loss";
+  }
+  return null;
+}
+
+async function processMercadoGols05Live(
+  supabase: ReturnType<typeof createClient>,
+  eventId: string,
+  totals: TotalsOdds,
+  ctx: MercadoGols05Context,
+  isNewGame: boolean,
+  existing: MercadoGols05Row | null,
+): Promise<"captured" | "win" | "loss" | null> {
+  const nowIso = new Date().toISOString();
+  const minute = ctx.minute;
+  const over0 = totals.over_0_odd;
+  const over1 = totals.over_1_odd;
+
+  if (!existing) {
+    if (!isNewGame || over0 != null) return null;
+    await supabase.from("futebol_mercado_gols_05").insert({
+      event_id: eventId,
+      home: ctx.home,
+      away: ctx.away,
+      league: ctx.league,
+      country: ctx.country,
+      betano_url: ctx.betano_url,
+      indisponivel_ate_minuto: minute,
+      had_min_plus2_before: over1 != null,
+      resultado: "watching",
+      is_live: true,
+      updated_at: nowIso,
+    });
+    return null;
+  }
+
+  if (existing.resultado === "watching") {
+    if (over0 == null) {
+      const hadMinPlus2 = existing.had_min_plus2_before || over1 != null;
+      await supabase.from("futebol_mercado_gols_05").update({
+        indisponivel_ate_minuto: minute,
+        had_min_plus2_before: hadMinPlus2,
+        updated_at: nowIso,
+      }).eq("event_id", eventId).eq("resultado", "watching");
+      return null;
+    }
+    if (!shouldCaptureMercadoGols05(totals, existing.had_min_plus2_before)) {
+      await supabase.from("futebol_mercado_gols_05").update({
+        resultado: "skipped",
+        is_live: true,
+        updated_at: nowIso,
+      }).eq("event_id", eventId).eq("resultado", "watching");
+      return null;
+    }
+    const indisponivel = existing.indisponivel_ate_minuto ?? (minute != null ? minute - 1 : null);
+    await supabase.from("futebol_mercado_gols_05").update({
+      indisponivel_ate_minuto: indisponivel,
+      disponivel_desde_minuto: minute,
+      placar_na_captura: ctx.score_text,
+      over_05_odd: over0,
+      over_05_line: totals.over_0_line,
+      captured_at: nowIso,
+      resultado: "pending",
+      updated_at: nowIso,
+    }).eq("event_id", eventId).eq("resultado", "watching");
+    return "captured";
+  }
+
+  return null;
+}
+
+async function finalizeMercadoGols05OffLive(
+  supabase: ReturnType<typeof createClient>,
+  liveIds: string[],
+): Promise<{ wins: number; losses: number; skipped: number }> {
+  let wins = 0;
+  let losses = 0;
+  let skipped = 0;
+  const nowIso = new Date().toISOString();
+
+  const { data: openRows } = await supabase
+    .from("futebol_mercado_gols_05")
+    .select("event_id,resultado,disponivel_desde_minuto,over_05_odd,captured_at,indisponivel_ate_minuto,had_min_plus2_before")
+    .eq("is_live", true)
+    .in("resultado", ["watching", "pending"]);
+
+  for (const row of openRows ?? []) {
+    const eventId = String(row.event_id);
+    if (liveIds.includes(eventId)) continue;
+
+    const { data: game } = await supabase
+      .from("futebol_historico_jogos")
+      .select("score,home_score,away_score")
+      .eq("event_id", eventId)
+      .maybeSingle();
+    const scoreText = game?.score ??
+      (game?.home_score != null && game?.away_score != null
+        ? `${game.home_score}-${game.away_score}`
+        : "—");
+
+    if (row.resultado === "watching") {
+      await supabase.from("futebol_mercado_gols_05").update({
+        resultado: "skipped",
+        is_live: false,
+        placar_final: scoreText,
+        updated_at: nowIso,
+      }).eq("event_id", eventId);
+      skipped += 1;
+      continue;
+    }
+
+    const outcome = await settleMercadoGols05Pending(
+      supabase,
+      row as MercadoGols05Row,
+      scoreText,
+      true,
+    );
+    await supabase.from("futebol_mercado_gols_05").update({
+      is_live: false,
+      updated_at: nowIso,
+    }).eq("event_id", eventId);
+    if (outcome === "win") wins += 1;
+    else if (outcome === "loss") losses += 1;
+  }
+
+  return { wins, losses, skipped };
+}
+
 function buildSignal(row: {
   minute: number | null;
   home_score: number | null;
@@ -1391,6 +1595,7 @@ Deno.serve(async (req) => {
     "Lista todos os jogos live da Betano (futebol real).",
     "Stats: Sportradar match_details (chutes a gol, escanteios, tiros de meta).",
     "Sinal 'manter placar' so a partir dos 85'; antes disso: em estudo.",
+    "Mercado +0,5: captura Over +0,5 apos fase inicial so com +1,5/+2,5; GREEN ao gol apos captura.",
     "Historico: jogos monitorados + gols com minuto (filtro por gol a partir de X').",
   ];
 
@@ -1419,6 +1624,8 @@ Deno.serve(async (req) => {
     let goalsTimelineEmpty = 0;
     let goalsInferred = 0;
     let goalsMissing = 0;
+    let mercadoCaptured = 0;
+    let mercadoWins = 0;
     const liveIds: string[] = [];
 
     for (const event of candidates) {
@@ -1625,9 +1832,59 @@ Deno.serve(async (req) => {
       if (persist.source === "missing" || persist.status === "missing" || persist.status === "partial") {
         goalsMissing += 1;
       }
+
+      const isNewGame = !prevGame;
+      const { data: mercadoRow } = await supabase
+        .from("futebol_mercado_gols_05")
+        .select(
+          "event_id,resultado,captured_at,disponivel_desde_minuto,indisponivel_ate_minuto,had_min_plus2_before,over_05_odd",
+        )
+        .eq("event_id", eventId)
+        .maybeSingle();
+
+      const mercadoAction = await processMercadoGols05Live(
+        supabase,
+        eventId,
+        totals,
+        {
+          home: teams.home,
+          away: teams.away,
+          league: league.league,
+          country: league.country,
+          betano_url: url,
+          minute,
+          score_text: score.text,
+        },
+        isNewGame,
+        mercadoRow as MercadoGols05Row | null,
+      );
+      if (mercadoAction === "captured") mercadoCaptured += 1;
+
+      const needsSettle = mercadoRow?.resultado === "pending" || mercadoAction === "captured";
+      if (needsSettle) {
+        const { data: mercadoNow } = await supabase
+          .from("futebol_mercado_gols_05")
+          .select(
+            "event_id,resultado,captured_at,disponivel_desde_minuto,indisponivel_ate_minuto,had_min_plus2_before,over_05_odd",
+          )
+          .eq("event_id", eventId)
+          .maybeSingle();
+        if (mercadoNow?.resultado === "pending") {
+          const out = await settleMercadoGols05Pending(
+            supabase,
+            mercadoNow as MercadoGols05Row,
+            score.text,
+            false,
+          );
+          if (out === "win") mercadoWins += 1;
+        }
+      }
     }
 
     const reconcile = await reconcileHistoricGoals(supabase, 120);
+
+    const mercadoFinalize = await finalizeMercadoGols05OffLive(supabase, liveIds);
+    mercadoWins += mercadoFinalize.wins;
 
     // jogos que sairam do live: marca is_live=false
     if (liveIds.length > 0) {
@@ -1669,6 +1926,7 @@ Deno.serve(async (req) => {
         `Stats ok em ${statsOk}/${rows.length} jogos.`,
         `Prontos para manter placar (>=85'): ${readyCount}.`,
         `Gols gravados no historico nesta rodada: ${goalsSaved}.`,
+        `Mercado +0,5: ${mercadoCaptured} captura(s), ${mercadoWins} green(s) nesta rodada; ${mercadoFinalize.losses} red(s) ao sair do live.`,
         `Gols timeline ok: ${goalsTimelineOk}, timeline vazia c/ placar: ${goalsTimelineEmpty}, inferidos: ${goalsInferred}, sem gols c/ placar: ${goalsMissing}.`,
         `Reconciliacao historico: ${reconcile.scanned} analisados, ${reconcile.fixed} ok, ${reconcile.backfilled} parcial/missing.`,
       ],

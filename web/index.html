@@ -277,6 +277,26 @@
       border-radius: 6px;
       min-width: 11rem;
     }
+    .mercado-summary {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+      gap: 0.75rem;
+      margin-bottom: 0.75rem;
+    }
+    .resultado-badge {
+      display: inline-block;
+      font-size: 0.78rem;
+      font-weight: 700;
+      padding: 0.15rem 0.45rem;
+      border-radius: 4px;
+      text-transform: uppercase;
+    }
+    .resultado-badge.pending { background: rgba(255, 209, 102, 0.2); color: var(--warn); }
+    .resultado-badge.win { background: rgba(61, 214, 140, 0.2); color: var(--accent); }
+    .resultado-badge.loss { background: rgba(220, 53, 69, 0.2); color: #ff6b6b; }
+    #panel-mercado-05 tbody tr:hover td {
+      background: rgba(232, 238, 247, 0.08);
+    }
   </style>
 </head>
 <body>
@@ -289,6 +309,7 @@
     <div class="tabs">
       <button type="button" class="tab-btn active" data-tab="live">Ao vivo</button>
       <button type="button" class="tab-btn" data-tab="history">Histórico</button>
+      <button type="button" class="tab-btn" data-tab="mercado-05">Mercado de Gols +0,5</button>
     </div>
 
     <section class="panel active" id="panel-live">
@@ -393,6 +414,42 @@
       <div class="history-load-more-wrap">
         <button type="button" id="history-load-more-btn" hidden>Carregar Mais</button>
         <span id="history-load-more-status" class="muted"></span>
+      </div>
+    </section>
+
+    <section class="panel" id="panel-mercado-05">
+      <p class="hint">
+        Registro automático quando a linha <strong>Over +0,5</strong> surge após fase inicial só com aposta mínima
+        <strong>+2 gols</strong> (Over +1,5/+2,5). Simulação <strong>1u</strong> em Over +0,5:
+        <span style="color:var(--accent)">GREEN</span> ao sair gol após a captura ·
+        <span style="color:#ff6b6b">RED</span> se o jogo encerrar sem gol após a captura.
+        Só jogos monitorados após a implementação.
+      </p>
+      <section class="mercado-summary" id="mercado-05-summary" aria-live="polite"></section>
+      <div class="table-wrap">
+        <table>
+          <thead>
+            <tr>
+              <th>#</th>
+              <th>Jogo</th>
+              <th>Liga</th>
+              <th title="Ultimo minuto sem Over +0,5">Sem +0,5 até</th>
+              <th title="Minuto em que Over +0,5 apareceu">Surgiu em</th>
+              <th>Placar captura</th>
+              <th>ODD +0,5</th>
+              <th>Gols após</th>
+              <th>Gol GREEN</th>
+              <th>Resultado</th>
+              <th>Lucro 1u</th>
+              <th>Placar final</th>
+              <th>Capturado</th>
+              <th>Link</th>
+            </tr>
+          </thead>
+          <tbody id="mercado-05-tbody">
+            <tr><td colspan="14" class="empty">Carregando...</td></tr>
+          </tbody>
+        </table>
       </div>
     </section>
   </main>
@@ -537,6 +594,136 @@
     const HISTORY_PAGE_SIZE = 200;
     let historyCache = { games: [], goals: [] };
     let historyPagination = { offset: 0, hasMore: true, loading: false };
+    let mercado05Cache = [];
+    let mercado05Loading = false;
+
+    function mercadoResultadoLabel(resultado) {
+      const map = {
+        pending: 'Pendente',
+        win: 'GREEN',
+        loss: 'RED',
+      };
+      const text = map[resultado] || resultado || '—';
+      const cls = resultado === 'win' || resultado === 'loss' || resultado === 'pending'
+        ? resultado
+        : '';
+      return cls
+        ? `<span class="resultado-badge ${cls}">${text}</span>`
+        : text;
+    }
+
+    function mercadoSimProfit(row) {
+      const odd = Number(row.over_05_odd);
+      if (!Number.isFinite(odd) || odd < 1.01) return null;
+      if (row.resultado === 'win') return odd - 1;
+      if (row.resultado === 'loss') return -1;
+      return null;
+    }
+
+    function formatMercadoProfit(value) {
+      if (value == null) return '<span class="muted">—</span>';
+      const rounded = Math.round(value * 100) / 100;
+      const sign = rounded > 0 ? '+' : '';
+      const cls = rounded >= 0 ? 'positive' : 'negative';
+      return `<span class="history-sim-profit ${cls}">${sign}${formatNumber(rounded)} u</span>`;
+    }
+
+    function renderMercado05Summary(rows) {
+      const el = document.getElementById('mercado-05-summary');
+      if (!el) return;
+      const settled = rows.filter((r) => r.resultado === 'win' || r.resultado === 'loss');
+      const greens = rows.filter((r) => r.resultado === 'win').length;
+      const reds = rows.filter((r) => r.resultado === 'loss').length;
+      const pending = rows.filter((r) => r.resultado === 'pending').length;
+      const profit = settled.reduce((sum, r) => sum + (mercadoSimProfit(r) ?? 0), 0);
+      const roi = settled.length > 0 ? (100 * profit) / settled.length : 0;
+      const profitClass = profit >= 0 ? 'positive' : 'negative';
+      const sign = profit > 0 ? '+' : '';
+      el.innerHTML = `
+        <div class="summary-card">
+          <div class="summary-label">Oportunidades</div>
+          <div class="summary-value">${formatNumber(rows.length)}</div>
+        </div>
+        <div class="summary-card">
+          <div class="summary-label">GREEN / RED</div>
+          <div class="summary-value">${greens} / ${reds}</div>
+        </div>
+        <div class="summary-card">
+          <div class="summary-label">Pendentes</div>
+          <div class="summary-value">${formatNumber(pending)}</div>
+        </div>
+        <div class="summary-card">
+          <div class="summary-label">Lucro 1u (liquidadas)</div>
+          <div class="summary-value history-sim-profit ${profitClass}">${sign}${formatNumber(profit)} u</div>
+        </div>
+        <div class="summary-card">
+          <div class="summary-label">ROI</div>
+          <div class="summary-value">${settled.length ? formatNumber(roi) + '%' : '—'}</div>
+        </div>
+      `;
+    }
+
+    function renderMercado05() {
+      const tbody = document.getElementById('mercado-05-tbody');
+      if (!tbody) return;
+      const rows = mercado05Cache.slice().sort((a, b) =>
+        String(b.captured_at || '').localeCompare(String(a.captured_at || '')),
+      );
+      renderMercado05Summary(rows);
+      if (!rows.length) {
+        tbody.innerHTML =
+          '<tr><td colspan="14" class="empty">Nenhuma oportunidade registrada ainda. Novos jogos serao monitorados automaticamente.</td></tr>';
+        return;
+      }
+      tbody.innerHTML = rows.map((row, i) => {
+        const match = `${row.home || '—'} x ${row.away || '—'}`;
+        const league = [row.country, row.league].filter(Boolean).join(' · ') || '—';
+        const semAte = row.indisponivel_ate_minuto != null ? `${row.indisponivel_ate_minuto}'` : '—';
+        const surgiu = row.disponivel_desde_minuto != null ? `${row.disponivel_desde_minuto}'` : '—';
+        const link = row.betano_url
+          ? `<a href="${row.betano_url}" target="_blank" rel="noopener">abrir</a>`
+          : '—';
+        const golsApos = row.gols_apos_captura != null ? row.gols_apos_captura : '—';
+        const golGreen = row.gol_green_minute != null ? `${row.gol_green_minute}'` : '—';
+        return `<tr>
+          <td>${i + 1}</td>
+          <td><strong>${match}</strong></td>
+          <td>${league}</td>
+          <td>${semAte}</td>
+          <td><strong>${surgiu}</strong></td>
+          <td>${row.placar_na_captura || '—'}</td>
+          <td>${formatOdd(row.over_05_odd)}</td>
+          <td>${golsApos}</td>
+          <td>${golGreen}</td>
+          <td>${mercadoResultadoLabel(row.resultado)}</td>
+          <td>${formatMercadoProfit(mercadoSimProfit(row))}</td>
+          <td>${row.placar_final || '—'}</td>
+          <td>${formatDate(row.captured_at)}</td>
+          <td>${link}</td>
+        </tr>`;
+      }).join('');
+    }
+
+    async function loadMercado05() {
+      if (!appCfg || mercado05Loading) return;
+      mercado05Loading = true;
+      const tbody = document.getElementById('mercado-05-tbody');
+      try {
+        mercado05Cache = await supabaseGet(
+          appCfg.url,
+          appCfg.anonKey,
+          'futebol_mercado_gols_05?select=*&captured_at=not.is.null&order=captured_at.desc&limit=500',
+        );
+        renderMercado05();
+      } catch (err) {
+        if (tbody) {
+          tbody.innerHTML =
+            `<tr><td colspan="14" class="empty">${err.message || String(err)}</td></tr>`;
+        }
+      } finally {
+        mercado05Loading = false;
+      }
+    }
 
     function mergeGoals(existing, incoming) {
       const seen = new Set();
@@ -967,6 +1154,15 @@
           } catch (err) {
             document.getElementById('history-tbody').innerHTML =
               `<tr><td colspan="18" class="empty">${err.message || err}</td></tr>`;
+          }
+        }
+        if (tab === 'mercado-05') {
+          try {
+            if (!appCfg) await initLive();
+            await loadMercado05();
+          } catch (err) {
+            document.getElementById('mercado-05-tbody').innerHTML =
+              `<tr><td colspan="14" class="empty">${err.message || err}</td></tr>`;
           }
         }
       });
