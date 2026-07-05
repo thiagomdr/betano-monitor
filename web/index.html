@@ -1135,38 +1135,58 @@
       }
     }
 
-    document.querySelectorAll('.tab-btn').forEach((btn) => {
-      btn.addEventListener('click', async () => {
-        document.querySelectorAll('.tab-btn').forEach((b) => b.classList.remove('active'));
-        document.querySelectorAll('.panel').forEach((p) => p.classList.remove('active'));
-        btn.classList.add('active');
-        const tab = btn.dataset.tab;
-        document.getElementById(`panel-${tab}`).classList.add('active');
-        if (tab === 'history') {
-          try {
-            if (!appCfg) await initLive();
-            if (historyCache.games.length === 0) {
-              await loadHistory(true);
-            } else {
-              renderHistory();
-              updateLoadMoreUi();
-            }
-          } catch (err) {
-            document.getElementById('history-tbody').innerHTML =
-              `<tr><td colspan="18" class="empty">${err.message || err}</td></tr>`;
-          }
-        }
-        if (tab === 'mercado-05') {
-          try {
-            if (!appCfg) await initLive();
-            await loadMercado05();
-          } catch (err) {
-            document.getElementById('mercado-05-tbody').innerHTML =
-              `<tr><td colspan="14" class="empty">${err.message || err}</td></tr>`;
-          }
-        }
+    const VALID_TABS = new Set(['live', 'history', 'mercado-05']);
+
+    function tabFromHash() {
+      const h = location.hash.replace('#', '');
+      return VALID_TABS.has(h) ? h : 'live';
+    }
+
+    async function activateTab(tab) {
+      if (!VALID_TABS.has(tab)) tab = 'live';
+
+      document.querySelectorAll('.tab-btn').forEach((b) => {
+        b.classList.toggle('active', b.dataset.tab === tab);
       });
+      document.querySelectorAll('.panel').forEach((p) => p.classList.remove('active'));
+      document.getElementById(`panel-${tab}`).classList.add('active');
+
+      if (location.hash !== `#${tab}`) {
+        history.replaceState(null, '', `#${tab}`);
+      }
+
+      try {
+        if (tab === 'live') {
+          await initLive();
+        } else if (tab === 'history') {
+          if (!appCfg) await initLive();
+          if (historyCache.games.length === 0) {
+            await loadHistory(true);
+          } else {
+            renderHistory();
+            updateLoadMoreUi();
+          }
+        } else if (tab === 'mercado-05') {
+          if (!appCfg) await initLive();
+          await loadMercado05();
+        }
+      } catch (err) {
+        const msg = err.message || String(err);
+        if (tab === 'history') {
+          document.getElementById('history-tbody').innerHTML =
+            `<tr><td colspan="18" class="empty">${msg}</td></tr>`;
+        } else if (tab === 'mercado-05') {
+          document.getElementById('mercado-05-tbody').innerHTML =
+            `<tr><td colspan="14" class="empty">${msg}</td></tr>`;
+        }
+      }
+    }
+
+    document.querySelectorAll('.tab-btn').forEach((btn) => {
+      btn.addEventListener('click', () => activateTab(btn.dataset.tab));
     });
+
+    window.addEventListener('hashchange', () => activateTab(tabFromHash()));
 
     document.getElementById('history-filter-btn').addEventListener('click', () => {
       renderHistory();
@@ -1182,8 +1202,10 @@
       });
     });
 
-    initLive();
-    setInterval(initLive, 60000);
+    activateTab(tabFromHash());
+    setInterval(() => {
+      if (tabFromHash() === 'live') initLive();
+    }, 60000);
   </script>
 </body>
 </html>
