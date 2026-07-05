@@ -157,7 +157,13 @@
       color: var(--text);
       padding: 0.4rem 0.55rem;
       border-radius: 6px;
-      width: 5rem;
+      width: 5.5rem;
+    }
+    .history-filter-result {
+      font-size: 0.85rem;
+      color: var(--accent);
+      font-weight: 600;
+      align-self: center;
     }
     .history-filters button {
       background: var(--accent);
@@ -276,10 +282,15 @@
       </p>
       <div class="history-filters">
         <label>
-          Gols a partir do minuto
-          <input type="number" id="goal-from-minute" min="0" max="130" value="85" />
+          Minuto inicial
+          <input type="number" id="goal-from-minute" min="0" max="130" placeholder="0" />
+        </label>
+        <label>
+          Minuto final
+          <input type="number" id="goal-to-minute" min="0" max="130" placeholder="sem limite" />
         </label>
         <button type="button" id="history-filter-btn">Buscar</button>
+        <span id="history-filter-result" class="history-filter-result"></span>
       </div>
       <div class="table-wrap">
         <table>
@@ -301,7 +312,7 @@
               <th title="Over congelado aos 85' (linha placar + 2,5)">ODD +2,5</th>
               <th>Gols (minuto)</th>
               <th title="Validacao BD: registrados vs placar">Gols BD</th>
-              <th>Gols a partir do filtro</th>
+              <th>Gols no intervalo</th>
               <th>Encerrado</th>
             </tr>
           </thead>
@@ -455,7 +466,6 @@
 
     let appCfg = null;
     const HISTORY_PAGE_SIZE = 200;
-    const BUILD_VERSION = 'load-more-v2';
     let historyCache = { games: [], goals: [] };
     let historyPagination = { offset: 0, hasMore: true, loading: false };
 
@@ -474,9 +484,6 @@
     function updateLoadMoreUi() {
       const btn = document.getElementById('history-load-more-btn');
       const statusEl = document.getElementById('history-load-more-status');
-      // #region agent log
-      fetch('http://127.0.0.1:7904/ingest/86615625-6ae5-4e98-a1da-0a5f0f15fc42',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'a2ecc7'},body:JSON.stringify({sessionId:'a2ecc7',runId:'load-more-ui',hypothesisId:'H-B-H-C',location:'web/index.html:updateLoadMoreUi',message:'load more ui state',data:{build:BUILD_VERSION,btnFound:!!btn,statusFound:!!statusEl,loaded:historyCache.games.length,hasMore:historyPagination.hasMore,loading:historyPagination.loading,btnHidden:btn?.hidden},timestamp:Date.now()})}).catch(()=>{});
-      // #endregion
       if (!btn || !statusEl) return;
       const loaded = historyCache.games.length;
       if (historyPagination.loading) {
@@ -517,7 +524,43 @@
       return '';
     }
 
-    function renderHistory(fromMinute) {
+    function getHistoryMinuteRange() {
+      const fromRaw = document.getElementById('goal-from-minute')?.value.trim() ?? '';
+      const toRaw = document.getElementById('goal-to-minute')?.value.trim() ?? '';
+      let from = fromRaw === '' ? 0 : Number(fromRaw);
+      let to = toRaw === '' ? null : Number(toRaw);
+      if (Number.isNaN(from)) from = 0;
+      if (to != null && Number.isNaN(to)) to = null;
+      from = Math.max(0, from);
+      if (to != null && from > to) {
+        const swap = from;
+        from = to;
+        to = swap;
+      }
+      return { from, to };
+    }
+
+    function goalMinuteInRange(minute, from, to) {
+      const m = minute ?? -1;
+      if (m < 0) return false;
+      if (m < from) return false;
+      if (to != null && m > to) return false;
+      return true;
+    }
+
+    function goalsInRange(allGoals, from, to) {
+      return allGoals.filter((g) => goalMinuteInRange(g.minute, from, to));
+    }
+
+    function formatMinuteRangeLabel(from, to) {
+      if (from === 0 && to == null) return 'todos os minutos';
+      if (to == null) return `${from}' em diante`;
+      if (from === 0) return `até ${to}'`;
+      return `${from}'–${to}'`;
+    }
+
+    function renderHistory() {
+      const { from, to } = getHistoryMinuteRange();
       const tbody = document.getElementById('history-tbody');
       const games = historyCache.games || [];
       const goals = historyCache.goals || [];
@@ -533,13 +576,20 @@
           const allGoals = (goalsByEvent.get(game.event_id) || [])
             .slice()
             .sort((a, b) => (a.minute ?? 0) - (b.minute ?? 0));
-          const lateGoals = allGoals.filter((g) => (g.minute ?? -1) >= fromMinute);
-          return { game, allGoals, lateGoals };
+          const rangedGoals = goalsInRange(allGoals, from, to);
+          return { game, allGoals, rangedGoals };
         })
         .sort((a, b) =>
           String(b.game.finished_at || b.game.last_seen_at || '')
             .localeCompare(String(a.game.finished_at || a.game.last_seen_at || '')),
         );
+
+      const matchedCount = items.filter(({ rangedGoals }) => rangedGoals.length > 0).length;
+      const filterResultEl = document.getElementById('history-filter-result');
+      if (filterResultEl) {
+        filterResultEl.textContent =
+          `${matchedCount} jogo(s) com gol · ${formatMinuteRangeLabel(from, to)} · ${items.length} exibido(s)`;
+      }
 
       if (!items.length) {
         tbody.innerHTML =
@@ -564,21 +614,22 @@
       const fmtStat = (n) => (n == null ? '<span class="muted">—</span>' : `<strong>${n}</strong>`);
 
       tbody.innerHTML = items.map((item, i) => {
-        const { game, allGoals, lateGoals } = item;
+        const { game, allGoals, rangedGoals } = item;
         const match = `${game.home || '—'} x ${game.away || '—'}`;
         const league = [game.country, game.league].filter(Boolean).join(' · ') || '—';
-        const fmtGoal = (g) => {
+        const fmtGoal = (g, highlightInRange = false) => {
           const side = g.team || (g.team_side === 'home' ? game.home : g.team_side === 'away' ? game.away : '?');
           const label = `${g.minute}' ${side}${g.player ? ` (${g.player})` : ''}`;
-          return (g.minute ?? 0) >= fromMinute
-            ? `<span class="late">${label}</span>`
-            : label;
+          if (highlightInRange && goalMinuteInRange(g.minute, from, to)) {
+            return `<span class="late">${label}</span>`;
+          }
+          return label;
         };
         const allHtml = allGoals.length
-          ? `<div class="goals-list">${allGoals.map(fmtGoal).join('<br>')}</div>`
+          ? `<div class="goals-list">${allGoals.map((g) => fmtGoal(g, true)).join('<br>')}</div>`
           : '<span class="muted">—</span>';
-        const lateHtml = lateGoals.length
-          ? `<div class="goals-list">${lateGoals.map(fmtGoal).join('<br>')}</div>`
+        const rangedHtml = rangedGoals.length
+          ? `<div class="goals-list">${rangedGoals.map((g) => fmtGoal(g, true)).join('<br>')}</div>`
           : '<span class="muted">—</span>';
         const odds85 = game.odds_85_score
           ? ` <span class="muted" title="Placar aos ${game.odds_85_minute ?? 85}'">${game.odds_85_score}</span>`
@@ -600,7 +651,7 @@
           <td>${formatOdd(game.odd_over_25)}</td>
           <td>${allHtml}</td>
           <td>${goalsStatusLabel(game, allGoals.length)}</td>
-          <td>${lateHtml}</td>
+          <td>${rangedHtml}</td>
           <td>${formatDate(game.finished_at || game.last_seen_at)}</td>
         </tr>`;
       }).join('');
@@ -629,7 +680,6 @@
       historyPagination.loading = true;
       updateLoadMoreUi();
 
-      const fromMinute = Number(document.getElementById('goal-from-minute').value || 85);
       const offset = historyPagination.offset;
 
       try {
@@ -645,14 +695,11 @@
 
         historyPagination.offset += batch.length;
         historyPagination.hasMore = batch.length === HISTORY_PAGE_SIZE;
-        // #region agent log
-        fetch('http://127.0.0.1:7904/ingest/86615625-6ae5-4e98-a1da-0a5f0f15fc42',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'a2ecc7'},body:JSON.stringify({sessionId:'a2ecc7',runId:'load-more-ui',hypothesisId:'H-B',location:'web/index.html:loadHistory',message:'history batch loaded',data:{build:BUILD_VERSION,reset,offset,batchSize:batch.length,totalLoaded:historyCache.games.length,hasMore:historyPagination.hasMore},timestamp:Date.now()})}).catch(()=>{});
-        // #endregion
       } finally {
         historyPagination.loading = false;
       }
 
-      renderHistory(fromMinute);
+      renderHistory();
       updateLoadMoreUi();
     }
 
@@ -709,7 +756,7 @@
             if (historyCache.games.length === 0) {
               await loadHistory(true);
             } else {
-              renderHistory(Number(document.getElementById('goal-from-minute').value || 85));
+              renderHistory();
               updateLoadMoreUi();
             }
           } catch (err) {
@@ -721,8 +768,7 @@
     });
 
     document.getElementById('history-filter-btn').addEventListener('click', () => {
-      const fromMinute = Number(document.getElementById('goal-from-minute').value || 85);
-      renderHistory(fromMinute);
+      renderHistory();
     });
 
     document.getElementById('history-load-more-btn').addEventListener('click', () => {
@@ -732,9 +778,6 @@
     });
 
     initLive();
-    // #region agent log
-    fetch('http://127.0.0.1:7904/ingest/86615625-6ae5-4e98-a1da-0a5f0f15fc42',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'a2ecc7'},body:JSON.stringify({sessionId:'a2ecc7',runId:'boot',hypothesisId:'H-A',location:'web/index.html:boot',message:'page boot',data:{build:BUILD_VERSION,hasLoadMoreBtn:!!document.getElementById('history-load-more-btn'),href:location.href},timestamp:Date.now()})}).catch(()=>{});
-    // #endregion
     setInterval(initLive, 60000);
   </script>
 </body>
