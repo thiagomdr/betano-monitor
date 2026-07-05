@@ -345,7 +345,7 @@ function extractMlOdds(
   return { home: null, draw: null, away: null };
 }
 
-/** Totais Under/Over por gols restantes nas linhas +0.5, +1.5, +2.5. */
+/** Totais Under/Over: slot 0/1/2 = +0.5 / +1.5 / +2.5 gols a partir do placar atual. */
 type TotalsOdds = {
   under_0_line: number | null;
   under_0_odd: number | null;
@@ -360,6 +360,8 @@ type TotalsOdds = {
   over_2_line: number | null;
   over_2_odd: number | null;
 };
+
+type OddSlot = { line: number | null; odd: number | null; kind: "absolute" | "remaining" | null };
 
 const EMPTY_TOTALS_ODDS: TotalsOdds = {
   under_0_line: null,
@@ -376,26 +378,124 @@ const EMPTY_TOTALS_ODDS: TotalsOdds = {
   over_2_odd: null,
 };
 
+const REMAINING_LINES = [0.5, 1.5, 2.5];
+
+function parseLineFromText(text: string): number | null {
+  const m = String(text).match(/(\d+[.,]\d+|\d+)/);
+  if (!m) return null;
+  return toNum(m[1].replace(",", "."));
+}
+
+/** Mapeia linha Betano (absoluta ou gols restantes) para slot 0/1/2. */
+function slotForLine(
+  selLine: number,
+  goalsTotal: number,
+): { slot: number; kind: "absolute" | "remaining" } | null {
+  for (let i = 0; i < 3; i++) {
+    if (Math.abs(selLine - (goalsTotal + REMAINING_LINES[i])) < 0.01) {
+      return { slot: i, kind: "absolute" };
+    }
+  }
+  for (let i = 0; i < 3; i++) {
+    if (Math.abs(selLine - REMAINING_LINES[i]) < 0.01) {
+      return { slot: i, kind: "remaining" };
+    }
+  }
+  return null;
+}
+
+function assignOddSlot(
+  slots: OddSlot[],
+  slot: number,
+  line: number,
+  odd: number,
+  kind: "absolute" | "remaining",
+) {
+  const cur = slots[slot];
+  if (cur.odd == null) {
+    slots[slot] = { line, odd, kind };
+    return;
+  }
+  if (cur.kind === "remaining" && kind === "absolute") {
+    slots[slot] = { line, odd, kind };
+  }
+}
+
+function slotsToTotalsOdds(
+  underSlots: OddSlot[],
+  overSlots: OddSlot[],
+  goalsTotal: number,
+): TotalsOdds {
+  const canonicalLines = REMAINING_LINES.map((r) => goalsTotal + r);
+  const pick = (slots: OddSlot[], i: number) => ({
+    line: slots[i].odd != null ? canonicalLines[i] : null,
+    odd: slots[i].odd,
+  });
+  let t: TotalsOdds = {
+    under_0_line: pick(underSlots, 0).line,
+    under_0_odd: pick(underSlots, 0).odd,
+    under_1_line: pick(underSlots, 1).line,
+    under_1_odd: pick(underSlots, 1).odd,
+    under_2_line: pick(underSlots, 2).line,
+    under_2_odd: pick(underSlots, 2).odd,
+    over_0_line: pick(overSlots, 0).line,
+    over_0_odd: pick(overSlots, 0).odd,
+    over_1_line: pick(overSlots, 1).line,
+    over_1_odd: pick(overSlots, 1).odd,
+    over_2_line: pick(overSlots, 2).line,
+    over_2_odd: pick(overSlots, 2).odd,
+  };
+  t = fixTotalsOddsMonotonicity(t);
+  return t;
+}
+
+/** Under mais restrito = odd maior; Over mais restrito = odd maior. Corrige inversao 0↔1. */
+function fixTotalsOddsMonotonicity(t: TotalsOdds): TotalsOdds {
+  const out = { ...t };
+  const swapUnder = (a: 0 | 1, b: 1 | 2) => {
+    const oa = out[`under_${a}_odd` as keyof TotalsOdds] as number | null;
+    const ob = out[`under_${b}_odd` as keyof TotalsOdds] as number | null;
+    if (oa == null || ob == null || oa >= ob) return;
+    const la = out[`under_${a}_line` as keyof TotalsOdds] as number | null;
+    const lb = out[`under_${b}_line` as keyof TotalsOdds] as number | null;
+    (out as Record<string, number | null>)[`under_${a}_odd`] = ob;
+    (out as Record<string, number | null>)[`under_${b}_odd`] = oa;
+    (out as Record<string, number | null>)[`under_${a}_line`] = lb;
+    (out as Record<string, number | null>)[`under_${b}_line`] = la;
+  };
+  const swapOver = (a: 0 | 1, b: 1 | 2) => {
+    const oa = out[`over_${a}_odd` as keyof TotalsOdds] as number | null;
+    const ob = out[`over_${b}_odd` as keyof TotalsOdds] as number | null;
+    if (oa == null || ob == null || oa <= ob) return;
+    const la = out[`over_${a}_line` as keyof TotalsOdds] as number | null;
+    const lb = out[`over_${b}_line` as keyof TotalsOdds] as number | null;
+    (out as Record<string, number | null>)[`over_${a}_odd`] = ob;
+    (out as Record<string, number | null>)[`over_${b}_odd`] = oa;
+    (out as Record<string, number | null>)[`over_${a}_line`] = lb;
+    (out as Record<string, number | null>)[`over_${b}_line`] = la;
+  };
+  swapUnder(0, 1);
+  swapUnder(1, 2);
+  swapOver(0, 1);
+  swapOver(1, 2);
+  return out;
+}
+
 function extractTotalsOdds(
   eventId: string,
   event: Json,
   overview: Json,
   goalsTotal: number,
 ): TotalsOdds {
-  const targets = [
-    goalsTotal + 0.5,
-    goalsTotal + 1.5,
-    goalsTotal + 2.5,
+  const underSlots: OddSlot[] = [
+    { line: null, odd: null, kind: null },
+    { line: null, odd: null, kind: null },
+    { line: null, odd: null, kind: null },
   ];
-  const foundUnder: Array<{ line: number | null; odd: number | null }> = [
-    { line: null, odd: null },
-    { line: null, odd: null },
-    { line: null, odd: null },
-  ];
-  const foundOver: Array<{ line: number | null; odd: number | null }> = [
-    { line: null, odd: null },
-    { line: null, odd: null },
-    { line: null, odd: null },
+  const overSlots: OddSlot[] = [
+    { line: null, odd: null, kind: null },
+    { line: null, odd: null, kind: null },
+    { line: null, odd: null, kind: null },
   ];
 
   const markets = asRecord(overview.markets) ?? {};
@@ -422,7 +522,7 @@ function extractTotalsOdds(
       name.includes("mais") ||
       name.includes("menos") ||
       typeName.includes("total");
-    const line = toNum(rec.handicap ?? rec.line ?? rec.points);
+    const marketLine = toNum(rec.handicap ?? rec.line ?? rec.points);
     const selIds = Array.isArray(rec.selectionIdList)
       ? rec.selectionIdList.map(String)
       : Object.keys(selections).filter((sid) => String(asRecord(selections[sid])?.marketId ?? "") === mid);
@@ -446,15 +546,15 @@ function extractTotalsOdds(
       if (!isUnder && !isOver && !looksTotal) continue;
 
       const price = toNum(sel.price ?? sel.odds ?? sel.decimalOdds);
-      const selLine = toNum(sel.handicap ?? sel.line ?? sel.points) ?? line;
+      let selLine = toNum(sel.handicap ?? sel.line ?? sel.points) ?? marketLine;
+      if (selLine == null) selLine = parseLineFromText(sname);
       if (price == null || selLine == null) continue;
 
-      for (let i = 0; i < targets.length; i++) {
-        if (Math.abs(selLine - targets[i]) < 0.01) {
-          if (isUnder) foundUnder[i] = { line: selLine, odd: price };
-          if (isOver) foundOver[i] = { line: selLine, odd: price };
-        }
-      }
+      const mapped = slotForLine(selLine, goalsTotal);
+      if (!mapped) continue;
+
+      if (isUnder) assignOddSlot(underSlots, mapped.slot, selLine, price, mapped.kind);
+      if (isOver) assignOddSlot(overSlots, mapped.slot, selLine, price, mapped.kind);
     }
   };
 
@@ -463,7 +563,7 @@ function extractTotalsOdds(
     if (rec) considerMarket(mid, rec);
   }
 
-  if (foundUnder.every((f) => f.odd == null) && foundOver.every((f) => f.odd == null)) {
+  if (underSlots.every((f) => f.odd == null) && overSlots.every((f) => f.odd == null)) {
     for (const [mid, market] of Object.entries(markets)) {
       const rec = asRecord(market);
       if (!rec) continue;
@@ -471,20 +571,7 @@ function extractTotalsOdds(
     }
   }
 
-  return {
-    under_0_line: foundUnder[0].line,
-    under_0_odd: foundUnder[0].odd,
-    under_1_line: foundUnder[1].line,
-    under_1_odd: foundUnder[1].odd,
-    under_2_line: foundUnder[2].line,
-    under_2_odd: foundUnder[2].odd,
-    over_0_line: foundOver[0].line,
-    over_0_odd: foundOver[0].odd,
-    over_1_line: foundOver[1].line,
-    over_1_odd: foundOver[1].odd,
-    over_2_line: foundOver[2].line,
-    over_2_odd: foundOver[2].odd,
-  };
+  return slotsToTotalsOdds(underSlots, overSlots, goalsTotal);
 }
 
 /** Under por gols restantes: linhas +0.5, +1.5, +2.5. */
@@ -520,18 +607,6 @@ async function fetchEventTotalsOdds(
   eventId: string,
   goalsTotal: number,
 ): Promise<TotalsOdds> {
-  const targets = [goalsTotal + 0.5, goalsTotal + 1.5, goalsTotal + 2.5];
-  const foundUnder: Array<{ line: number | null; odd: number | null }> = [
-    { line: null, odd: null },
-    { line: null, odd: null },
-    { line: null, odd: null },
-  ];
-  const foundOver: Array<{ line: number | null; odd: number | null }> = [
-    { line: null, odd: null },
-    { line: null, odd: null },
-    { line: null, odd: null },
-  ];
-
   const urls = [
     `${BETANO_BASE}/api/event/markets-offers/${eventId}`,
     `${BETANO_BASE}/danae-webapi/api/live/events/${eventId}?queryLanguageId=5&queryOperatorId=8`,
@@ -540,34 +615,6 @@ async function fetchEventTotalsOdds(
   for (const url of urls) {
     try {
       const data = await betanoGet(url);
-      const text = JSON.stringify(data);
-      for (let i = 0; i < targets.length; i++) {
-        const t = targets[i];
-        const tEsc = t.toString().replace(".", "\\.");
-        const underPatterns = [
-          new RegExp(`menos\\s*de\\s*${tEsc}[^0-9]{0,40}([0-9]+(?:[.,][0-9]+)?)`, "i"),
-          new RegExp(`under[^0-9]{0,10}${tEsc}[^0-9]{0,40}([0-9]+(?:[.,][0-9]+)?)`, "i"),
-        ];
-        const overPatterns = [
-          new RegExp(`mais\\s*de\\s*${tEsc}[^0-9]{0,40}([0-9]+(?:[.,][0-9]+)?)`, "i"),
-          new RegExp(`over[^0-9]{0,10}${tEsc}[^0-9]{0,40}([0-9]+(?:[.,][0-9]+)?)`, "i"),
-        ];
-        for (const re of underPatterns) {
-          const m = text.match(re);
-          if (m?.[1]) {
-            const price = toNum(m[1].replace(",", "."));
-            if (price != null) foundUnder[i] = { line: t, odd: price };
-          }
-        }
-        for (const re of overPatterns) {
-          const m = text.match(re);
-          if (m?.[1]) {
-            const price = toNum(m[1].replace(",", "."));
-            if (price != null) foundOver[i] = { line: t, odd: price };
-          }
-        }
-      }
-
       const rec = asRecord(data) ?? {};
       const markets = asRecord(rec.markets) ?? asRecord(asRecord(rec.data)?.markets) ?? {};
       const selections = asRecord(rec.selections) ?? asRecord(asRecord(rec.data)?.selections) ?? {};
@@ -584,23 +631,7 @@ async function fetchEventTotalsOdds(
     }
   }
 
-  if (foundUnder.every((f) => f.odd == null) && foundOver.every((f) => f.odd == null)) {
-    return EMPTY_TOTALS_ODDS;
-  }
-  return {
-    under_0_line: foundUnder[0].line,
-    under_0_odd: foundUnder[0].odd,
-    under_1_line: foundUnder[1].line,
-    under_1_odd: foundUnder[1].odd,
-    under_2_line: foundUnder[2].line,
-    under_2_odd: foundUnder[2].odd,
-    over_0_line: foundOver[0].line,
-    over_0_odd: foundOver[0].odd,
-    over_1_line: foundOver[1].line,
-    over_1_odd: foundOver[1].odd,
-    over_2_line: foundOver[2].line,
-    over_2_odd: foundOver[2].odd,
-  };
+  return EMPTY_TOTALS_ODDS;
 }
 
 async function fetchEventUnderOdds(
@@ -1414,6 +1445,12 @@ Deno.serve(async (req) => {
             odd_over_05: snap.over_0_odd,
             odd_over_15: snap.over_1_odd,
             odd_over_25: snap.over_2_odd,
+            odd_under_05_line: snap.under_0_line,
+            odd_under_15_line: snap.under_1_line,
+            odd_under_25_line: snap.under_2_line,
+            odd_over_05_line: snap.over_0_line,
+            odd_over_15_line: snap.over_1_line,
+            odd_over_25_line: snap.over_2_line,
             odds_85_minute: minute,
             odds_85_score: score.text,
             odds_85_captured_at: nowIso,
