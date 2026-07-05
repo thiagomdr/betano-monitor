@@ -186,6 +186,12 @@
       justify-content: center;
       gap: 0.75rem;
       margin-top: 1rem;
+      position: sticky;
+      bottom: 0;
+      z-index: 5;
+      padding: 0.85rem 1rem;
+      background: linear-gradient(to top, var(--bg) 70%, rgba(11, 15, 20, 0));
+      border-top: 1px solid var(--border);
     }
     .history-load-more-wrap button {
       background: var(--panel);
@@ -449,6 +455,7 @@
 
     let appCfg = null;
     const HISTORY_PAGE_SIZE = 200;
+    const BUILD_VERSION = 'load-more-v2';
     let historyCache = { games: [], goals: [] };
     let historyPagination = { offset: 0, hasMore: true, loading: false };
 
@@ -467,6 +474,9 @@
     function updateLoadMoreUi() {
       const btn = document.getElementById('history-load-more-btn');
       const statusEl = document.getElementById('history-load-more-status');
+      // #region agent log
+      fetch('http://127.0.0.1:7904/ingest/86615625-6ae5-4e98-a1da-0a5f0f15fc42',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'a2ecc7'},body:JSON.stringify({sessionId:'a2ecc7',runId:'load-more-ui',hypothesisId:'H-B-H-C',location:'web/index.html:updateLoadMoreUi',message:'load more ui state',data:{build:BUILD_VERSION,btnFound:!!btn,statusFound:!!statusEl,loaded:historyCache.games.length,hasMore:historyPagination.hasMore,loading:historyPagination.loading,btnHidden:btn?.hidden},timestamp:Date.now()})}).catch(()=>{});
+      // #endregion
       if (!btn || !statusEl) return;
       const loaded = historyCache.games.length;
       if (historyPagination.loading) {
@@ -635,6 +645,9 @@
 
         historyPagination.offset += batch.length;
         historyPagination.hasMore = batch.length === HISTORY_PAGE_SIZE;
+        // #region agent log
+        fetch('http://127.0.0.1:7904/ingest/86615625-6ae5-4e98-a1da-0a5f0f15fc42',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'a2ecc7'},body:JSON.stringify({sessionId:'a2ecc7',runId:'load-more-ui',hypothesisId:'H-B',location:'web/index.html:loadHistory',message:'history batch loaded',data:{build:BUILD_VERSION,reset,offset,batchSize:batch.length,totalLoaded:historyCache.games.length,hasMore:historyPagination.hasMore},timestamp:Date.now()})}).catch(()=>{});
+        // #endregion
       } finally {
         historyPagination.loading = false;
       }
@@ -719,6 +732,9 @@
     });
 
     initLive();
+    // #region agent log
+    fetch('http://127.0.0.1:7904/ingest/86615625-6ae5-4e98-a1da-0a5f0f15fc42',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'a2ecc7'},body:JSON.stringify({sessionId:'a2ecc7',runId:'boot',hypothesisId:'H-A',location:'web/index.html:boot',message:'page boot',data:{build:BUILD_VERSION,hasLoadMoreBtn:!!document.getElementById('history-load-more-btn'),href:location.href},timestamp:Date.now()})}).catch(()=>{});
+    // #endregion
     setInterval(initLive, 60000);
   </script>
 </body>
