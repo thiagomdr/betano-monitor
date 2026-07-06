@@ -14,6 +14,7 @@
       --accent: #3dd68c;
       --warn: #ffd166;
       --betano-orange: #ff5500;
+      --super-blue: #0B57DD;
     }
     * { box-sizing: border-box; }
     body {
@@ -77,6 +78,32 @@
       font-size: 1.1rem;
       font-weight: 700;
     }
+    .summary-card.summary-super {
+      border-color: var(--super-blue);
+    }
+    .summary-card.summary-super .summary-label,
+    .summary-card.summary-super .summary-value {
+      color: var(--super-blue);
+    }
+    .summary-card.summary-imediato {
+      border-color: #fff;
+    }
+    .summary-card.summary-imediato .summary-label,
+    .summary-card.summary-imediato .summary-value {
+      color: #fff;
+    }
+    .summary-card.summary-sem-linha {
+      background: rgba(143, 163, 191, 0.25);
+    }
+    .summary-card.summary-pendentes {
+      border-color: var(--betano-orange);
+    }
+    .summary-card.summary-pendentes .summary-label,
+    .summary-card.summary-pendentes .summary-value {
+      color: var(--betano-orange);
+    }
+    .summary-green { color: var(--accent); }
+    .summary-red { color: #ff6b6b; }
     .mercado-summary {
       display: grid;
       grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
@@ -137,7 +164,7 @@
       padding: 0.12rem 0.4rem;
       border-radius: 4px;
     }
-    .estrategia-badge.super { background: #0B57DD; color: #fff; }
+    .estrategia-badge.super { background: var(--super-blue); color: #fff; }
     .estrategia-badge.imediato {
       background: transparent;
       color: #fff;
@@ -642,31 +669,31 @@
           <div class="summary-label">Capturas +0,5</div>
           <div class="summary-value">${formatNumber(capturas)}</div>
         </div>
-        <div class="summary-card">
+        <div class="summary-card summary-super">
           <div class="summary-label">Super · GREEN</div>
           <div class="summary-value">${fmtG(superS)}</div>
         </div>
-        <div class="summary-card">
+        <div class="summary-card summary-super">
           <div class="summary-label">Super · ROI</div>
           <div class="summary-value">${fmtRoi(superS.roi)}</div>
         </div>
-        <div class="summary-card">
+        <div class="summary-card summary-imediato">
           <div class="summary-label">Imediato · GREEN</div>
           <div class="summary-value">${fmtG(imedS)}</div>
         </div>
-        <div class="summary-card">
+        <div class="summary-card summary-imediato">
           <div class="summary-label">Imediato · ROI</div>
           <div class="summary-value">${fmtRoi(imedS.roi)}</div>
         </div>
-        <div class="summary-card">
+        <div class="summary-card summary-sem-linha">
           <div class="summary-label">Sem +0,5 no jogo</div>
           <div class="summary-value">${formatNumber(semLinha)}</div>
         </div>
         <div class="summary-card">
           <div class="summary-label">GREEN / RED</div>
-          <div class="summary-value">${greens} / ${reds}</div>
+          <div class="summary-value"><span class="summary-green">${greens}</span> / <span class="summary-red">${reds}</span></div>
         </div>
-        <div class="summary-card">
+        <div class="summary-card summary-pendentes">
           <div class="summary-label">Pendentes</div>
           <div class="summary-value">${formatNumber(pending)}</div>
         </div>
