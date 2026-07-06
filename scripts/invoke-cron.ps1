@@ -8,6 +8,9 @@ $headers = @{
 Write-Host "Invoking betano-futebol-live..."
 $res = Invoke-RestMethod -Uri "$($cfg.url)/functions/v1/betano-futebol-live" -Method POST -Headers $headers
 Write-Host ($res | ConvertTo-Json -Depth 3 -Compress)
-Start-Sleep -Seconds 4
-$live = Invoke-RestMethod -Uri "$($cfg.url)/rest/v1/futebol_live_rows?event_id=eq.88363620&select=score,minute,over_0_odd,over_0_line,over_1_odd,over_1_line,over_2_odd,over_2_line" -Headers $headers
-Write-Host "Mexico over_0: $($live.over_0_odd) line $($live.over_0_line) | over_1: $($live.over_1_odd) @ $($live.over_1_line)"
+Start-Sleep -Seconds 3
+$mercado = Invoke-RestMethod -Uri "$($cfg.url)/rest/v1/futebol_mercado_gols_05?is_live=eq.true&resultado=neq.excluido&select=home,away,last_minute,live_score,resultado&limit=5" -Headers $headers
+if ($mercado) {
+  Write-Host "Mercado ao vivo (amostra):"
+  $mercado | ForEach-Object { Write-Host "  $($_.home) x $($_.away) | $($_.last_minute)' $($_.live_score) | $($_.resultado)" }
+}

@@ -1,23 +1,24 @@
-# Supabase — Futebol Live Betano
+# Supabase — Mercado de Gols +0,5 (Betano)
 
-Coleta na nuvem (Edge Function), sem IP local.
+Coleta na nuvem (Edge Function `betano-futebol-live`), sem IP local.
 
 ## Deploy
 
 ```powershell
-supabase link --project-ref mddortcbebtkopeanrhu
-supabase db push
-supabase functions deploy betano-futebol-live --no-verify-jwt
+npx supabase link --project-ref mddortcbebtkopeanrhu
+npx supabase db query --linked -f supabase/migrations/<migration>.sql
+npx supabase functions deploy betano-futebol-live --no-verify-jwt
 ```
 
 ## Teste
 
 ```powershell
-curl -X POST "https://mddortcbebtkopeanrhu.supabase.co/functions/v1/betano-futebol-live"
+powershell -File scripts/invoke-cron.ps1
 ```
 
-## Tabelas
+## Tabelas usadas pela coleta
 
-- `futebol_live_rows`
-- `futebol_live_meta`
-- `futebol_live_coleta_config`
+- `futebol_mercado_gols_05` — mercado +0,5 (fonte do painel)
+- `futebol_historico_jogos` / `futebol_historico_gols` — placar e gols
+- `futebol_live_meta` — meta da ultima rodada
+- `futebol_live_coleta_config` — cron

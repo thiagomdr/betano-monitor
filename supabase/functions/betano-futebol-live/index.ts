@@ -2798,19 +2798,6 @@ Deno.serve(async (req) => {
 
     rows.sort((a, b) => (b.minute ?? 0) - (a.minute ?? 0));
 
-    // substitui snapshot: remove jogos que sairam da janela
-    const keepIds = rows.map((r) => r.event_id);
-    if (keepIds.length > 0) {
-      await supabase.from("futebol_live_rows").upsert(rows, { onConflict: "event_id" });
-      await supabase
-        .from("futebol_live_rows")
-        .delete()
-        .not("event_id", "in", `(${keepIds.join(",")})`);
-    } else {
-      // delete all rows
-      await supabase.from("futebol_live_rows").delete().gte("updated_at", "1970-01-01");
-    }
-
     await supabase.from("futebol_live_meta").upsert({
       id: 1,
       source: "betano-danae+sportradar",
@@ -2821,11 +2808,10 @@ Deno.serve(async (req) => {
       notes: [
         ...notes,
         `Stats ok em ${statsOk}/${rows.length} jogos.`,
-        `Prontos para manter placar (>=85'): ${readyCount}.`,
-        `Gols gravados no historico nesta rodada: ${goalsSaved}.`,
+        `Gols gravados nesta rodada: ${goalsSaved}.`,
         `Mercado +0,5: ${mercadoCaptured} captura(s), ${mercadoWins} green(s), ${mercadoFinalize.losses} red(s), ${mercadoFinalize.semLinha} sem linha +0,5 nesta rodada.`,
         `Gols timeline ok: ${goalsTimelineOk}, timeline vazia c/ placar: ${goalsTimelineEmpty}, inferidos: ${goalsInferred}, sem gols c/ placar: ${goalsMissing}.`,
-        `Reconciliacao historico: ${reconcile.scanned} analisados, ${reconcile.fixed} ok, ${reconcile.backfilled} parcial/missing.`,
+        `Reconciliacao: ${reconcile.scanned} analisados, ${reconcile.fixed} ok, ${reconcile.backfilled} parcial/missing.`,
       ],
       last_error: null,
       updated_at: new Date().toISOString(),
