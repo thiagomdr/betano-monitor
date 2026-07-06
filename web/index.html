@@ -102,8 +102,10 @@
     .summary-card.summary-pendentes .summary-value {
       color: var(--betano-orange);
     }
-    .summary-green { color: var(--accent); }
-    .summary-red { color: #ff6b6b; }
+    .summary-card .summary-value .summary-green { color: var(--accent); }
+    .summary-card .summary-value .summary-red { color: #ff6b6b; }
+    .summary-card .summary-label .summary-green { color: var(--accent); }
+    .summary-card .summary-label .summary-red { color: #ff6b6b; }
     .mercado-summary {
       display: grid;
       grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
@@ -690,7 +692,7 @@
           <div class="summary-value">${formatNumber(semLinha)}</div>
         </div>
         <div class="summary-card">
-          <div class="summary-label">GREEN / RED</div>
+          <div class="summary-label"><span class="summary-green">GREEN</span> / <span class="summary-red">RED</span></div>
           <div class="summary-value"><span class="summary-green">${greens}</span> / <span class="summary-red">${reds}</span></div>
         </div>
         <div class="summary-card summary-pendentes">
