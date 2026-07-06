@@ -39,7 +39,7 @@ jobs:
 
       - name: Wait before retry 2
         if: steps.deployment1.outcome == 'failure'
-        run: sleep 15
+        run: sleep 30
 
       - name: Deploy to GitHub Pages (attempt 2)
         id: deployment2
@@ -49,7 +49,7 @@ jobs:
 
       - name: Wait before retry 3
         if: steps.deployment1.outcome == 'failure' && steps.deployment2.outcome == 'failure'
-        run: sleep 20
+        run: sleep 45
 
       - name: Deploy to GitHub Pages (attempt 3)
         id: deployment

@@ -1447,9 +1447,10 @@
       }
     }
 
-    document.getElementById('mercado-05-tbody')?.addEventListener('click', async (e) => {
+    document.getElementById('panel-mercado-05')?.addEventListener('click', async (e) => {
       const popBtn = e.target.closest('[data-super-popover]');
       if (popBtn) {
+        e.preventDefault();
         e.stopPropagation();
         const eventId = popBtn.getAttribute('data-super-popover');
         const pop = document.getElementById('mercado-elevated-popover');
@@ -1477,7 +1478,7 @@
     document.addEventListener('click', (e) => {
       if (e.target.closest('[data-super-popover]') || e.target.closest('#mercado-elevated-popover')) return;
       hideMercadoElevatedPopover();
-    });
+    }, true);
 
     document.querySelectorAll('.tab-btn').forEach((btn) => {
       btn.addEventListener('click', () => activateTab(btn.dataset.tab));
