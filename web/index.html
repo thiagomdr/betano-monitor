@@ -667,7 +667,7 @@
           apikey: anonKey,
           Authorization: `Bearer ${anonKey}`,
           'Content-Type': 'application/json',
-          Prefer: 'return=minimal',
+          Prefer: 'return=representation',
         },
         body: JSON.stringify(body),
       });
@@ -675,6 +675,8 @@
         const text = await res.text();
         throw new Error(`Supabase ${res.status}: ${text.slice(0, 200)}`);
       }
+      const rows = await res.json();
+      return Array.isArray(rows) ? rows : [];
     }
 
     async function supabaseDelete(url, anonKey, path) {
@@ -697,12 +699,15 @@
         ? `Remover "${label}" da lista Mercado +0,5?\n\nO jogo permanece no Historico; o cron nao recria esta linha.`
         : 'Remover este jogo da lista Mercado +0,5?';
       if (!window.confirm(msg)) return;
-      await supabasePatch(
+      const updated = await supabasePatch(
         appCfg.url,
         appCfg.anonKey,
         `futebol_mercado_gols_05?event_id=eq.${encodeURIComponent(eventId)}`,
         { resultado: 'excluido', updated_at: new Date().toISOString() },
       );
+      if (!updated.length) {
+        throw new Error('Nenhuma linha foi atualizada. Verifique permissao UPDATE no Supabase (migration excluido).');
+      }
       mercado05Cache = mercado05Cache.filter((r) => r.event_id !== eventId);
       renderMercado05();
     }
