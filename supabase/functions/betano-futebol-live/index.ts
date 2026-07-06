@@ -479,13 +479,17 @@ function goalsTotalFromScoreText(text: string): number {
   return (toInt(m[1]) ?? 0) + (toInt(m[2]) ?? 0);
 }
 
-/** Over +0,5 real: linha minima do mercado = placar atual + 0,5 (ex.: 1-0 → Mais de 1,5). */
+/** Over +0,5 real: linha minima = placar+0,5 e sem linha Over maior ainda ofertada. */
 function canCaptureTrueOver05(totals: TotalsOdds, goalsTotal: number): boolean {
   if (totals.over_0_odd == null || totals.over_0_line == null) return false;
   const needLine = goalsTotal + 0.5;
   if (Math.abs(totals.over_0_line - needLine) > 0.01) return false;
   if (totals.min_over_absolute_line == null) return false;
-  return Math.abs(totals.min_over_absolute_line - needLine) <= 0.01;
+  if (Math.abs(totals.min_over_absolute_line - needLine) > 0.01) return false;
+  for (const line of [totals.over_0_line, totals.over_1_line, totals.over_2_line]) {
+    if (line != null && line > needLine + 0.01) return false;
+  }
+  return true;
 }
 
 function assignOddSlot(
@@ -522,20 +526,26 @@ function sideOddsMonotonic(odds: (number | null)[], side: "under" | "over"): boo
   return true;
 }
 
-/** Reordena odds entre slots preenchidos: Under desc, Over asc. */
+/** Reordena pares linha+odd entre slots preenchidos: Under desc, Over asc. */
 function reorderSideOdds(slots: OddSlot[], side: "under" | "over"): OddSlot[] {
   const out = slots.map((s) => ({ ...s }));
   const filled = out
-    .map((s, i) => ({ i, odd: s.odd }))
-    .filter((x) => x.odd != null) as Array<{ i: number; odd: number }>;
+    .map((s, i) => ({ i, line: s.line, odd: s.odd }))
+    .filter((x) => x.odd != null && x.line != null) as Array<
+      { i: number; line: number; odd: number }
+    >;
   if (filled.length <= 1) return out;
 
-  const sortedOdds = filled.map((f) => f.odd).sort((a, b) =>
-    side === "under" ? b - a : a - b
+  const sorted = filled.slice().sort((a, b) =>
+    side === "under" ? b.odd - a.odd : a.odd - b.odd
   );
   filled.sort((a, b) => a.i - b.i);
   for (let j = 0; j < filled.length; j++) {
-    out[filled[j].i] = { ...out[filled[j].i], odd: sortedOdds[j] };
+    out[filled[j].i] = {
+      ...out[filled[j].i],
+      line: sorted[j].line,
+      odd: sorted[j].odd,
+    };
   }
   return out;
 }
@@ -1637,9 +1647,9 @@ async function revertMercadoInvalidPending(
   const needLine = goalsAtCapture + 0.5;
   const lineOk = row.over_05_line != null &&
     Math.abs(row.over_05_line - needLine) <= 0.01;
-  const minOk = totals.min_over_absolute_line != null &&
-    Math.abs(totals.min_over_absolute_line - needLine) <= 0.01;
-  if (lineOk && minOk && canCaptureTrueOver05(totals, goalsAtCapture)) return;
+  const higherSlot = [totals.over_0_line, totals.over_1_line, totals.over_2_line]
+    .some((line) => line != null && line > needLine + 0.01);
+  if (lineOk && !higherSlot && canCaptureTrueOver05(totals, goalsAtCapture)) return;
   const nowIso = new Date().toISOString();
   await supabase.from("futebol_mercado_gols_05").update({
     resultado: "watching",
