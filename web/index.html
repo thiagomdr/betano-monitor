@@ -717,11 +717,8 @@
       }
       if (resultado === 'watching') {
         // #region agent log
-        fetch('http://127.0.0.1:7904/ingest/86615625-6ae5-4e98-a1da-0a5f0f15fc42',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'e14164'},body:JSON.stringify({sessionId:'e14164',location:'index.html:mercadoEstrategiaLabel',message:'watching estrategia',data:{event_id:row.event_id,hadPhase,home:row.home},timestamp:Date.now(),hypothesisId:'H1'})}).catch(()=>{});
+        fetch('http://127.0.0.1:7904/ingest/86615625-6ae5-4e98-a1da-0a5f0f15fc42',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'e14164'},body:JSON.stringify({sessionId:'e14164',location:'index.html:mercadoEstrategiaLabel',message:'watching estrategia',data:{event_id:row.event_id,hadPhase,label:'aguardando+0,5'},timestamp:Date.now(),hypothesisId:'H1',runId:'post-fix'})}).catch(()=>{});
         // #endregion
-        if (hadPhase) {
-          return '<span class="estrategia-badge super">Super Estratégia</span> <span class="muted">· aguardando +0,5</span>';
-        }
         return '<span class="muted">aguardando +0,5</span>';
       }
       return '<span class="muted">—</span>';
