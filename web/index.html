@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Mercado de Gols +0,5 · Betano</title>
+  <title>Monitor Betano · Mercado de Gols +0,5</title>
   <style>
     :root {
       --bg: #0b0f14;
@@ -13,6 +13,7 @@
       --muted: #8fa3bf;
       --accent: #3dd68c;
       --warn: #ffd166;
+      --betano-orange: #ff5500;
     }
     * { box-sizing: border-box; }
     body {
@@ -26,6 +27,18 @@
       padding: 1rem 1.25rem;
       border-bottom: 1px solid var(--border);
     }
+    .brand-title {
+      margin: 0 0 0.35rem;
+      font-size: 1.5rem;
+      font-weight: 700;
+      line-height: 1.2;
+    }
+    .brand-monitor { color: #fff; }
+    a.brand-betano {
+      color: var(--betano-orange);
+      text-decoration: none;
+    }
+    a.brand-betano:hover { text-decoration: underline; }
     h1 { margin: 0 0 0.25rem; font-size: 1.35rem; }
     .subtitle { color: var(--muted); font-size: 0.9rem; margin: 0; }
     .status {
@@ -180,10 +193,76 @@
     }
     .mercado-profit.positive { color: var(--accent); font-weight: 700; }
     .mercado-profit.negative { color: #ff6b6b; font-weight: 700; }
+
+    @media (max-width: 640px) {
+      header, main { padding: 0.75rem; }
+      .brand-title { font-size: 1.25rem; }
+      h1 { font-size: 1.1rem; }
+      .subtitle { font-size: 0.82rem; }
+      .status { font-size: 0.8rem; }
+      .hint { font-size: 0.8rem; }
+      .mercado-summary {
+        grid-template-columns: repeat(2, 1fr);
+        gap: 0.5rem;
+      }
+      .summary-card { padding: 0.6rem; }
+      .summary-value { font-size: 1rem; }
+      .table-wrap {
+        overflow: visible;
+        border: none;
+        background: transparent;
+      }
+      table { font-size: 0.82rem; }
+      thead { display: none; }
+      #mercado-tbody tr {
+        display: block;
+        margin-bottom: 0.75rem;
+        padding: 0.65rem;
+        border: 1px solid var(--border);
+        border-radius: 8px;
+        background: var(--panel);
+      }
+      #mercado-tbody tr:hover td { background: transparent; }
+      #mercado-tbody td {
+        display: flex;
+        justify-content: space-between;
+        align-items: flex-start;
+        gap: 0.75rem;
+        padding: 0.35rem 0;
+        white-space: normal;
+        border-bottom: 1px solid rgba(36, 48, 68, 0.5);
+        text-align: right;
+      }
+      #mercado-tbody td:last-child { border-bottom: none; }
+      #mercado-tbody td::before {
+        content: attr(data-label);
+        font-weight: 600;
+        color: var(--muted);
+        font-size: 0.7rem;
+        text-transform: uppercase;
+        text-align: left;
+        flex-shrink: 0;
+      }
+      #mercado-tbody td[data-label=""]::before { content: none; }
+      #mercado-tbody td.empty {
+        display: block;
+        text-align: center;
+      }
+      #mercado-tbody td.empty::before { content: none; }
+      .mercado-elevated-popover {
+        left: 0.75rem !important;
+        right: 0.75rem !important;
+        max-width: none;
+      }
+    }
   </style>
 </head>
 <body>
   <header>
+    <p class="brand-title">
+      <span class="brand-monitor">Monitor</span>
+      <a class="brand-betano" href="https://www.betano.bet.br/" target="_blank" rel="noopener noreferrer">Betano</a>
+    </p>
     <h1>Mercado de Gols +0,5</h1>
     <p class="subtitle">Betano via Supabase · coleta na nuvem</p>
     <div class="status" id="status">Carregando…</div>
@@ -638,17 +717,17 @@
           ? `<a href="${row.betano_url}" target="_blank" rel="noopener">abrir</a>`
           : '—';
         return `<tr>
-          <td>${i + 1}</td>
-          <td><strong>${match}</strong></td>
-          <td>${mercadoEstrategiaLabel(row)}</td>
-          <td>${league}</td>
-          <td>${formatMercadoGolGreen(row)}</td>
-          <td>${mercadoResultadoLabel(row.resultado)}</td>
-          <td>${formatMercadoProfit(mercadoSimProfit(row))}</td>
-          <td>${mercadoPlacarLabel(row)}</td>
-          <td>${mercadoStatusLabel(row)}</td>
-          <td>${link}</td>
-          <td><button type="button" class="mercado-delete-btn" data-delete-mercado="${row.event_id}" data-delete-label="${match.replace(/"/g, '&quot;')}" title="Remover da lista">🗑</button></td>
+          <td data-label="#">${i + 1}</td>
+          <td data-label="Jogo"><strong>${match}</strong></td>
+          <td data-label="Estrategia">${mercadoEstrategiaLabel(row)}</td>
+          <td data-label="Liga">${league}</td>
+          <td data-label="Gol GREEN">${formatMercadoGolGreen(row)}</td>
+          <td data-label="Resultado">${mercadoResultadoLabel(row.resultado)}</td>
+          <td data-label="Lucro 1u">${formatMercadoProfit(mercadoSimProfit(row))}</td>
+          <td data-label="Placar">${mercadoPlacarLabel(row)}</td>
+          <td data-label="Status">${mercadoStatusLabel(row)}</td>
+          <td data-label="Link">${link}</td>
+          <td data-label=""><button type="button" class="mercado-delete-btn" data-delete-mercado="${row.event_id}" data-delete-label="${match.replace(/"/g, '&quot;')}" title="Remover da lista">🗑</button></td>
         </tr>`;
       }).join('');
     }
