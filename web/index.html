@@ -829,7 +829,7 @@
       if (!log.length) {
         return `<h4>Registro +0,5 · ${match}</h4><p class="muted">Nenhum registro ainda.</p>`;
       }
-      const items = log.map((e) => {
+      const items = log.slice().reverse().map((e) => {
         const when = formatDate(e.at);
         const min = e.minute != null ? `${e.minute}'` : '—';
         const score = e.score || '—';
