@@ -788,9 +788,10 @@
       const log = dedupeConsecutiveElevatedLines(parseElevatedOddsLog(row?.elevated_odds_log));
       const match = row ? `${row.home || '—'} x ${row.away || '—'}` : '';
       const live = row ? mercado05LiveOdds[row.event_id] : null;
+      const liveOver = row ? mercadoLiveTrueOver05(row.event_id) : null;
       let currentHtml = '';
-      if (live?.over_0_odd != null && live?.over_0_line != null) {
-        currentHtml = `<p class="mercado-popover-live"><strong>+0,5 agora:</strong> Mais de ${formatNumber(live.over_0_line)} @ ${formatOdd(live.over_0_odd)}${live.minute != null ? ` · ${live.minute}'` : ''}</p>`;
+      if (liveOver) {
+        currentHtml = `<p class="mercado-popover-live"><strong>+0,5 agora:</strong> Mais de ${formatNumber(liveOver.line)} @ ${formatOdd(liveOver.odd)}${live?.minute != null ? ` · ${live.minute}'` : ''}</p>`;
       }
       if (!log.length) {
         return `<h4>Odds acima de +0,5 · ${match}</h4>${currentHtml}<p class="muted">Nenhum historico de linhas elevadas ainda.</p>`;
@@ -946,18 +947,44 @@
       return formatDate(row.updated_at || row.created_at);
     }
 
+    function goalsTotalFromScoreText(text) {
+      const m = String(text || '').match(/(\d+)\s*[-–]\s*(\d+)/);
+      if (!m) return null;
+      return Number(m[1]) + Number(m[2]);
+    }
+
+    function mercadoLiveTrueOver05(eventId) {
+      const live = mercado05LiveOdds[eventId];
+      if (!live || live.over_0_odd == null || live.over_0_line == null) return null;
+      const goalsTotal = goalsTotalFromScoreText(live.score);
+      if (goalsTotal == null) return { odd: live.over_0_odd, line: live.over_0_line };
+      const needLine = goalsTotal + 0.5;
+      if (Math.abs(live.over_0_line - needLine) > 0.01) {
+        const slots = [
+          { line: live.over_0_line, odd: live.over_0_odd },
+          { line: live.over_1_line, odd: live.over_1_odd },
+          { line: live.over_2_line, odd: live.over_2_odd },
+        ];
+        const hit = slots.find((s) =>
+          s.line != null && s.odd != null && Math.abs(s.line - needLine) < 0.01,
+        );
+        if (!hit) return null;
+        return { odd: hit.odd, line: hit.line };
+      }
+      return { odd: live.over_0_odd, line: live.over_0_line };
+    }
+
     function formatMercadoOdd(row) {
       const open = row.resultado === 'watching' || row.resultado === 'pending';
-      const live = mercado05LiveOdds[row.event_id];
-      const odd = row.over_05_odd ?? (open && live?.over_0_odd != null ? live.over_0_odd : null);
-      const line = row.over_05_line ?? (open && live?.over_0_line != null ? live.over_0_line : null);
-      if (odd == null) return '—';
-      const oddFmt = formatOdd(odd);
-      if (line == null) return oddFmt;
-      const liveTag = row.over_05_odd == null && live?.over_0_odd != null
-        ? ' <span class="muted" title="Odd ao vivo (ainda nao capturada)">live</span>'
-        : '';
-      return `${oddFmt} <span class="muted" title="Linha Mais de (total gols)">+${formatNumber(line)}</span>${liveTag}`;
+      if (row.over_05_odd != null) {
+        const oddFmt = formatOdd(row.over_05_odd);
+        if (row.over_05_line == null) return oddFmt;
+        return `${oddFmt} <span class="muted" title="Linha Mais de (total gols)">+${formatNumber(row.over_05_line)}</span>`;
+      }
+      if (!open) return '—';
+      const liveOver = mercadoLiveTrueOver05(row.event_id);
+      if (!liveOver) return '—';
+      return `${formatOdd(liveOver.odd)} <span class="muted" title="Linha Mais de (total gols)">+${formatNumber(liveOver.line)}</span> <span class="muted" title="Odd ao vivo (ainda nao capturada)">live</span>`;
     }
 
     function mercadoVisibleRows(rows) {
@@ -1024,7 +1051,7 @@
           supabaseGet(
             appCfg.url,
             appCfg.anonKey,
-            'futebol_live_rows?select=event_id,minute,score,over_0_odd,over_0_line,over_1_odd,over_1_line,over_2_odd,over_2_line',
+            'futebol_live_rows?select=event_id,minute,score,over_0_odd,over_0_line,over_1_odd,over_1_line,over_2_odd,over_2_line,under_0_odd,under_0_line',
           ),
         ]);
         // #region agent log
@@ -1053,6 +1080,10 @@
           (liveRows ?? []).map((r) => [r.event_id, {
             over_0_odd: r.over_0_odd,
             over_0_line: r.over_0_line,
+            over_1_odd: r.over_1_odd,
+            over_1_line: r.over_1_line,
+            over_2_odd: r.over_2_odd,
+            over_2_line: r.over_2_line,
             minute: r.minute,
             score: r.score,
           }]),

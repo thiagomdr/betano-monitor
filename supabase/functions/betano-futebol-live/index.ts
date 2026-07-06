@@ -596,8 +596,16 @@ function sideOddsMonotonic(odds: (number | null)[], side: "under" | "over"): boo
   return true;
 }
 
-/** Reordena pares linha+odd entre slots preenchidos: Under desc, Over asc. */
+/** Reordena Over por linha absoluta asc; Under por odd desc. */
 function reorderSideOdds(slots: OddSlot[], side: "under" | "over"): OddSlot[] {
+  if (side === "over") {
+    const empty: OddSlot = { line: null, odd: null, kind: null };
+    const filled = slots
+      .filter((s) => s.odd != null && s.line != null)
+      .sort((a, b) => (a.line as number) - (b.line as number));
+    return [filled[0] ?? empty, filled[1] ?? empty, filled[2] ?? empty];
+  }
+
   const out = slots.map((s) => ({ ...s }));
   const filled = out
     .map((s, i) => ({ i, line: s.line, odd: s.odd }))
@@ -669,6 +677,54 @@ function slotsToTotalsOdds(
   }
 
   return t;
+}
+
+/** Garante over_0 = placar+0,5 (menor linha Over ofertada), slots seguintes = linhas maiores. */
+function canonicalizeTotalsOver05(t: TotalsOdds, goalsTotal: number): TotalsOdds {
+  const needLine = goalsTotal + 0.5;
+  const map = new Map<string, { line: number; odd: number }>();
+  const add = (line: number | null, odd: number | null) => {
+    if (line == null || odd == null) return;
+    map.set(String(line), { line, odd });
+  };
+  add(t.over_0_line, t.over_0_odd);
+  add(t.over_1_line, t.over_1_odd);
+  add(t.over_2_line, t.over_2_odd);
+  for (const e of t.elevated_over_lines ?? []) add(e.line, e.odd);
+
+  const pairs = [...map.values()].sort((a, b) => a.line - b.line);
+  const out: TotalsOdds = {
+    ...t,
+    over_0_line: null,
+    over_0_odd: null,
+    over_1_line: null,
+    over_1_odd: null,
+    over_2_line: null,
+    over_2_odd: null,
+    elevated_over_lines: [...(t.elevated_over_lines ?? [])],
+  };
+
+  const needIdx = pairs.findIndex((p) => Math.abs(p.line - needLine) < 0.01);
+  if (needIdx >= 0) {
+    out.over_0_line = pairs[needIdx].line;
+    out.over_0_odd = pairs[needIdx].odd;
+    let slot = 1;
+    for (let i = needIdx + 1; i < pairs.length && slot < 3; i++, slot++) {
+      if (slot === 1) {
+        out.over_1_line = pairs[i].line;
+        out.over_1_odd = pairs[i].odd;
+      } else {
+        out.over_2_line = pairs[i].line;
+        out.over_2_odd = pairs[i].odd;
+      }
+    }
+  }
+
+  out.min_over_absolute_line = pairs.length
+    ? pairs[0].line
+    : t.min_over_absolute_line;
+  out.elevated_over_seen = pairs.some((p) => p.line > needLine + 0.01) || t.elevated_over_seen;
+  return out;
 }
 
 function scoreMarketOdds(underSlots: OddSlot[], overSlots: OddSlot[], goalsTotal: number): number {
@@ -880,7 +936,7 @@ function extractTotalsOdds(
   totals.elevated_over_seen = elevatedOverSeen;
   totals.min_over_absolute_line = minOverAbsoluteLine;
   totals.elevated_over_lines = elevatedOverLinesAcc;
-  return totals;
+  return canonicalizeTotalsOver05(totals, goalsTotal);
 }
 
 /** Under por gols restantes: linhas +0.5, +1.5, +2.5. */
@@ -957,6 +1013,14 @@ function mergeTotalsOdds(primary: TotalsOdds, secondary: TotalsOdds): TotalsOdds
   return out;
 }
 
+function mergeAndCanonicalizeTotals(
+  primary: TotalsOdds,
+  secondary: TotalsOdds,
+  goalsTotal: number,
+): TotalsOdds {
+  return canonicalizeTotalsOver05(mergeTotalsOdds(primary, secondary), goalsTotal);
+}
+
 /** Extrai mercados/selecoes aninhados em marketOffers (inclui HCTG alternativos). */
 function flattenOffersMarkets(data: unknown): { markets: Json; selections: Json } {
   const markets: Json = {};
@@ -1013,7 +1077,7 @@ function flattenOffersMarkets(data: unknown): { markets: Json; selections: Json 
   return { markets, selections };
 }
 
-/** Mercados HCTG alternativos: vizinhos handicap anchor±1 (ex. 3,5 e 5,5 quando anchor 4,5). */
+/** Mercados HCTG alternativos no overview (nao estao no marketIdList). */
 function supplementOverviewHctgOrphans(
   event: Json,
   overview: Json,
@@ -1027,18 +1091,6 @@ function supplementOverviewHctgOrphans(
   const marketIdList = Array.isArray(event.marketIdList)
     ? event.marketIdList.map(String)
     : [];
-
-  let anchorMid: string | null = null;
-  let anchorHandicap: number | null = null;
-  for (const mid of marketIdList) {
-    const rec = asRecord(markets[mid]);
-    if (rec?.type === "HCTG") {
-      anchorMid = mid;
-      anchorHandicap = toNum(rec.handicap);
-      break;
-    }
-  }
-  if (!anchorMid || anchorHandicap == null) return totals;
 
   const pickOverOdd = (mid: string): number | null => {
     const rec = asRecord(markets[mid]);
@@ -1054,31 +1106,31 @@ function supplementOverviewHctgOrphans(
     return null;
   };
 
-  const anchorOver = pickOverOdd(anchorMid);
-  if (anchorOver == null) return totals;
+  const targetHandicaps = [
+    goalsTotal + 0.5,
+    goalsTotal + 1.5,
+    goalsTotal + 2.5,
+  ];
 
   const extraIds: string[] = [];
-  for (const delta of [-1, 1] as const) {
-    const targetHc = anchorHandicap + delta;
-    let candidates: string[] = [];
+  for (const targetHc of targetHandicaps) {
+    if (marketIdList.some((mid) => {
+      const hc = toNum(asRecord(markets[mid])?.handicap);
+      return hc != null && Math.abs(hc - targetHc) < 0.01;
+    })) continue;
+
+    const candidates: string[] = [];
     for (const [mid, market] of Object.entries(markets)) {
-      if (mid === anchorMid || marketIdList.includes(mid) || claimedHctg.has(mid)) continue;
+      if (marketIdList.includes(mid) || claimedHctg.has(mid)) continue;
       const rec = asRecord(market);
       if (!rec || rec.type !== "HCTG") continue;
       const line = toNum(rec.handicap);
       if (line == null || Math.abs(line - targetHc) > 0.01) continue;
-      const over = pickOverOdd(mid);
-      if (over == null) continue;
-      if (delta < 0 && over >= anchorOver) continue;
-      if (delta > 0 && over <= anchorOver) continue;
+      if (pickOverOdd(mid) == null) continue;
       candidates.push(mid);
     }
     if (!candidates.length) continue;
-    candidates.sort((a, b) => {
-      const oa = pickOverOdd(a)!;
-      const ob = pickOverOdd(b)!;
-      return delta < 0 ? ob - oa : oa - ob;
-    });
+    candidates.sort((a, b) => (pickOverOdd(a) ?? 999) - (pickOverOdd(b) ?? 999));
     const chosen = candidates[0];
     claimedHctg.add(chosen);
     extraIds.push(chosen);
@@ -1093,7 +1145,7 @@ function supplementOverviewHctgOrphans(
     overview,
     goalsTotal,
   );
-  return mergeTotalsOdds(totals, patched);
+  return mergeAndCanonicalizeTotals(totals, patched, goalsTotal);
 }
 
 /** Busca mercados extras do evento (totais Under/Over) quando o overview nao traz. */
@@ -2207,14 +2259,14 @@ Deno.serve(async (req) => {
               offerOverview,
               goalsTotal,
             );
-            totals = mergeTotalsOdds(totals, fromOffersTotals);
+            totals = mergeAndCanonicalizeTotals(totals, fromOffersTotals, goalsTotal);
           }
         } catch {
           // markets-offers opcional
         }
         if (needsSupplementalTotalsFetch(totals, goalsTotal)) {
           const extra = await fetchEventTotalsOdds(eventId, goalsTotal);
-          totals = mergeTotalsOdds(totals, extra);
+          totals = mergeAndCanonicalizeTotals(totals, extra, goalsTotal);
         }
       }
       totals = supplementOverviewHctgOrphans(
