@@ -361,6 +361,8 @@ type TotalsOdds = {
   over_2_odd: number | null;
   /** Over acima do +0,5 (ex.: Mais de 5,5) sem slot 0/1/2 — fase Super antes do +0,5. */
   elevated_over_seen: boolean;
+  /** Menor linha Over absoluta vista (ex.: Mais de 4,5 no placar 1-0). */
+  min_over_absolute_line: number | null;
 };
 
 type OddSlot = { line: number | null; odd: number | null; kind: MarketLineMode | null };
@@ -379,6 +381,7 @@ const EMPTY_TOTALS_ODDS: TotalsOdds = {
   over_2_line: null,
   over_2_odd: null,
   elevated_over_seen: false,
+  min_over_absolute_line: null,
 };
 
 const REMAINING_LINES = [0.5, 1.5, 2.5];
@@ -470,6 +473,21 @@ function mercadoHadElevatedOverPhase(totals: TotalsOdds): boolean {
     totals.elevated_over_seen;
 }
 
+function goalsTotalFromScoreText(text: string): number {
+  const m = String(text).match(/(\d+)\s*[-–]\s*(\d+)/);
+  if (!m) return 0;
+  return (toInt(m[1]) ?? 0) + (toInt(m[2]) ?? 0);
+}
+
+/** Over +0,5 real: linha minima do mercado = placar atual + 0,5 (ex.: 1-0 → Mais de 1,5). */
+function canCaptureTrueOver05(totals: TotalsOdds, goalsTotal: number): boolean {
+  if (totals.over_0_odd == null || totals.over_0_line == null) return false;
+  const needLine = goalsTotal + 0.5;
+  if (Math.abs(totals.over_0_line - needLine) > 0.01) return false;
+  if (totals.min_over_absolute_line == null) return false;
+  return Math.abs(totals.min_over_absolute_line - needLine) <= 0.01;
+}
+
 function assignOddSlot(
   slots: OddSlot[],
   slot: number,
@@ -527,12 +545,11 @@ function slotsToTotalsOdds(
   overSlots: OddSlot[],
   goalsTotal: number,
 ): TotalsOdds {
-  const canonicalLines = REMAINING_LINES.map((r) => goalsTotal + r);
   let u = reorderSideOdds(underSlots, "under");
   let o = reorderSideOdds(overSlots, "over");
 
   const pick = (slots: OddSlot[], i: number) => ({
-    line: slots[i].odd != null ? canonicalLines[i] : null,
+    line: slots[i].odd != null ? slots[i].line : null,
     odd: slots[i].odd,
   });
 
@@ -550,6 +567,7 @@ function slotsToTotalsOdds(
     over_2_line: pick(os, 2).line,
     over_2_odd: pick(os, 2).odd,
     elevated_over_seen: false,
+    min_over_absolute_line: null,
   });
 
   let t = build(u, o);
@@ -588,7 +606,7 @@ function extractOddsFromMarket(
   rec: Json,
   selections: Record<string, Json>,
   goalsTotal: number,
-): { under: OddSlot[]; over: OddSlot[]; elevatedOverSeen: boolean } | null {
+): { under: OddSlot[]; over: OddSlot[]; elevatedOverSeen: boolean; minOverAbsLine: number | null } | null {
   const mode = marketLineMode(rec);
   if (!mode) return null;
 
@@ -603,6 +621,7 @@ function extractOddsFromMarket(
     { line: null, odd: null, kind: null },
   ];
   let elevatedOverSeen = false;
+  let minOverAbsLine: number | null = null;
 
   const marketLine = toNum(rec.handicap ?? rec.line ?? rec.points);
   const selIds = Array.isArray(rec.selectionIdList)
@@ -628,6 +647,18 @@ function extractOddsFromMarket(
     if (selLine == null) selLine = parseGoalLineFromSelectionName(sname);
     if (price == null || selLine == null || price < 1.01 || price > 100) continue;
 
+    if (isOver && mode === "absolute") {
+      minOverAbsLine = minOverAbsLine == null
+        ? selLine
+        : Math.min(minOverAbsLine, selLine);
+    }
+    if (isOver && mode === "remaining") {
+      const absEquiv = goalsTotal + selLine;
+      minOverAbsLine = minOverAbsLine == null
+        ? absEquiv
+        : Math.min(minOverAbsLine, absEquiv);
+    }
+
     const slot = slotForLine(selLine, goalsTotal, mode);
     if (slot == null) {
       if (isOver && isElevatedOverLine(selLine, goalsTotal, mode)) {
@@ -644,7 +675,7 @@ function extractOddsFromMarket(
     !elevatedOverSeen) {
     return null;
   }
-  return { under: underSlots, over: overSlots, elevatedOverSeen };
+  return { under: underSlots, over: overSlots, elevatedOverSeen, minOverAbsLine };
 }
 
 function extractTotalsOdds(
@@ -677,6 +708,7 @@ function extractTotalsOdds(
     absolute: { under: emptySlots(), over: emptySlots() },
   };
   let elevatedOverSeen = false;
+  let minOverAbsoluteLine: number | null = null;
 
   const tryMarket = (mid: string, rec: Json) => {
     const mode = marketLineMode(rec);
@@ -684,6 +716,11 @@ function extractTotalsOdds(
     const extracted = extractOddsFromMarket(mid, rec, selections as Record<string, Json>, goalsTotal);
     if (!extracted) return;
     if (extracted.elevatedOverSeen) elevatedOverSeen = true;
+    if (extracted.minOverAbsLine != null) {
+      minOverAbsoluteLine = minOverAbsoluteLine == null
+        ? extracted.minOverAbsLine
+        : Math.min(minOverAbsoluteLine, extracted.minOverAbsLine);
+    }
     const bucket = byMode[mode];
     for (let i = 0; i < 3; i++) {
       const u = extracted.under[i];
@@ -733,13 +770,18 @@ function extractTotalsOdds(
   }
 
   if (bestScore < 0 || bestMode == null) {
-    if (elevatedOverSeen) {
-      return { ...EMPTY_TOTALS_ODDS, elevated_over_seen: true };
+    if (elevatedOverSeen || minOverAbsoluteLine != null) {
+      return {
+        ...EMPTY_TOTALS_ODDS,
+        elevated_over_seen: elevatedOverSeen,
+        min_over_absolute_line: minOverAbsoluteLine,
+      };
     }
     return EMPTY_TOTALS_ODDS;
   }
   const totals = slotsToTotalsOdds(bestUnder, bestOver, goalsTotal);
   totals.elevated_over_seen = elevatedOverSeen;
+  totals.min_over_absolute_line = minOverAbsoluteLine;
   return totals;
 }
 
@@ -1352,6 +1394,8 @@ type MercadoGols05Row = {
   indisponivel_ate_minuto: number | null;
   had_min_plus2_before: boolean;
   over_05_odd: number | null;
+  over_05_line?: number | null;
+  placar_na_captura?: string | null;
   estrategia?: string | null;
 };
 
@@ -1371,8 +1415,9 @@ type MercadoGols05Context = {
 function shouldCaptureMercadoGols05(
   totals: TotalsOdds,
   hadMinPlus2: boolean,
+  goalsTotal: number,
 ): boolean {
-  return totals.over_0_odd != null && hadMinPlus2;
+  return canCaptureTrueOver05(totals, goalsTotal) && hadMinPlus2;
 }
 
 async function applyMercadoGols05Capture(
@@ -1469,13 +1514,15 @@ async function processMercadoGols05Live(
 ): Promise<"captured" | "win" | "loss" | null> {
   const nowIso = new Date().toISOString();
   const minute = ctx.minute;
+  const goalsTotal = goalsTotalFromScoreText(ctx.score_text);
   const over0 = totals.over_0_odd;
   const elevatedPhase = mercadoHadElevatedOverPhase(totals);
+  const trueOver05 = canCaptureTrueOver05(totals, goalsTotal);
 
   if (!existing) {
     if (!isNewGame) return null;
 
-    if (over0 != null) {
+    if (over0 != null && trueOver05) {
       await supabase.from("futebol_mercado_gols_05").insert({
         event_id: eventId,
         home: ctx.home,
@@ -1527,7 +1574,17 @@ async function processMercadoGols05Live(
       }).eq("event_id", eventId).eq("resultado", "watching");
       return null;
     }
-    if (shouldCaptureMercadoGols05(totals, existing.had_min_plus2_before)) {
+    if (!trueOver05) {
+      const hadMinPlus2 = existing.had_min_plus2_before || elevatedPhase;
+      await supabase.from("futebol_mercado_gols_05").update({
+        indisponivel_ate_minuto: minute,
+        had_min_plus2_before: hadMinPlus2,
+        last_minute: minute,
+        updated_at: nowIso,
+      }).eq("event_id", eventId).eq("resultado", "watching");
+      return null;
+    }
+    if (shouldCaptureMercadoGols05(totals, existing.had_min_plus2_before, goalsTotal)) {
       const indisponivel = existing.indisponivel_ate_minuto ?? (minute != null ? minute - 1 : null);
       await applyMercadoGols05Capture(
         supabase,
@@ -1567,6 +1624,33 @@ async function processMercadoGols05Live(
   }
 
   return null;
+}
+
+async function revertMercadoInvalidPending(
+  supabase: ReturnType<typeof createClient>,
+  eventId: string,
+  totals: TotalsOdds,
+  row: MercadoGols05Row | null,
+): Promise<void> {
+  if (!row || row.resultado !== "pending" || !row.placar_na_captura) return;
+  const goalsAtCapture = goalsTotalFromScoreText(row.placar_na_captura);
+  const needLine = goalsAtCapture + 0.5;
+  const lineOk = row.over_05_line != null &&
+    Math.abs(row.over_05_line - needLine) <= 0.01;
+  const minOk = totals.min_over_absolute_line != null &&
+    Math.abs(totals.min_over_absolute_line - needLine) <= 0.01;
+  if (lineOk && minOk && canCaptureTrueOver05(totals, goalsAtCapture)) return;
+  const nowIso = new Date().toISOString();
+  await supabase.from("futebol_mercado_gols_05").update({
+    resultado: "watching",
+    estrategia: null,
+    captured_at: null,
+    over_05_odd: null,
+    over_05_line: null,
+    disponivel_desde_minuto: null,
+    placar_na_captura: null,
+    updated_at: nowIso,
+  }).eq("event_id", eventId).eq("resultado", "pending");
 }
 
 async function finalizeMercadoGols05OffLive(
@@ -1967,7 +2051,7 @@ Deno.serve(async (req) => {
       const { data: mercadoRow } = await supabase
         .from("futebol_mercado_gols_05")
         .select(
-          "event_id,resultado,captured_at,disponivel_desde_minuto,indisponivel_ate_minuto,had_min_plus2_before,over_05_odd",
+          "event_id,resultado,captured_at,disponivel_desde_minuto,indisponivel_ate_minuto,had_min_plus2_before,over_05_odd,over_05_line,placar_na_captura",
         )
         .eq("event_id", eventId)
         .maybeSingle();
@@ -1986,6 +2070,12 @@ Deno.serve(async (req) => {
           score_text: score.text,
         },
         isNewGame,
+        mercadoRow as MercadoGols05Row | null,
+      );
+      await revertMercadoInvalidPending(
+        supabase,
+        eventId,
+        totals,
         mercadoRow as MercadoGols05Row | null,
       );
       if (mercadoAction === "captured") mercadoCaptured += 1;

@@ -465,7 +465,7 @@
               <th title="Ultimo minuto sem Over +0,5">Sem +0,5 até</th>
               <th title="Minuto em que Over +0,5 apareceu">Surgiu em</th>
               <th>Placar captura</th>
-              <th>ODD +0,5</th>
+              <th title="Odd Over +0,5 e linha Mais de (total gols no placar da captura)">ODD +0,5</th>
               <th>Gols após</th>
               <th>Gol GREEN</th>
               <th>Resultado</th>
@@ -826,6 +826,13 @@
       return formatDate(row.updated_at || row.created_at);
     }
 
+    function formatMercadoOdd(row) {
+      if (row.over_05_odd == null) return '—';
+      const odd = formatOdd(row.over_05_odd);
+      if (row.over_05_line == null) return odd;
+      return `${odd} <span class="muted" title="Linha Mais de (total gols)">+${formatNumber(row.over_05_line)}</span>`;
+    }
+
     function renderMercado05() {
       const tbody = document.getElementById('mercado-05-tbody');
       if (!tbody) return;
@@ -859,7 +866,7 @@
           <td>${semAte}</td>
           <td><strong>${surgiu}</strong></td>
           <td>${row.placar_na_captura || '—'}</td>
-          <td>${formatOdd(row.over_05_odd)}</td>
+          <td>${formatMercadoOdd(row)}</td>
           <td>${golsApos}</td>
           <td>${golGreen}</td>
           <td>${mercadoResultadoLabel(row.resultado)}</td>
