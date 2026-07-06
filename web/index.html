@@ -304,7 +304,7 @@
       padding: 0.12rem 0.4rem;
       border-radius: 4px;
     }
-    .estrategia-badge.super { background: rgba(77, 150, 255, 0.22); color: #fff; }
+    .estrategia-badge.super { background: rgba(77, 150, 255, 0.45); color: #fff; }
     .estrategia-badge.imediato { background: rgba(94, 179, 255, 0.18); color: #5eb3ff; }
     #panel-mercado-05 tbody tr:hover td {
       background: rgba(232, 238, 247, 0.08);
@@ -449,7 +449,7 @@
 
     <section class="panel" id="panel-mercado-05">
       <p class="hint">
-        <strong>Super Estratégia</strong> = +0,5 só após fase com +1,5/+2,5 ·
+        <strong>Super Estratégia</strong> = fase com linha acima do +0,5 (+1,5/+2,5 ou Mais de 4,5/5,5) antes do +0,5 ·
         <strong>Imediato</strong> = +0,5 já na 1ª coleta ou ao surgir sem esperar +1,5 ·
         <strong>Sem +0,5 no jogo</strong> = linha nunca apareceu · simulação 1u Over +0,5 nas capturas.
       </p>
@@ -699,7 +699,8 @@
       return `<span class="history-sim-profit ${cls}">${sign}${formatNumber(rounded)} u</span>`;
     }
 
-    function mercadoEstrategiaLabel(estrategia, resultado) {
+    function mercadoEstrategiaLabel(row) {
+      const { estrategia, resultado, had_min_plus2_before: hadPhase } = row;
       const map = {
         super_05: { text: 'Super Estratégia', cls: 'super' },
         imediato_05: { text: 'Imediato', cls: 'imediato' },
@@ -715,7 +716,13 @@
         return '<span class="muted">—</span>';
       }
       if (resultado === 'watching') {
-        return '<span class="muted">aguardando</span>';
+        // #region agent log
+        fetch('http://127.0.0.1:7904/ingest/86615625-6ae5-4e98-a1da-0a5f0f15fc42',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'e14164'},body:JSON.stringify({sessionId:'e14164',location:'index.html:mercadoEstrategiaLabel',message:'watching estrategia',data:{event_id:row.event_id,hadPhase,home:row.home},timestamp:Date.now(),hypothesisId:'H1'})}).catch(()=>{});
+        // #endregion
+        if (hadPhase) {
+          return '<span class="estrategia-badge super">Super Estratégia</span> <span class="muted">· aguardando +0,5</span>';
+        }
+        return '<span class="muted">aguardando +0,5</span>';
       }
       return '<span class="muted">—</span>';
     }
@@ -850,7 +857,7 @@
         return `<tr>
           <td>${i + 1}</td>
           <td><strong>${match}</strong></td>
-          <td>${mercadoEstrategiaLabel(row.estrategia, row.resultado)}</td>
+          <td>${mercadoEstrategiaLabel(row)}</td>
           <td>${league}</td>
           <td>${semAte}</td>
           <td><strong>${surgiu}</strong></td>
