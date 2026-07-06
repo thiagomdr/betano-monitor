@@ -559,16 +559,27 @@ async function appendMercadoElevatedOddsLog(
     elevated_odds_log: trimmed,
     updated_at: nowIso,
   }).eq("event_id", eventId);
-  // #region agent log
-  console.log(JSON.stringify({
-    sessionId: "e14164",
-    hypothesisId: "H-log",
-    runId: "post-fix-v2",
-    location: "index.ts:appendMercadoElevatedOddsLog",
-    message: "true over05 logged",
-    data: { eventId, goalsTotal, needLine: goalsTotal + 0.5, snapshot },
-  }));
-  // #endregion
+}
+
+async function syncMercadoLiveSnapshot(
+  supabase: ReturnType<typeof createClient>,
+  eventId: string,
+  minute: number | null,
+  scoreText: string,
+  totals: TotalsOdds,
+): Promise<void> {
+  const nowIso = new Date().toISOString();
+  await supabase.from("futebol_mercado_gols_05").update({
+    last_minute: minute,
+    live_score: scoreText,
+    live_over_0_line: totals.over_0_line,
+    live_over_0_odd: totals.over_0_odd,
+    live_over_1_line: totals.over_1_line,
+    live_over_1_odd: totals.over_1_odd,
+    live_over_2_line: totals.over_2_line,
+    live_over_2_odd: totals.over_2_odd,
+    updated_at: nowIso,
+  }).eq("event_id", eventId).eq("is_live", true).neq("resultado", "excluido");
 }
 
 function assignOddSlot(
@@ -2193,26 +2204,6 @@ async function processMercadoGols05Live(
     return "captured";
   }
 
-  if (existing.resultado === "pending") {
-    await supabase.from("futebol_mercado_gols_05").update({
-      last_minute: minute,
-      is_live: true,
-      updated_at: nowIso,
-    }).eq("event_id", eventId).eq("resultado", "pending");
-  }
-
-  if (
-    existing.resultado === "win" ||
-    existing.resultado === "loss"
-  ) {
-    await supabase.from("futebol_mercado_gols_05").update({
-      last_minute: minute,
-      placar_final: ctx.score_text,
-      is_live: true,
-      updated_at: nowIso,
-    }).eq("event_id", eventId).in("resultado", ["win", "loss"]);
-  }
-
   return null;
 }
 
@@ -2514,30 +2505,6 @@ Deno.serve(async (req) => {
           event, overview, goalsTotal, totals,
         );
       }
-      // #region agent log
-      if (eventId === "86656223" || eventId === "88363620") {
-        console.log(JSON.stringify({
-          sessionId: "e14164",
-          hypothesisId: eventId === "86656223" ? "H-TAC" : "H-MEX",
-          runId: "post-fix-tacoma",
-          location: "index.ts:totals_after_deep",
-          message: "totals after event deep fetch",
-          data: {
-            eventId,
-            goalsTotal,
-            mercadoResultado,
-            needDeepGoalMarkets,
-            over_0_line: totals.over_0_line,
-            over_0_odd: totals.over_0_odd,
-            over_1_line: totals.over_1_line,
-            over_1_odd: totals.over_1_odd,
-            min_over_absolute_line: totals.min_over_absolute_line,
-            canCapture: canCaptureTrueOver05(totals, goalsTotal),
-          },
-          timestamp: Date.now(),
-        }));
-      }
-      // #endregion
       const under = totals;
 
       const betradarId = extractBetradarMatchId(event);
@@ -2780,6 +2747,33 @@ Deno.serve(async (req) => {
             false,
           );
           if (out === "win") mercadoWins += 1;
+        }
+      }
+
+      const { data: mercadoSnap } = await supabase
+        .from("futebol_mercado_gols_05")
+        .select("event_id,is_live,resultado")
+        .eq("event_id", eventId)
+        .maybeSingle();
+      if (
+        mercadoSnap?.is_live &&
+        mercadoSnap.resultado !== "excluido"
+      ) {
+        await syncMercadoLiveSnapshot(
+          supabase,
+          eventId,
+          minute,
+          score.text,
+          totals,
+        );
+        if (
+          mercadoSnap.resultado === "win" ||
+          mercadoSnap.resultado === "loss"
+        ) {
+          await supabase.from("futebol_mercado_gols_05").update({
+            placar_final: score.text,
+            updated_at: new Date().toISOString(),
+          }).eq("event_id", eventId).in("resultado", ["win", "loss"]);
         }
       }
     }

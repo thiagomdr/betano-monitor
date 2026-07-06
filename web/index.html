@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Futebol Live · Manter Placar (Betano)</title>
+  <title>Mercado de Gols +0,5 · Betano</title>
   <style>
     :root {
       --bg: #0b0f14;
@@ -13,9 +13,6 @@
       --muted: #8fa3bf;
       --accent: #3dd68c;
       --warn: #ffd166;
-      --low: rgba(61, 214, 140, 0.16);
-      --mid: rgba(255, 209, 102, 0.14);
-      --high: rgba(220, 53, 69, 0.18);
     }
     * { box-sizing: border-box; }
     body {
@@ -43,12 +40,6 @@
       font-size: 0.85rem;
       margin: 0 0 0.75rem;
     }
-    .summary {
-      display: grid;
-      grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
-      gap: 0.75rem;
-      margin-bottom: 1rem;
-    }
     .summary-card {
       border: 1px solid var(--border);
       border-radius: 8px;
@@ -65,6 +56,12 @@
       margin-top: 0.25rem;
       font-size: 1.1rem;
       font-weight: 700;
+    }
+    .mercado-summary {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+      gap: 0.75rem;
+      margin-bottom: 0.75rem;
     }
     .table-wrap {
       overflow: auto;
@@ -93,196 +90,13 @@
       background: var(--panel);
     }
     tr:last-child td { border-bottom: none; }
-    tr.risk-low td { background: var(--low); }
-    tr.risk-mid td { background: var(--mid); }
-    tr.risk-high td { background: var(--high); }
-    tr.risk-study td { background: rgba(50, 130, 255, 0.12); }
-    tr.risk-study td:first-child { box-shadow: inset 3px 0 0 #5eb3ff; }
-    tr.risk-low td:first-child { box-shadow: inset 3px 0 0 #3dd68c; }
-    tr.risk-mid td:first-child { box-shadow: inset 3px 0 0 #ffd166; }
-    tr.risk-high td:first-child { box-shadow: inset 3px 0 0 #dc3545; }
-    tr.goals-missing td { background: rgba(220, 53, 69, 0.12); }
-    tr.goals-partial td { background: rgba(255, 209, 102, 0.1); }
-    .goals-status { font-size: 0.78rem; font-weight: 600; }
-    .goals-status.ok { color: var(--accent); }
-    .goals-status.partial { color: var(--warn); }
-    .goals-status.missing, .goals-status.mismatch { color: #ff6b6b; }
+    #mercado-tbody tr:hover td {
+      background: rgba(232, 238, 247, 0.08);
+    }
     .muted { color: var(--muted); }
     .odd { color: var(--accent); font-weight: 600; }
     .empty { text-align: center; color: var(--muted); padding: 2rem; }
-    .notes {
-      margin-top: 0.75rem;
-      color: var(--warn);
-      font-size: 0.82rem;
-    }
     a { color: var(--accent); }
-    .tabs {
-      display: flex;
-      gap: 0.5rem;
-      margin-bottom: 1rem;
-    }
-    .tab-btn {
-      background: var(--panel);
-      border: 1px solid var(--border);
-      color: var(--muted);
-      padding: 0.45rem 0.9rem;
-      border-radius: 6px;
-      cursor: pointer;
-      font-size: 0.88rem;
-    }
-    .tab-btn.active {
-      color: var(--text);
-      border-color: var(--accent);
-      color: var(--accent);
-    }
-    .panel { display: none; }
-    .panel.active { display: block; }
-    .history-filters {
-      display: flex;
-      flex-wrap: wrap;
-      gap: 0.75rem;
-      align-items: end;
-      margin-bottom: 0.75rem;
-    }
-    .history-filters label {
-      display: flex;
-      flex-direction: column;
-      gap: 0.25rem;
-      font-size: 0.8rem;
-      color: var(--muted);
-    }
-    .history-filters input {
-      background: var(--panel);
-      border: 1px solid var(--border);
-      color: var(--text);
-      padding: 0.4rem 0.55rem;
-      border-radius: 6px;
-      width: 5.5rem;
-    }
-    .history-filter-result {
-      font-size: 0.85rem;
-      color: var(--accent);
-      font-weight: 600;
-      align-self: center;
-    }
-    .history-filters button {
-      background: var(--accent);
-      color: #062416;
-      border: none;
-      border-radius: 6px;
-      padding: 0.45rem 0.9rem;
-      font-weight: 600;
-      cursor: pointer;
-    }
-    .goals-list {
-      font-size: 0.82rem;
-      line-height: 1.45;
-    }
-    .goals-list .late { color: #ff8f5e; font-weight: 600; }
-    #panel-history tbody tr td {
-      transition: background 0.15s ease;
-    }
-    #panel-history tbody tr:hover td {
-      background: rgba(232, 238, 247, 0.08);
-    }
-    .history-load-more-wrap {
-      display: flex;
-      flex-wrap: wrap;
-      align-items: center;
-      justify-content: center;
-      gap: 0.75rem;
-      margin-top: 1rem;
-      position: sticky;
-      bottom: 0;
-      z-index: 5;
-      padding: 0.85rem 1rem;
-      background: linear-gradient(to top, var(--bg) 70%, rgba(11, 15, 20, 0));
-      border-top: 1px solid var(--border);
-    }
-    .history-load-more-wrap button {
-      background: var(--panel);
-      border: 1px solid var(--border);
-      color: var(--text);
-      border-radius: 6px;
-      padding: 0.55rem 1.25rem;
-      font-size: 0.9rem;
-      font-weight: 600;
-      cursor: pointer;
-    }
-    .history-load-more-wrap button:hover:not(:disabled) {
-      border-color: var(--accent);
-      color: var(--accent);
-    }
-    .history-load-more-wrap button:disabled {
-      opacity: 0.55;
-      cursor: wait;
-    }
-    .history-simulation {
-      display: grid;
-      grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
-      gap: 0.75rem;
-      margin-bottom: 0.75rem;
-    }
-    .history-sim-card {
-      border: 1px solid var(--border);
-      border-radius: 8px;
-      background: var(--panel);
-      padding: 0.75rem;
-    }
-    .history-sim-title {
-      font-size: 0.78rem;
-      color: var(--muted);
-      text-transform: uppercase;
-      letter-spacing: 0.04em;
-      margin-bottom: 0.35rem;
-    }
-    .history-sim-market {
-      font-size: 0.92rem;
-      font-weight: 700;
-      margin-bottom: 0.5rem;
-    }
-    .history-sim-row {
-      font-size: 0.82rem;
-      color: var(--muted);
-      line-height: 1.5;
-    }
-    .history-sim-row strong { color: var(--text); }
-    .history-sim-profit.positive { color: var(--accent); font-weight: 700; }
-    .history-sim-profit.negative { color: #ff6b6b; font-weight: 700; }
-    .history-sim-note {
-      grid-column: 1 / -1;
-      font-size: 0.78rem;
-      color: var(--muted);
-      margin: 0;
-    }
-    .history-sim-toolbar {
-      display: flex;
-      flex-wrap: wrap;
-      gap: 0.75rem;
-      align-items: end;
-      margin-bottom: 0.5rem;
-    }
-    .history-sim-toolbar label {
-      display: flex;
-      flex-direction: column;
-      gap: 0.25rem;
-      font-size: 0.8rem;
-      color: var(--muted);
-    }
-    .history-sim-toolbar select {
-      background: var(--panel);
-      border: 1px solid var(--border);
-      color: var(--text);
-      padding: 0.4rem 0.55rem;
-      border-radius: 6px;
-      min-width: 11rem;
-    }
-    .mercado-summary {
-      display: grid;
-      grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
-      gap: 0.75rem;
-      margin-bottom: 0.75rem;
-    }
     .resultado-badge {
       display: inline-block;
       font-size: 0.78rem;
@@ -295,7 +109,6 @@
     .resultado-badge.win { background: rgba(61, 214, 140, 0.2); color: var(--accent); }
     .resultado-badge.loss { background: rgba(220, 53, 69, 0.2); color: #ff6b6b; }
     .resultado-badge.sem-linha { background: rgba(143, 163, 191, 0.2); color: var(--muted); }
-    .resultado-badge.excluido { background: rgba(143, 163, 191, 0.12); color: var(--muted); }
     .resultado-badge.watching { background: rgba(94, 179, 255, 0.15); color: #5eb3ff; }
     .estrategia-badge {
       display: inline-block;
@@ -311,9 +124,7 @@
       cursor: pointer;
       font: inherit;
     }
-    button.estrategia-popover-btn:hover {
-      filter: brightness(1.12);
-    }
+    button.estrategia-popover-btn:hover { filter: brightness(1.12); }
     .mercado-elevated-popover {
       display: none;
       position: fixed;
@@ -345,16 +156,6 @@
       border-bottom: 1px solid rgba(255, 255, 255, 0.06);
     }
     .mercado-elevated-popover li:last-child { border-bottom: none; }
-    .mercado-popover-live {
-      margin: 0 0 0.75rem;
-      padding: 0.5rem 0.6rem;
-      background: rgba(94, 179, 255, 0.12);
-      border-radius: 6px;
-      font-size: 0.9rem;
-    }
-    #panel-mercado-05 tbody tr:hover td {
-      background: rgba(232, 238, 247, 0.08);
-    }
     .mercado-delete-btn {
       background: transparent;
       border: none;
@@ -373,159 +174,51 @@
       opacity: 0.45;
       cursor: wait;
     }
+    .mercado-profit.positive { color: var(--accent); font-weight: 700; }
+    .mercado-profit.negative { color: #ff6b6b; font-weight: 700; }
   </style>
 </head>
 <body>
   <header>
-    <h1 id="game-title">Futebol Live · Manter Placar</h1>
-    <p class="subtitle" id="game-subtitle">Betano via Supabase (IP nuvem)</p>
-    <div class="status" id="status"></div>
+    <h1>Mercado de Gols +0,5</h1>
+    <p class="subtitle">Betano via Supabase · coleta na nuvem</p>
+    <div class="status" id="status">Carregando…</div>
   </header>
   <main>
-    <div class="tabs">
-      <button type="button" class="tab-btn active" data-tab="mercado-05">Mercado de Gols +0,5</button>
-      <button type="button" class="tab-btn" data-tab="live">Ao vivo</button>
-      <button type="button" class="tab-btn" data-tab="history">Histórico</button>
+    <p class="hint">
+      Monitoramento automatico da linha <strong>Over +0,5</strong> (placar + 0,5).
+      Novos jogos entram sozinhos; use a lixeira para ocultar da lista.
+    </p>
+    <section class="mercado-summary" id="mercado-summary" aria-live="polite"></section>
+    <div class="table-wrap">
+      <table>
+        <thead>
+          <tr>
+            <th>#</th>
+            <th>Jogo</th>
+            <th>Estrategia</th>
+            <th>Liga</th>
+            <th>Gol GREEN</th>
+            <th>Resultado</th>
+            <th>Lucro 1u</th>
+            <th>Placar</th>
+            <th title="Ao vivo com minuto ou data de encerramento">Status</th>
+            <th>Link</th>
+            <th title="Ocultar da lista"></th>
+          </tr>
+        </thead>
+        <tbody id="mercado-tbody">
+          <tr><td colspan="11" class="empty">Carregando…</td></tr>
+        </tbody>
+      </table>
     </div>
-
-    <section class="panel" id="panel-live">
-      <p class="hint">
-        Todos os jogos <strong>live</strong> da Betano (para estudar antes) ·
-        destaque a partir dos <strong>85'</strong> para manter placar ·
-        números em <span style="color:#3dd68c">verde</span> = <strong>odds Under Betano</strong>
-        (Odd 0 = sem mais gols · Odd +1 · Odd +2) ·
-        fundo da linha: <span style="color:#5eb3ff">azul</span> em estudo ·
-        <span style="color:#3dd68c">verde</span> pressão baixa ·
-        <span style="color:#ffd166">amarelo</span> média ·
-        <span style="color:#ff6b6b">vermelho</span> alta ·
-        stats <code>---</code> = sem cobertura Sportradar nesse jogo
-      </p>
-      <section class="summary" id="summary"></section>
-      <div class="table-wrap">
-        <table>
-          <thead>
-            <tr>
-              <th>#</th>
-              <th>Min</th>
-              <th>Placar</th>
-              <th>Jogo</th>
-              <th>Liga</th>
-              <th title="Soma casa + fora">Chutes a gol</th>
-              <th title="Soma casa + fora">Escanteios</th>
-              <th title="Soma casa + fora">Tiros de meta</th>
-              <th title="Soma de Chutes a gol + Tiros de meta + Escanteios">CTE</th>
-              <th title="Under: sem mais gols (linha placar + 0,5)">ODD -0,5</th>
-              <th title="Under: no maximo +1 gol (linha placar + 1,5)">ODD -1,5</th>
-              <th title="Under: no maximo +2 gols (linha placar + 2,5)">ODD -2,5</th>
-              <th title="Over: pelo menos +1 gol (linha placar + 0,5)">ODD +0,5</th>
-              <th title="Over: pelo menos +2 gols (linha placar + 1,5)">ODD +1,5</th>
-              <th title="Over: pelo menos +3 gols (linha placar + 2,5)">ODD +2,5</th>
-              <th title="Em estudo (&lt;85') ou manter placar (≥85')">Sinal</th>
-              <th>Link</th>
-            </tr>
-          </thead>
-          <tbody id="tbody">
-            <tr><td colspan="16" class="empty">Carregando...</td></tr>
-          </tbody>
-        </table>
-      </div>
-      <p class="notes" id="notes"></p>
-    </section>
-
-    <section class="panel" id="panel-history">
-      <p class="hint">
-        Histórico de <strong>jogos já finalizados</strong> · coluna <strong>Gols BD</strong> mostra
-        se os gols gravados batem com o placar (ok / parcial / faltando)
-      </p>
-      <div class="history-filters">
-        <label>
-          Minuto inicial
-          <input type="number" id="goal-from-minute" min="0" max="130" placeholder="0" />
-        </label>
-        <label>
-          Minuto final
-          <input type="number" id="goal-to-minute" min="0" max="130" placeholder="sem limite" />
-        </label>
-        <button type="button" id="history-filter-btn">Buscar</button>
-        <span id="history-filter-result" class="history-filter-result"></span>
-      </div>
-      <div class="history-sim-toolbar">
-        <label>
-          Simulacao por dia
-          <select id="history-sim-day">
-            <option value="all">Todos os carregados</option>
-          </select>
-        </label>
-      </div>
-      <section class="history-simulation" id="history-simulation" aria-live="polite"></section>
-      <div class="table-wrap">
-        <table>
-          <thead>
-            <tr>
-              <th>#</th>
-              <th>Placar</th>
-              <th>Jogo</th>
-              <th>Liga</th>
-              <th title="Soma chutes a gol">Chutes a gol</th>
-              <th title="Soma escanteios">Escanteios</th>
-              <th title="Soma tiros de meta">Tiros de meta</th>
-              <th title="Soma Chutes + Tiros + Escanteios">CTE</th>
-              <th title="Under congelado aos 85' (linha placar + 0,5)">ODD -0,5</th>
-              <th title="Under congelado aos 85' (linha placar + 1,5)">ODD -1,5</th>
-              <th title="Under congelado aos 85' (linha placar + 2,5)">ODD -2,5</th>
-              <th title="Over congelado aos 85' (linha placar + 0,5)">ODD +0,5</th>
-              <th title="Over congelado aos 85' (linha placar + 1,5)">ODD +1,5</th>
-              <th title="Over congelado aos 85' (linha placar + 2,5)">ODD +2,5</th>
-              <th>Gols (minuto)</th>
-              <th title="Validacao BD: registrados vs placar">Gols BD</th>
-              <th>Gols no intervalo</th>
-              <th>Encerrado</th>
-            </tr>
-          </thead>
-          <tbody id="history-tbody">
-            <tr><td colspan="18" class="empty">Carregando histórico...</td></tr>
-          </tbody>
-        </table>
-      </div>
-      <div class="history-load-more-wrap">
-        <button type="button" id="history-load-more-btn" hidden>Carregar Mais</button>
-        <span id="history-load-more-status" class="muted"></span>
-      </div>
-    </section>
-
-    <section class="panel active" id="panel-mercado-05">
-      <p class="hint">
-        <strong>Super Estratégia</strong> = fase com linha acima do +0,5 (+1,5/+2,5 ou Mais de 4,5/5,5) antes do +0,5 ·
-        <strong>Imediato</strong> = +0,5 já na 1ª coleta ou ao surgir sem esperar +1,5 ·
-        <strong>Sem +0,5 no jogo</strong> = linha nunca apareceu · simulação 1u Over +0,5 nas capturas.
-      </p>
-      <section class="mercado-summary" id="mercado-05-summary" aria-live="polite"></section>
-      <div class="table-wrap">
-        <table>
-          <thead>
-            <tr>
-              <th>#</th>
-              <th>Jogo</th>
-              <th>Estratégia</th>
-              <th>Liga</th>
-              <th>Gol GREEN</th>
-              <th>Resultado</th>
-              <th>Lucro 1u</th>
-              <th>Placar final</th>
-              <th title="Ao vivo com minuto ou data de encerramento">Status</th>
-              <th>Link</th>
-              <th title="Remover da lista Mercado +0,5"></th>
-            </tr>
-          </thead>
-          <tbody id="mercado-05-tbody">
-            <tr><td colspan="11" class="empty">Carregando...</td></tr>
-          </tbody>
-        </table>
-      </div>
-      <div id="mercado-elevated-popover" class="mercado-elevated-popover" role="dialog" aria-hidden="true"></div>
-    </section>
+    <div id="mercado-elevated-popover" class="mercado-elevated-popover" role="dialog" aria-hidden="true"></div>
   </main>
   <script>
+    let appCfg = null;
+    let mercadoCache = [];
+    let mercadoLoading = false;
+
     function formatNumber(n) {
       if (n == null || Number.isNaN(Number(n))) return '—';
       return Number(n).toLocaleString('pt-BR', { maximumFractionDigits: 2 });
@@ -545,119 +238,55 @@
       return d.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' });
     }
 
+    function formatOdd(n) {
+      if (n == null) return '<span class="muted">—</span>';
+      return `<span class="odd">${formatNumber(n)}</span>`;
+    }
+
     function formatMercadoGolGreen(row) {
       if (row.gol_green_minute == null) return '—';
       const time = formatTimeOnly(row.settled_at);
       return time ? `${row.gol_green_minute}' ${time}` : `${row.gol_green_minute}'`;
     }
 
-    function pair(home, away) {
-      if (home == null && away == null) return '<span class="muted">—</span>';
-      return `${home ?? '—'}-${away ?? '—'}`;
+    function formatMercadoProfit(value) {
+      if (value == null) return '<span class="muted">—</span>';
+      const rounded = Math.round(value * 100) / 100;
+      const sign = rounded > 0 ? '+' : '';
+      const cls = rounded >= 0 ? 'positive' : 'negative';
+      return `<span class="mercado-profit ${cls}">${sign}${formatNumber(rounded)} u</span>`;
     }
 
-    function sumPair(home, away) {
-      if (home == null && away == null) return null;
-      return (home ?? 0) + (away ?? 0);
+    function goalsTotalFromScoreText(text) {
+      const m = String(text || '').match(/(\d+)\s*[-–]\s*(\d+)/);
+      if (!m) return null;
+      return Number(m[1]) + Number(m[2]);
     }
 
-    function formatSum(home, away) {
-      const total = sumPair(home, away);
-      if (total == null) return '<span class="muted">—</span>';
-      return `<strong>${total}</strong>`;
-    }
-
-    function formatCte(row) {
-      const shots = sumPair(row.home_shots_on_target, row.away_shots_on_target);
-      const corners = sumPair(row.home_corners, row.away_corners);
-      const kicks = sumPair(row.home_goal_kicks, row.away_goal_kicks);
-      if (shots == null && corners == null && kicks == null) {
-        return '<span class="muted">—</span>';
+    async function initAppCfg() {
+      if (appCfg) return appCfg;
+      const cfgRes = await fetch('./supabase.config.json');
+      if (!cfgRes.ok) throw new Error('web/supabase.config.json nao encontrado');
+      appCfg = await cfgRes.json();
+      if (!appCfg.url || !appCfg.anonKey || appCfg.anonKey.includes('COLE_AQUI')) {
+        throw new Error('Configure url e anonKey em web/supabase.config.json');
       }
-      const cte = (shots ?? 0) + (corners ?? 0) + (kicks ?? 0);
-      return `<strong>${cte}</strong>`;
+      return appCfg;
     }
 
-    function formatOdd(n) {
-      if (n == null) return '<span class="muted">—</span>';
-      return `<span class="odd">${formatNumber(n)}</span>`;
-    }
-
-    function riskClass(signal, minute) {
-      const s = String(signal || '').toLowerCase();
-      if (s.includes('em estudo') || (minute != null && minute < 85)) return 'risk-study';
-      if (s.includes('pressao alta')) return 'risk-high';
-      if (s.includes('pressao media')) return 'risk-mid';
-      if (s.includes('pressao baixa')) return 'risk-low';
-      return '';
-    }
-
-    function renderSummary(meta, rows) {
-      const ready = rows.filter((r) => (r.minute ?? 0) >= 85).length;
-      const withStats = rows.filter((r) => r.stats_available || r.home_shots_on_target != null || r.home_corners != null).length;
-      const low = rows.filter((r) => riskClass(r.signal, r.minute) === 'risk-low').length;
-      document.getElementById('summary').innerHTML = `
-        <div class="summary-card">
-          <div class="summary-label">Jogos live</div>
-          <div class="summary-value">${formatNumber(meta.total ?? rows.length)}</div>
-        </div>
-        <div class="summary-card">
-          <div class="summary-label">Prontos (85'+)</div>
-          <div class="summary-value">${formatNumber(meta.candidates ?? ready)}</div>
-        </div>
-        <div class="summary-card">
-          <div class="summary-label">Com stats</div>
-          <div class="summary-value">${formatNumber(withStats)}</div>
-        </div>
-        <div class="summary-card">
-          <div class="summary-label">Pressão baixa</div>
-          <div class="summary-value">${formatNumber(low)}</div>
-        </div>
-      `;
-    }
-
-    function formatUnderOdd(odd, line) {
-      if (odd == null) return '<span class="muted">—</span>';
-      return formatOdd(odd);
-    }
-
-    function renderRows(rows) {
-      const tbody = document.getElementById('tbody');
-      if (!rows.length) {
-        tbody.innerHTML = '<tr><td colspan="16" class="empty">Nenhum jogo live no momento. Aguarde o cron (2 min) ou dispare a Edge Function.</td></tr>';
-        return;
+    async function supabaseGet(url, anonKey, path) {
+      const res = await fetch(`${url}/rest/v1/${path}`, {
+        headers: {
+          apikey: anonKey,
+          Authorization: `Bearer ${anonKey}`,
+          Accept: 'application/json',
+        },
+      });
+      if (!res.ok) {
+        const text = await res.text();
+        throw new Error(`Supabase ${res.status}: ${text.slice(0, 200)}`);
       }
-      tbody.innerHTML = rows.map((row, i) => {
-        const minLabel = row.injury_time
-          ? `${row.minute}'+${row.injury_time}`
-          : `${row.minute ?? '—'}'`;
-        const league = [row.country, row.league].filter(Boolean).join(' · ') || '—';
-        const match = `${row.home || '—'} x ${row.away || '—'}`;
-        const link = row.betano_url
-          ? `<a href="${row.betano_url}" target="_blank" rel="noopener">abrir</a>`
-          : '—';
-        const odd0 = row.under_0_odd ?? row.under_odd;
-        const line0 = row.under_0_line ?? row.under_line;
-        return `<tr class="${riskClass(row.signal, row.minute)}">
-          <td>${i + 1}</td>
-          <td>${minLabel}</td>
-          <td><strong>${row.score || '—'}</strong></td>
-          <td>${match}</td>
-          <td>${league}</td>
-          <td>${formatSum(row.home_shots_on_target, row.away_shots_on_target)}</td>
-          <td>${formatSum(row.home_corners, row.away_corners)}</td>
-          <td>${formatSum(row.home_goal_kicks, row.away_goal_kicks)}</td>
-          <td>${formatCte(row)}</td>
-          <td>${formatUnderOdd(odd0, line0)}</td>
-          <td>${formatUnderOdd(row.under_1_odd, row.under_1_line)}</td>
-          <td>${formatUnderOdd(row.under_2_odd, row.under_2_line)}</td>
-          <td>${formatUnderOdd(row.over_0_odd, row.over_0_line)}</td>
-          <td>${formatUnderOdd(row.over_1_odd, row.over_1_line)}</td>
-          <td>${formatUnderOdd(row.over_2_odd, row.over_2_line)}</td>
-          <td>${row.signal || '—'}</td>
-          <td>${link}</td>
-        </tr>`;
-      }).join('');
+      return res.json();
     }
 
     async function supabasePatch(url, anonKey, path, body) {
@@ -679,25 +308,11 @@
       return Array.isArray(rows) ? rows : [];
     }
 
-    async function supabaseDelete(url, anonKey, path) {
-      const res = await fetch(`${url}/rest/v1/${path}`, {
-        method: 'DELETE',
-        headers: {
-          apikey: anonKey,
-          Authorization: `Bearer ${anonKey}`,
-        },
-      });
-      if (!res.ok) {
-        const text = await res.text();
-        throw new Error(`Supabase ${res.status}: ${text.slice(0, 200)}`);
-      }
-    }
-
-    async function deleteMercado05Row(eventId, label) {
+    async function deleteMercadoRow(eventId, label) {
       if (!appCfg || !eventId) return;
       const msg = label
-        ? `Remover "${label}" da lista Mercado +0,5?\n\nO jogo permanece no Historico; o cron nao recria esta linha.`
-        : 'Remover este jogo da lista Mercado +0,5?';
+        ? `Remover "${label}" da lista?\n\nO cron nao recria esta linha.`
+        : 'Remover este jogo da lista?';
       if (!window.confirm(msg)) return;
       const updated = await supabasePatch(
         appCfg.url,
@@ -706,35 +321,11 @@
         { resultado: 'excluido', updated_at: new Date().toISOString() },
       );
       if (!updated.length) {
-        throw new Error('Nenhuma linha foi atualizada. Verifique permissao UPDATE no Supabase (migration excluido).');
+        throw new Error('Nenhuma linha foi atualizada no Supabase.');
       }
-      mercado05Cache = mercado05Cache.filter((r) => r.event_id !== eventId);
-      renderMercado05();
+      mercadoCache = mercadoCache.filter((r) => String(r.event_id) !== String(eventId));
+      renderMercado();
     }
-
-    async function supabaseGet(url, anonKey, path) {
-      const res = await fetch(`${url}/rest/v1/${path}`, {
-        headers: {
-          apikey: anonKey,
-          Authorization: `Bearer ${anonKey}`,
-          Accept: 'application/json',
-        },
-      });
-      if (!res.ok) {
-        const text = await res.text();
-        throw new Error(`Supabase ${res.status}: ${text.slice(0, 200)}`);
-      }
-      return res.json();
-    }
-
-    let appCfg = null;
-    const HISTORY_PAGE_SIZE = 200;
-    let historyCache = { games: [], goals: [] };
-    let historyPagination = { offset: 0, hasMore: true, loading: false };
-    let mercado05Cache = [];
-    let mercado05LiveMinutes = {};
-    let mercado05LiveOdds = {};
-    let mercado05Loading = false;
 
     function mercadoResultadoLabel(resultado) {
       const map = {
@@ -742,7 +333,6 @@
         win: 'GREEN',
         loss: 'RED',
         sem_linha_05: 'Sem +0,5 no jogo',
-        excluido: 'Legado (sem odd)',
         watching: 'Monitorando',
         skipped: 'Sem +0,5 no jogo',
       };
@@ -751,15 +341,12 @@
         win: 'win',
         loss: 'loss',
         sem_linha_05: 'sem-linha',
-        excluido: 'excluido',
         watching: 'watching',
         skipped: 'sem-linha',
       };
       const text = map[resultado] || resultado || '—';
       const cls = badgeCls[resultado];
-      return cls
-        ? `<span class="resultado-badge ${cls}">${text}</span>`
-        : text;
+      return cls ? `<span class="resultado-badge ${cls}">${text}</span>` : text;
     }
 
     function mercadoSimProfit(row) {
@@ -770,21 +357,13 @@
       return null;
     }
 
-    function formatMercadoProfit(value) {
-      if (value == null) return '<span class="muted">—</span>';
-      const rounded = Math.round(value * 100) / 100;
-      const sign = rounded > 0 ? '+' : '';
-      const cls = rounded >= 0 ? 'positive' : 'negative';
-      return `<span class="history-sim-profit ${cls}">${sign}${formatNumber(rounded)} u</span>`;
-    }
-
     function parseElevatedOddsLog(raw) {
       if (!Array.isArray(raw)) return [];
       return raw.filter((e) => e && typeof e.line === 'number' && typeof e.odd === 'number');
     }
 
     function superEstrategiaBadge(eventId) {
-      return `<button type="button" class="estrategia-badge super estrategia-popover-btn" data-super-popover="${eventId}" title="Clique: registro das odds +0,5">Super Estratégia</button>`;
+      return `<button type="button" class="estrategia-badge super estrategia-popover-btn" data-super-popover="${eventId}" title="Registro das odds +0,5">Super Estrategia</button>`;
     }
 
     function dedupeConsecutiveElevatedLines(log) {
@@ -798,6 +377,41 @@
         out.push(e);
       }
       return out;
+    }
+
+    function mercadoLiveOddsFromRow(row) {
+      if (!row) return null;
+      return {
+        over_0_odd: row.live_over_0_odd,
+        over_0_line: row.live_over_0_line,
+        over_1_odd: row.live_over_1_odd,
+        over_1_line: row.live_over_1_line,
+        over_2_odd: row.live_over_2_odd,
+        over_2_line: row.live_over_2_line,
+        minute: row.last_minute,
+        score: row.live_score,
+      };
+    }
+
+    function mercadoLiveTrueOver05(row) {
+      const live = mercadoLiveOddsFromRow(row);
+      if (!live || live.over_0_odd == null || live.over_0_line == null) return null;
+      const goalsTotal = goalsTotalFromScoreText(live.score);
+      if (goalsTotal == null) return { odd: live.over_0_odd, line: live.over_0_line };
+      const needLine = goalsTotal + 0.5;
+      if (Math.abs(live.over_0_line - needLine) > 0.01) {
+        const slots = [
+          { line: live.over_0_line, odd: live.over_0_odd },
+          { line: live.over_1_line, odd: live.over_1_odd },
+          { line: live.over_2_line, odd: live.over_2_odd },
+        ];
+        const hit = slots.find((s) =>
+          s.line != null && s.odd != null && Math.abs(s.line - needLine) < 0.01,
+        );
+        if (!hit) return null;
+        return { odd: hit.odd, line: hit.line };
+      }
+      return { odd: live.over_0_odd, line: live.over_0_line };
     }
 
     function buildSuperPopoverLog(row) {
@@ -824,10 +438,10 @@
         return log;
       }
 
-      if (row.resultado === 'watching') {
-        const liveOver = mercadoLiveTrueOver05(row.event_id);
+      if (row.resultado === 'watching' && row.is_live) {
+        const liveOver = mercadoLiveTrueOver05(row);
         if (liveOver) {
-          const live = mercado05LiveOdds[row.event_id];
+          const live = mercadoLiveOddsFromRow(row);
           log.push({
             at: new Date().toISOString(),
             minute: live?.minute ?? row.last_minute,
@@ -851,9 +465,7 @@
         const when = formatDate(e.at);
         const min = e.minute != null ? `${e.minute}'` : '—';
         const score = e.score || '—';
-        const lineLabel = e.line != null
-          ? `Mais de ${formatNumber(e.line)}`
-          : '+0,5';
+        const lineLabel = e.line != null ? `Mais de ${formatNumber(e.line)}` : '+0,5';
         const tag = e.capture
           ? ' <span class="muted">(captura)</span>'
           : (e.live ? ' <span class="muted">(agora)</span>' : '');
@@ -872,7 +484,7 @@
     function showMercadoElevatedPopover(btn, eventId) {
       const pop = document.getElementById('mercado-elevated-popover');
       if (!pop) return;
-      const row = mercado05Cache.find((r) => String(r.event_id) === String(eventId));
+      const row = mercadoCache.find((r) => String(r.event_id) === String(eventId));
       pop.innerHTML = renderElevatedPopoverHtml(row);
       const rect = btn.getBoundingClientRect();
       pop.style.left = `${Math.min(rect.left, window.innerWidth - 380)}px`;
@@ -883,13 +495,8 @@
 
     function mercadoEstrategiaLabel(row) {
       const { estrategia, resultado, had_min_plus2_before: hadPhase, event_id: eventId } = row;
-      if (estrategia === 'super_05') {
-        return superEstrategiaBadge(eventId);
-      }
+      if (estrategia === 'super_05') return superEstrategiaBadge(eventId);
       if (estrategia === 'imediato_05') {
-        return '<span class="estrategia-badge imediato">Imediato</span>';
-      }
-      if (resultado === 'excluido') {
         return '<span class="estrategia-badge imediato">Imediato</span>';
       }
       if (resultado === 'sem_linha_05' || resultado === 'skipped') {
@@ -914,15 +521,14 @@
       return { bets: scoped.length, greens, profit, roi };
     }
 
-    function renderMercado05Summary(rows) {
-      const el = document.getElementById('mercado-05-summary');
+    function renderMercadoSummary(rows) {
+      const el = document.getElementById('mercado-summary');
       if (!el) return;
       const settled = rows.filter((r) => r.resultado === 'win' || r.resultado === 'loss');
       const capturas = rows.filter((r) => r.captured_at != null).length;
       const semLinha = rows.filter((r) =>
         r.resultado === 'sem_linha_05' || r.resultado === 'skipped',
       ).length;
-      const legado = rows.filter((r) => r.resultado === 'excluido').length;
       const superS = mercadoStrategyStats(rows, 'super_05');
       const imedS = mercadoStrategyStats(rows, 'imediato_05');
       const greens = rows.filter((r) => r.resultado === 'win').length;
@@ -963,12 +569,8 @@
           <div class="summary-label">Sem +0,5 no jogo</div>
           <div class="summary-value">${formatNumber(semLinha)}</div>
         </div>
-        ${legado > 0 ? `<div class="summary-card">
-          <div class="summary-label">Legado (sem odd)</div>
-          <div class="summary-value">${formatNumber(legado)}</div>
-        </div>` : ''}
         <div class="summary-card">
-          <div class="summary-label">GREEN / RED (total)</div>
+          <div class="summary-label">GREEN / RED</div>
           <div class="summary-value">${greens} / ${reds}</div>
         </div>
         <div class="summary-card">
@@ -977,7 +579,7 @@
         </div>
         <div class="summary-card">
           <div class="summary-label">Lucro 1u (liquidadas)</div>
-          <div class="summary-value history-sim-profit ${profitClass}">${sign}${formatNumber(profit)} u</div>
+          <div class="summary-value mercado-profit ${profitClass}">${sign}${formatNumber(profit)} u</div>
         </div>
         <div class="summary-card">
           <div class="summary-label">ROI (total)</div>
@@ -992,25 +594,7 @@
 
     function mercadoStatusLabel(row) {
       if (row.is_live) {
-        const liveMinute = mercado05LiveMinutes[row.event_id];
-        const m = liveMinute != null ? liveMinute : row.last_minute;
-        // #region agent log
-        if (row.event_id === '87557966' || row.event_id === 87557966) {
-          fetch('http://127.0.0.1:7904/ingest/86615625-6ae5-4e98-a1da-0a5f0f15fc42', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json', 'X-Debug-Session-Id': 'e14164' },
-            body: JSON.stringify({
-              sessionId: 'e14164',
-              hypothesisId: 'H1',
-              runId: 'alta-minute-fix',
-              location: 'index.html:mercadoStatusLabel',
-              message: 'Status minute sources',
-              data: { event_id: row.event_id, liveMinute, rowLastMinute: row.last_minute, chosen: m, resultado: row.resultado },
-              timestamp: Date.now(),
-            }),
-          }).catch(() => {});
-        }
-        // #endregion
+        const m = row.last_minute;
         return m != null
           ? `<span class="muted">Ao Vivo ${m}'</span>`
           : '<span class="muted">Ao Vivo</span>';
@@ -1018,44 +602,22 @@
       return formatDate(row.updated_at || row.created_at);
     }
 
-    function goalsTotalFromScoreText(text) {
-      const m = String(text || '').match(/(\d+)\s*[-–]\s*(\d+)/);
-      if (!m) return null;
-      return Number(m[1]) + Number(m[2]);
-    }
-
-    function mercadoLiveTrueOver05(eventId) {
-      const live = mercado05LiveOdds[eventId];
-      if (!live || live.over_0_odd == null || live.over_0_line == null) return null;
-      const goalsTotal = goalsTotalFromScoreText(live.score);
-      if (goalsTotal == null) return { odd: live.over_0_odd, line: live.over_0_line };
-      const needLine = goalsTotal + 0.5;
-      if (Math.abs(live.over_0_line - needLine) > 0.01) {
-        const slots = [
-          { line: live.over_0_line, odd: live.over_0_odd },
-          { line: live.over_1_line, odd: live.over_1_odd },
-          { line: live.over_2_line, odd: live.over_2_odd },
-        ];
-        const hit = slots.find((s) =>
-          s.line != null && s.odd != null && Math.abs(s.line - needLine) < 0.01,
-        );
-        if (!hit) return null;
-        return { odd: hit.odd, line: hit.line };
-      }
-      return { odd: live.over_0_odd, line: live.over_0_line };
+    function mercadoPlacarLabel(row) {
+      if (row.is_live && row.live_score) return row.live_score;
+      return row.placar_final || '—';
     }
 
     function mercadoVisibleRows(rows) {
       return rows.filter((r) => r.resultado !== 'excluido');
     }
 
-    function renderMercado05() {
-      const tbody = document.getElementById('mercado-05-tbody');
+    function renderMercado() {
+      const tbody = document.getElementById('mercado-tbody');
       if (!tbody) return;
-      const rows = mercadoVisibleRows(mercado05Cache).slice().sort((a, b) =>
+      const rows = mercadoVisibleRows(mercadoCache).slice().sort((a, b) =>
         String(mercadoSortKey(b)).localeCompare(String(mercadoSortKey(a))),
       );
-      renderMercado05Summary(rows);
+      renderMercadoSummary(rows);
       if (!rows.length) {
         tbody.innerHTML =
           '<tr><td colspan="11" class="empty">Nenhum jogo monitorado ainda. Novos jogos serao registrados automaticamente.</td></tr>';
@@ -1067,16 +629,15 @@
         const link = row.betano_url
           ? `<a href="${row.betano_url}" target="_blank" rel="noopener">abrir</a>`
           : '—';
-        const golGreen = formatMercadoGolGreen(row);
         return `<tr>
           <td>${i + 1}</td>
           <td><strong>${match}</strong></td>
           <td>${mercadoEstrategiaLabel(row)}</td>
           <td>${league}</td>
-          <td>${golGreen}</td>
+          <td>${formatMercadoGolGreen(row)}</td>
           <td>${mercadoResultadoLabel(row.resultado)}</td>
           <td>${formatMercadoProfit(mercadoSimProfit(row))}</td>
-          <td>${row.placar_final || '—'}</td>
+          <td>${mercadoPlacarLabel(row)}</td>
           <td>${mercadoStatusLabel(row)}</td>
           <td>${link}</td>
           <td><button type="button" class="mercado-delete-btn" data-delete-mercado="${row.event_id}" data-delete-label="${match.replace(/"/g, '&quot;')}" title="Remover da lista">🗑</button></td>
@@ -1084,12 +645,28 @@
       }).join('');
     }
 
-    async function loadMercado05() {
-      if (!appCfg || mercado05Loading) return;
-      mercado05Loading = true;
-      const tbody = document.getElementById('mercado-05-tbody');
+    function updateMercadoStatus(meta, visibleCount) {
+      const status = document.getElementById('status');
+      if (!status) return;
+      if (meta?.last_error) {
+        status.className = 'status error';
+        status.textContent = `Ultimo erro da coleta: ${meta.last_error}`;
+        return;
+      }
+      status.className = 'status';
+      const when = meta?.fetched_at ? formatDate(meta.fetched_at) : '—';
+      const source = meta?.source || 'betano-danae';
+      status.textContent =
+        `${formatNumber(visibleCount)} jogos na lista · atualizado ${when} · fonte ${source}`;
+    }
+
+    async function loadMercado() {
+      if (mercadoLoading) return;
+      mercadoLoading = true;
+      const tbody = document.getElementById('mercado-tbody');
       try {
-        const [rows, liveRows] = await Promise.all([
+        await initAppCfg();
+        const [rows, metaRows] = await Promise.all([
           supabaseGet(
             appCfg.url,
             appCfg.anonKey,
@@ -1098,512 +675,29 @@
           supabaseGet(
             appCfg.url,
             appCfg.anonKey,
-            'futebol_live_rows?select=event_id,minute,score,over_0_odd,over_0_line,over_1_odd,over_1_line,over_2_odd,over_2_line,under_0_odd,under_0_line',
+            'futebol_live_meta?id=eq.1&select=fetched_at,source,last_error',
           ),
         ]);
-        // #region agent log
-        const mx = (liveRows ?? []).find((r) => r.event_id === '88363620');
-        if (mx) {
-          fetch('http://127.0.0.1:7904/ingest/86615625-6ae5-4e98-a1da-0a5f0f15fc42', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json', 'X-Debug-Session-Id': 'e14164' },
-            body: JSON.stringify({
-              sessionId: 'e14164',
-              hypothesisId: 'H1-H5',
-              runId: 'post-fix',
-              location: 'index.html:loadMercado05',
-              message: 'Mexico live odds from BD',
-              data: mx,
-              timestamp: Date.now(),
-            }),
-          }).catch(() => {});
-        }
-        // #endregion
-        mercado05Cache = rows;
-        mercado05LiveMinutes = Object.fromEntries(
-          (liveRows ?? []).map((r) => [r.event_id, r.minute]),
-        );
-        mercado05LiveOdds = Object.fromEntries(
-          (liveRows ?? []).map((r) => [r.event_id, {
-            over_0_odd: r.over_0_odd,
-            over_0_line: r.over_0_line,
-            over_1_odd: r.over_1_odd,
-            over_1_line: r.over_1_line,
-            over_2_odd: r.over_2_odd,
-            over_2_line: r.over_2_line,
-            minute: r.minute,
-            score: r.score,
-          }]),
-        );
-        renderMercado05();
+        mercadoCache = rows ?? [];
+        const visible = mercadoVisibleRows(mercadoCache);
+        updateMercadoStatus(metaRows?.[0], visible.length);
+        renderMercado();
       } catch (err) {
+        const status = document.getElementById('status');
+        if (status) {
+          status.className = 'status error';
+          status.textContent = err.message || String(err);
+        }
         if (tbody) {
           tbody.innerHTML =
             `<tr><td colspan="11" class="empty">${err.message || String(err)}</td></tr>`;
         }
       } finally {
-        mercado05Loading = false;
+        mercadoLoading = false;
       }
     }
 
-    function mergeGoals(existing, incoming) {
-      const seen = new Set();
-      const merged = [];
-      for (const g of [...existing, ...incoming]) {
-        const key = g.id != null ? String(g.id) : `${g.event_id}|${g.minute}|${g.team_side}|${g.score_home}-${g.score_away}`;
-        if (seen.has(key)) continue;
-        seen.add(key);
-        merged.push(g);
-      }
-      return merged;
-    }
-
-    function updateLoadMoreUi() {
-      const btn = document.getElementById('history-load-more-btn');
-      const statusEl = document.getElementById('history-load-more-status');
-      if (!btn || !statusEl) return;
-      const loaded = historyCache.games.length;
-      if (historyPagination.loading) {
-        btn.hidden = false;
-        btn.disabled = true;
-        btn.textContent = 'Carregando…';
-        statusEl.textContent = `${loaded} jogos carregados`;
-        return;
-      }
-      if (historyPagination.hasMore) {
-        btn.hidden = false;
-        btn.disabled = false;
-        btn.textContent = 'Carregar Mais';
-        statusEl.textContent = `${loaded} jogos carregados · mais disponíveis no BD`;
-      } else if (loaded > 0) {
-        btn.hidden = true;
-        statusEl.textContent = `${loaded} jogos carregados · fim da lista`;
-      } else {
-        btn.hidden = true;
-        statusEl.textContent = '';
-      }
-    }
-
-    function goalsStatusLabel(game, goalCount) {
-      const expected = (game.goals_expected ?? ((game.home_score ?? 0) + (game.away_score ?? 0)));
-      const recorded = game.goals_recorded ?? goalCount;
-      const status = game.goals_status || (recorded >= expected && expected > 0 ? 'ok' : recorded === 0 && expected > 0 ? 'missing' : recorded < expected ? 'partial' : 'ok');
-      const text = `${recorded}/${expected} ${status}`;
-      return `<span class="goals-status ${status}">${text}</span>`;
-    }
-
-    function goalsRowClass(game, goalCount) {
-      const expected = (game.goals_expected ?? ((game.home_score ?? 0) + (game.away_score ?? 0)));
-      const recorded = game.goals_recorded ?? goalCount;
-      const status = game.goals_status || (recorded >= expected ? 'ok' : recorded === 0 ? 'missing' : 'partial');
-      if (expected > 0 && status === 'missing') return 'goals-missing';
-      if (expected > 0 && (status === 'partial' || status === 'mismatch')) return 'goals-partial';
-      return '';
-    }
-
-    function getHistoryMinuteRange() {
-      const fromRaw = document.getElementById('goal-from-minute')?.value.trim() ?? '';
-      const toRaw = document.getElementById('goal-to-minute')?.value.trim() ?? '';
-      let from = fromRaw === '' ? 0 : Number(fromRaw);
-      let to = toRaw === '' ? null : Number(toRaw);
-      if (Number.isNaN(from)) from = 0;
-      if (to != null && Number.isNaN(to)) to = null;
-      from = Math.max(0, from);
-      if (to != null && from > to) {
-        const swap = from;
-        from = to;
-        to = swap;
-      }
-      return { from, to };
-    }
-
-    function goalMinuteInRange(minute, from, to) {
-      const m = minute ?? -1;
-      if (m < 0) return false;
-      if (m < from) return false;
-      if (to != null && m > to) return false;
-      return true;
-    }
-
-    function goalsInRange(allGoals, from, to) {
-      return allGoals.filter((g) => goalMinuteInRange(g.minute, from, to));
-    }
-
-    function formatMinuteRangeLabel(from, to) {
-      if (from === 0 && to == null) return 'todos os minutos';
-      if (to == null) return `${from}' em diante`;
-      if (from === 0) return `até ${to}'`;
-      return `${from}'–${to}'`;
-    }
-
-    function parseScoreTotal(text) {
-      const m = String(text || '').match(/(\d+)\D+(\d+)/);
-      if (!m) return null;
-      return Number(m[1]) + Number(m[2]);
-    }
-
-    /** Gols com minuto estritamente apos 85'. Fallback: placar final - placar aos 85'. */
-    function goalsAfter85(allGoals, game) {
-      const fromTimeline = allGoals.filter((g) => (g.minute ?? 0) > 85).length;
-      if (fromTimeline > 0) return fromTimeline;
-      const at85 = parseScoreTotal(game.odds_85_score);
-      if (at85 == null) return 0;
-      const final = (game.home_score ?? 0) + (game.away_score ?? 0);
-      return Math.max(0, final - at85);
-    }
-
-    function simulateHistoryBet(items, oddKey, winIf) {
-      let bets = 0;
-      let greens = 0;
-      let profit = 0;
-      for (const { game, allGoals } of items) {
-        const odd = Number(game[oddKey]);
-        if (!Number.isFinite(odd) || odd < 1.01) continue;
-        bets += 1;
-        const after85 = goalsAfter85(allGoals, game);
-        const win = winIf(after85);
-        if (win) {
-          greens += 1;
-          profit += odd - 1;
-        } else {
-          profit -= 1;
-        }
-      }
-      return {
-        bets,
-        greens,
-        reds: bets - greens,
-        profit,
-        roi: bets > 0 ? (100 * profit) / bets : 0,
-      };
-    }
-
-    function formatSimProfit(value) {
-      const rounded = Math.round(value * 100) / 100;
-      const sign = rounded > 0 ? '+' : '';
-      return `${sign}${formatNumber(rounded)} u`;
-    }
-
-    const SIM_DAY_TZ = 'America/Sao_Paulo';
-
-    function gameFinishedDayKey(game) {
-      const iso = game.finished_at || game.last_seen_at;
-      if (!iso) return null;
-      const d = new Date(iso);
-      if (Number.isNaN(d.getTime())) return null;
-      return d.toLocaleDateString('en-CA', { timeZone: SIM_DAY_TZ });
-    }
-
-    function formatSimDayLabel(dayKey) {
-      const parts = String(dayKey).split('-');
-      if (parts.length !== 3) return dayKey;
-      return `${parts[2]}/${parts[1]}/${parts[0]}`;
-    }
-
-    function collectHistorySimDays(items) {
-      const counts = new Map();
-      for (const { game } of items) {
-        const key = gameFinishedDayKey(game);
-        if (!key) continue;
-        counts.set(key, (counts.get(key) || 0) + 1);
-      }
-      return [...counts.entries()]
-        .sort((a, b) => b[0].localeCompare(a[0]))
-        .map(([key, count]) => ({ key, count, label: formatSimDayLabel(key) }));
-    }
-
-    function syncHistorySimDaySelect(items) {
-      const sel = document.getElementById('history-sim-day');
-      if (!sel) return 'all';
-      const prev = sel.value || 'all';
-      const days = collectHistorySimDays(items);
-      sel.innerHTML = `<option value="all">Todos os carregados (${items.length})</option>` +
-        days.map(({ key, count, label }) =>
-          `<option value="${key}">${label} (${count} jogo${count === 1 ? '' : 's'})</option>`,
-        ).join('');
-      if (prev === 'all' || days.some((d) => d.key === prev)) {
-        sel.value = prev;
-      } else {
-        sel.value = 'all';
-      }
-      return sel.value;
-    }
-
-    function filterItemsBySimDay(items, dayKey) {
-      if (!dayKey || dayKey === 'all') return items;
-      return items.filter(({ game }) => gameFinishedDayKey(game) === dayKey);
-    }
-
-    function renderHistorySimulation(items) {
-      const el = document.getElementById('history-simulation');
-      if (!el) return;
-
-      const dayKey = syncHistorySimDaySelect(items);
-      const scoped = filterItemsBySimDay(items, dayKey);
-
-      if (!items.length) {
-        el.innerHTML = '';
-        return;
-      }
-
-      const under = simulateHistoryBet(scoped, 'odd_under_05', (g) => g === 0);
-      const over = simulateHistoryBet(scoped, 'odd_over_05', (g) => g >= 1);
-
-      const card = (title, market, sim) => {
-        const profitClass = sim.profit >= 0 ? 'positive' : 'negative';
-        const hitRate = sim.bets > 0 ? formatNumber((100 * sim.greens) / sim.bets) : '—';
-        return `<div class="history-sim-card">
-          <div class="history-sim-title">${title}</div>
-          <div class="history-sim-market">${market}</div>
-          <div class="history-sim-row"><strong>${sim.bets}</strong> apostas · ${sim.greens}G / ${sim.reds}R · acerto ${hitRate}%</div>
-          <div class="history-sim-row">Lucro <span class="history-sim-profit ${profitClass}">${formatSimProfit(sim.profit)}</span> · ROI ${formatNumber(sim.roi)}%</div>
-        </div>`;
-      };
-
-      const dayNote = dayKey === 'all'
-        ? `${items.length} jogo(s) carregados`
-        : `${scoped.length} jogo(s) em ${formatSimDayLabel(dayKey)} · ${items.length} carregados no total`;
-
-      el.innerHTML =
-        card('Simulacao 1u/jogo', 'Under -0,5 · sem gol apos 85\'', under) +
-        card('Simulacao 1u/jogo', 'Over +0,5 · 1 gol ou mais apos 85\'', over) +
-        `<p class="history-sim-note">Base: ${dayNote} · liquidacao por gols apos 85' · jogos sem odd ignorados na respectiva aposta</p>`;
-    }
-
-    function renderHistory() {
-      const { from, to } = getHistoryMinuteRange();
-      const tbody = document.getElementById('history-tbody');
-      const games = historyCache.games || [];
-      const goals = historyCache.goals || [];
-      const goalsByEvent = new Map();
-      for (const g of goals) {
-        const list = goalsByEvent.get(g.event_id) || [];
-        list.push(g);
-        goalsByEvent.set(g.event_id, list);
-      }
-
-      const items = games
-        .map((game) => {
-          const allGoals = (goalsByEvent.get(game.event_id) || [])
-            .slice()
-            .sort((a, b) => (a.minute ?? 0) - (b.minute ?? 0));
-          const rangedGoals = goalsInRange(allGoals, from, to);
-          return { game, allGoals, rangedGoals };
-        })
-        .sort((a, b) =>
-          String(b.game.finished_at || b.game.last_seen_at || '')
-            .localeCompare(String(a.game.finished_at || a.game.last_seen_at || '')),
-        );
-
-      const matchedCount = items.filter(({ rangedGoals }) => rangedGoals.length > 0).length;
-      const filterResultEl = document.getElementById('history-filter-result');
-      if (filterResultEl) {
-        filterResultEl.textContent =
-          `${matchedCount} jogo(s) com gol · ${formatMinuteRangeLabel(from, to)} · ${items.length} exibido(s)`;
-      }
-
-      renderHistorySimulation(items);
-
-      if (!items.length) {
-        tbody.innerHTML =
-          '<tr><td colspan="18" class="empty">Nenhum jogo finalizado no histórico.</td></tr>';
-        return;
-      }
-
-      const integrityIssues = items.filter(({ game, allGoals }) => {
-        const expected = (game.home_score ?? 0) + (game.away_score ?? 0);
-        const recorded = game.goals_recorded ?? allGoals.length;
-        const status = game.goals_status;
-        return expected > 0 && (status !== 'ok' || recorded < expected);
-      }).length;
-      const hintEl = document.querySelector('#panel-history .hint');
-      if (hintEl) {
-        const base = 'Histórico de <strong>jogos já finalizados</strong> · coluna <strong>Gols BD</strong> mostra se os gols gravados batem com o placar (ok / parcial / faltando)';
-        hintEl.innerHTML = integrityIssues > 0
-          ? `Histórico · <strong style="color:#ff6b6b">${integrityIssues} jogo(s) com gols incompletos no BD</strong> · coluna Gols BD indica confiabilidade`
-          : base;
-      }
-
-      const fmtStat = (n) => (n == null ? '<span class="muted">—</span>' : `<strong>${n}</strong>`);
-
-      tbody.innerHTML = items.map((item, i) => {
-        const { game, allGoals, rangedGoals } = item;
-        const match = `${game.home || '—'} x ${game.away || '—'}`;
-        const league = [game.country, game.league].filter(Boolean).join(' · ') || '—';
-        const fmtGoal = (g, highlightInRange = false) => {
-          const side = g.team || (g.team_side === 'home' ? game.home : g.team_side === 'away' ? game.away : '?');
-          const label = `${g.minute}' ${side}${g.player ? ` (${g.player})` : ''}`;
-          if (highlightInRange && goalMinuteInRange(g.minute, from, to)) {
-            return `<span class="late">${label}</span>`;
-          }
-          return label;
-        };
-        const allHtml = allGoals.length
-          ? `<div class="goals-list">${allGoals.map((g) => fmtGoal(g, true)).join('<br>')}</div>`
-          : '<span class="muted">—</span>';
-        const rangedHtml = rangedGoals.length
-          ? `<div class="goals-list">${rangedGoals.map((g) => fmtGoal(g, true)).join('<br>')}</div>`
-          : '<span class="muted">—</span>';
-        const odds85 = game.odds_85_score
-          ? ` <span class="muted" title="Placar aos ${game.odds_85_minute ?? 85}'">${game.odds_85_score}</span>`
-          : '';
-        return `<tr class="${goalsRowClass(game, allGoals.length)}">
-          <td>${i + 1}</td>
-          <td><strong>${game.score || '—'}</strong>${odds85}</td>
-          <td>${match}</td>
-          <td>${league}</td>
-          <td>${fmtStat(game.shots_on_target)}</td>
-          <td>${fmtStat(game.corners)}</td>
-          <td>${fmtStat(game.goal_kicks)}</td>
-          <td>${fmtStat(game.cte)}</td>
-          <td>${formatOdd(game.odd_under_05)}</td>
-          <td>${formatOdd(game.odd_under_15)}</td>
-          <td>${formatOdd(game.odd_under_25)}</td>
-          <td>${formatOdd(game.odd_over_05)}</td>
-          <td>${formatOdd(game.odd_over_15)}</td>
-          <td>${formatOdd(game.odd_over_25)}</td>
-          <td>${allHtml}</td>
-          <td>${goalsStatusLabel(game, allGoals.length)}</td>
-          <td>${rangedHtml}</td>
-          <td>${formatDate(game.finished_at || game.last_seen_at)}</td>
-        </tr>`;
-      }).join('');
-    }
-
-    async function fetchGoalsForGames(url, anonKey, games) {
-      const ids = (games || []).map((g) => g.event_id).filter(Boolean);
-      if (!ids.length) return [];
-      const quoted = ids.map((id) => `"${id}"`).join(',');
-      return supabaseGet(
-        url,
-        anonKey,
-        `futebol_historico_gols?select=*&event_id=in.(${quoted})&order=minute.asc`,
-      );
-    }
-
-    async function loadHistory(reset = true) {
-      if (!appCfg || historyPagination.loading) return;
-      if (!reset && !historyPagination.hasMore) return;
-
-      if (reset) {
-        historyPagination = { offset: 0, hasMore: true, loading: false };
-        historyCache = { games: [], goals: [] };
-      }
-
-      historyPagination.loading = true;
-      updateLoadMoreUi();
-
-      const offset = historyPagination.offset;
-
-      try {
-        const batch = await supabaseGet(
-          appCfg.url,
-          appCfg.anonKey,
-          `futebol_historico_jogos?select=*&is_live=eq.false&order=finished_at.desc&limit=${HISTORY_PAGE_SIZE}&offset=${offset}`,
-        );
-        const batchGoals = await fetchGoalsForGames(appCfg.url, appCfg.anonKey, batch);
-
-        historyCache.games = reset ? batch : historyCache.games.concat(batch);
-        historyCache.goals = reset ? batchGoals : mergeGoals(historyCache.goals, batchGoals);
-
-        historyPagination.offset += batch.length;
-        historyPagination.hasMore = batch.length === HISTORY_PAGE_SIZE;
-      } finally {
-        historyPagination.loading = false;
-      }
-
-      renderHistory();
-      updateLoadMoreUi();
-    }
-
-    async function initLive() {
-      const status = document.getElementById('status');
-      try {
-        if (!appCfg) {
-          const cfgRes = await fetch('./supabase.config.json');
-          if (!cfgRes.ok) throw new Error('web/supabase.config.json não encontrado');
-          appCfg = await cfgRes.json();
-          if (!appCfg.url || !appCfg.anonKey || appCfg.anonKey.includes('COLE_AQUI')) {
-            throw new Error('Configure url e anonKey em web/supabase.config.json');
-          }
-        }
-
-        const metaRows = await supabaseGet(appCfg.url, appCfg.anonKey, 'futebol_live_meta?id=eq.1&select=*');
-        const meta = metaRows[0] || {};
-        if (meta.last_error) {
-          status.className = 'status error';
-          status.textContent = `Ultimo erro da coleta: ${meta.last_error}`;
-        }
-
-        const rows = await supabaseGet(
-          appCfg.url,
-          appCfg.anonKey,
-          'futebol_live_rows?select=*&order=minute.desc.nullslast',
-        );
-
-        renderSummary(meta, rows);
-        renderRows(rows);
-        document.getElementById('notes').textContent = (meta.notes || []).join(' ');
-        if (!meta.last_error) {
-          status.textContent =
-            `${formatNumber(rows.length)} jogos · atualizado ${formatDate(meta.fetched_at)} · fonte ${meta.source || 'betano-danae'} (Supabase)`;
-        }
-      } catch (err) {
-        status.className = 'status error';
-        status.textContent = err.message || String(err);
-        document.getElementById('tbody').innerHTML =
-          `<tr><td colspan="13" class="empty">${status.textContent}</td></tr>`;
-      }
-    }
-
-    const VALID_TABS = new Set(['live', 'history', 'mercado-05']);
-
-    function tabFromHash() {
-      const h = location.hash.replace('#', '');
-      return VALID_TABS.has(h) ? h : 'mercado-05';
-    }
-
-    async function activateTab(tab) {
-      if (!VALID_TABS.has(tab)) tab = 'mercado-05';
-
-      document.querySelectorAll('.tab-btn').forEach((b) => {
-        b.classList.toggle('active', b.dataset.tab === tab);
-      });
-      document.querySelectorAll('.panel').forEach((p) => p.classList.remove('active'));
-      document.getElementById(`panel-${tab}`).classList.add('active');
-
-      if (location.hash !== `#${tab}`) {
-        history.replaceState(null, '', `#${tab}`);
-      }
-
-      try {
-        if (tab === 'live') {
-          await initLive();
-        } else if (tab === 'history') {
-          if (!appCfg) await initLive();
-          if (historyCache.games.length === 0) {
-            await loadHistory(true);
-          } else {
-            renderHistory();
-            updateLoadMoreUi();
-          }
-        } else if (tab === 'mercado-05') {
-          if (!appCfg) await initLive();
-          await loadMercado05();
-        }
-      } catch (err) {
-        const msg = err.message || String(err);
-        if (tab === 'history') {
-          document.getElementById('history-tbody').innerHTML =
-            `<tr><td colspan="18" class="empty">${msg}</td></tr>`;
-        } else if (tab === 'mercado-05') {
-          document.getElementById('mercado-05-tbody').innerHTML =
-            `<tr><td colspan="11" class="empty">${msg}</td></tr>`;
-        }
-      }
-    }
-
-    document.getElementById('panel-mercado-05')?.addEventListener('click', async (e) => {
+    document.getElementById('mercado-tbody')?.closest('main')?.addEventListener('click', async (e) => {
       const popBtn = e.target.closest('[data-super-popover]');
       if (popBtn) {
         e.preventDefault();
@@ -1624,7 +718,7 @@
       const label = btn.getAttribute('data-delete-label') || '';
       btn.disabled = true;
       try {
-        await deleteMercado05Row(eventId, label);
+        await deleteMercadoRow(eventId, label);
       } catch (err) {
         window.alert(err.message || String(err));
         btn.disabled = false;
@@ -1636,32 +730,8 @@
       hideMercadoElevatedPopover();
     }, true);
 
-    document.querySelectorAll('.tab-btn').forEach((btn) => {
-      btn.addEventListener('click', () => activateTab(btn.dataset.tab));
-    });
-
-    window.addEventListener('hashchange', () => activateTab(tabFromHash()));
-
-    document.getElementById('history-filter-btn').addEventListener('click', () => {
-      renderHistory();
-    });
-
-    document.getElementById('history-sim-day')?.addEventListener('change', () => {
-      renderHistory();
-    });
-
-    document.getElementById('history-load-more-btn').addEventListener('click', () => {
-      loadHistory(false).catch((err) => {
-        document.getElementById('history-load-more-status').textContent = err.message || String(err);
-      });
-    });
-
-    activateTab(tabFromHash());
-    setInterval(() => {
-      const tab = tabFromHash();
-      if (tab === 'live') initLive();
-      else if (tab === 'mercado-05') loadMercado05();
-    }, 60000);
+    loadMercado();
+    setInterval(loadMercado, 60000);
   </script>
 </body>
 </html>
