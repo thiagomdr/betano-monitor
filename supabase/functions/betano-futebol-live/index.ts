@@ -2201,6 +2201,18 @@ async function processMercadoGols05Live(
     }).eq("event_id", eventId).eq("resultado", "pending");
   }
 
+  if (
+    existing.resultado === "win" ||
+    existing.resultado === "loss"
+  ) {
+    await supabase.from("futebol_mercado_gols_05").update({
+      last_minute: minute,
+      placar_final: ctx.score_text,
+      is_live: true,
+      updated_at: nowIso,
+    }).eq("event_id", eventId).in("resultado", ["win", "loss"]);
+  }
+
   return null;
 }
 

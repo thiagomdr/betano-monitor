@@ -987,7 +987,25 @@
 
     function mercadoStatusLabel(row) {
       if (row.is_live) {
-        const m = row.last_minute ?? mercado05LiveMinutes[row.event_id];
+        const liveMinute = mercado05LiveMinutes[row.event_id];
+        const m = liveMinute != null ? liveMinute : row.last_minute;
+        // #region agent log
+        if (row.event_id === '87557966' || row.event_id === 87557966) {
+          fetch('http://127.0.0.1:7904/ingest/86615625-6ae5-4e98-a1da-0a5f0f15fc42', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json', 'X-Debug-Session-Id': 'e14164' },
+            body: JSON.stringify({
+              sessionId: 'e14164',
+              hypothesisId: 'H1',
+              runId: 'alta-minute-fix',
+              location: 'index.html:mercadoStatusLabel',
+              message: 'Status minute sources',
+              data: { event_id: row.event_id, liveMinute, rowLastMinute: row.last_minute, chosen: m, resultado: row.resultado },
+              timestamp: Date.now(),
+            }),
+          }).catch(() => {});
+        }
+        // #endregion
         return m != null
           ? `<span class="muted">Ao Vivo ${m}'</span>`
           : '<span class="muted">Ao Vivo</span>';
