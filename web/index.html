@@ -297,6 +297,15 @@
     .resultado-badge.sem-linha { background: rgba(143, 163, 191, 0.2); color: var(--muted); }
     .resultado-badge.excluido { background: rgba(143, 163, 191, 0.12); color: var(--muted); }
     .resultado-badge.watching { background: rgba(94, 179, 255, 0.15); color: #5eb3ff; }
+    .estrategia-badge {
+      display: inline-block;
+      font-size: 0.76rem;
+      font-weight: 700;
+      padding: 0.12rem 0.4rem;
+      border-radius: 4px;
+    }
+    .estrategia-badge.super { background: rgba(255, 209, 102, 0.22); color: var(--warn); }
+    .estrategia-badge.imediato { background: rgba(94, 179, 255, 0.18); color: #5eb3ff; }
     #panel-mercado-05 tbody tr:hover td {
       background: rgba(232, 238, 247, 0.08);
     }
@@ -422,10 +431,9 @@
 
     <section class="panel" id="panel-mercado-05">
       <p class="hint">
-        Registro de <strong>todos os jogos novos</strong> monitorados desde a implementação.
-        <strong>Sem +0,5 no jogo</strong> = Over +0,5 nunca apareceu no tempo total ·
-        <strong>Excluído</strong> = +0,5 já existia na 1ª coleta (fora do perfil) ·
-        <strong>Captura</strong> = +0,5 surgiu após fase só com +1,5/+2,5 (simulação 1u Over +0,5).
+        <strong>Super Estratégia</strong> = +0,5 só após fase com +1,5/+2,5 ·
+        <strong>Imediato</strong> = +0,5 já na 1ª coleta ou ao surgir sem esperar +1,5 ·
+        <strong>Sem +0,5 no jogo</strong> = linha nunca apareceu · simulação 1u Over +0,5 nas capturas.
       </p>
       <section class="mercado-summary" id="mercado-05-summary" aria-live="polite"></section>
       <div class="table-wrap">
@@ -434,6 +442,7 @@
             <tr>
               <th>#</th>
               <th>Jogo</th>
+              <th>Estratégia</th>
               <th>Liga</th>
               <th title="Ultimo minuto sem Over +0,5">Sem +0,5 até</th>
               <th title="Minuto em que Over +0,5 apareceu">Surgiu em</th>
@@ -449,7 +458,7 @@
             </tr>
           </thead>
           <tbody id="mercado-05-tbody">
-            <tr><td colspan="14" class="empty">Carregando...</td></tr>
+            <tr><td colspan="15" class="empty">Carregando...</td></tr>
           </tbody>
         </table>
       </div>
@@ -605,7 +614,7 @@
         win: 'GREEN',
         loss: 'RED',
         sem_linha_05: 'Sem +0,5 no jogo',
-        excluido: 'Excluído',
+        excluido: 'Legado (sem odd)',
         watching: 'Monitorando',
         skipped: 'Sem +0,5 no jogo',
       };
@@ -641,6 +650,37 @@
       return `<span class="history-sim-profit ${cls}">${sign}${formatNumber(rounded)} u</span>`;
     }
 
+    function mercadoEstrategiaLabel(estrategia, resultado) {
+      const map = {
+        super_05: { text: 'Super Estratégia', cls: 'super' },
+        imediato_05: { text: 'Imediato', cls: 'imediato' },
+      };
+      const e = map[estrategia];
+      if (e) {
+        return `<span class="estrategia-badge ${e.cls}">${e.text}</span>`;
+      }
+      if (resultado === 'excluido') {
+        return '<span class="estrategia-badge imediato">Imediato</span>';
+      }
+      if (resultado === 'sem_linha_05' || resultado === 'skipped') {
+        return '<span class="muted">—</span>';
+      }
+      if (resultado === 'watching') {
+        return '<span class="muted">aguardando</span>';
+      }
+      return '<span class="muted">—</span>';
+    }
+
+    function mercadoStrategyStats(rows, estrategia) {
+      const scoped = rows.filter((r) =>
+        r.estrategia === estrategia && (r.resultado === 'win' || r.resultado === 'loss'),
+      );
+      const greens = scoped.filter((r) => r.resultado === 'win').length;
+      const profit = scoped.reduce((sum, r) => sum + (mercadoSimProfit(r) ?? 0), 0);
+      const roi = scoped.length > 0 ? (100 * profit) / scoped.length : null;
+      return { bets: scoped.length, greens, profit, roi };
+    }
+
     function renderMercado05Summary(rows) {
       const el = document.getElementById('mercado-05-summary');
       if (!el) return;
@@ -649,7 +689,9 @@
       const semLinha = rows.filter((r) =>
         r.resultado === 'sem_linha_05' || r.resultado === 'skipped',
       ).length;
-      const excluidos = rows.filter((r) => r.resultado === 'excluido').length;
+      const legado = rows.filter((r) => r.resultado === 'excluido').length;
+      const superS = mercadoStrategyStats(rows, 'super_05');
+      const imedS = mercadoStrategyStats(rows, 'imediato_05');
       const greens = rows.filter((r) => r.resultado === 'win').length;
       const reds = rows.filter((r) => r.resultado === 'loss').length;
       const pending = rows.filter((r) => r.resultado === 'pending' || r.resultado === 'watching').length;
@@ -657,6 +699,8 @@
       const roi = settled.length > 0 ? (100 * profit) / settled.length : 0;
       const profitClass = profit >= 0 ? 'positive' : 'negative';
       const sign = profit > 0 ? '+' : '';
+      const fmtRoi = (v) => (v != null ? `${formatNumber(v)}%` : '—');
+      const fmtG = (s) => (s.bets > 0 ? `${s.greens}/${s.bets}` : '—');
       el.innerHTML = `
         <div class="summary-card">
           <div class="summary-label">Jogos monitorados</div>
@@ -667,15 +711,31 @@
           <div class="summary-value">${formatNumber(capturas)}</div>
         </div>
         <div class="summary-card">
+          <div class="summary-label">Super · GREEN</div>
+          <div class="summary-value">${fmtG(superS)}</div>
+        </div>
+        <div class="summary-card">
+          <div class="summary-label">Super · ROI</div>
+          <div class="summary-value">${fmtRoi(superS.roi)}</div>
+        </div>
+        <div class="summary-card">
+          <div class="summary-label">Imediato · GREEN</div>
+          <div class="summary-value">${fmtG(imedS)}</div>
+        </div>
+        <div class="summary-card">
+          <div class="summary-label">Imediato · ROI</div>
+          <div class="summary-value">${fmtRoi(imedS.roi)}</div>
+        </div>
+        <div class="summary-card">
           <div class="summary-label">Sem +0,5 no jogo</div>
           <div class="summary-value">${formatNumber(semLinha)}</div>
         </div>
+        ${legado > 0 ? `<div class="summary-card">
+          <div class="summary-label">Legado (sem odd)</div>
+          <div class="summary-value">${formatNumber(legado)}</div>
+        </div>` : ''}
         <div class="summary-card">
-          <div class="summary-label">Excluídos</div>
-          <div class="summary-value">${formatNumber(excluidos)}</div>
-        </div>
-        <div class="summary-card">
-          <div class="summary-label">GREEN / RED</div>
+          <div class="summary-label">GREEN / RED (total)</div>
           <div class="summary-value">${greens} / ${reds}</div>
         </div>
         <div class="summary-card">
@@ -687,7 +747,7 @@
           <div class="summary-value history-sim-profit ${profitClass}">${sign}${formatNumber(profit)} u</div>
         </div>
         <div class="summary-card">
-          <div class="summary-label">ROI</div>
+          <div class="summary-label">ROI (total)</div>
           <div class="summary-value">${settled.length ? formatNumber(roi) + '%' : '—'}</div>
         </div>
       `;
@@ -713,7 +773,7 @@
       renderMercado05Summary(rows);
       if (!rows.length) {
         tbody.innerHTML =
-          '<tr><td colspan="14" class="empty">Nenhum jogo monitorado ainda. Novos jogos serao registrados automaticamente.</td></tr>';
+          '<tr><td colspan="15" class="empty">Nenhum jogo monitorado ainda. Novos jogos serao registrados automaticamente.</td></tr>';
         return;
       }
       tbody.innerHTML = rows.map((row, i) => {
@@ -732,6 +792,7 @@
         return `<tr>
           <td>${i + 1}</td>
           <td><strong>${match}</strong></td>
+          <td>${mercadoEstrategiaLabel(row.estrategia, row.resultado)}</td>
           <td>${league}</td>
           <td>${semAte}</td>
           <td><strong>${surgiu}</strong></td>
@@ -762,7 +823,7 @@
       } catch (err) {
         if (tbody) {
           tbody.innerHTML =
-            `<tr><td colspan="14" class="empty">${err.message || String(err)}</td></tr>`;
+            `<tr><td colspan="15" class="empty">${err.message || String(err)}</td></tr>`;
         }
       } finally {
         mercado05Loading = false;
@@ -1221,7 +1282,7 @@
             `<tr><td colspan="18" class="empty">${msg}</td></tr>`;
         } else if (tab === 'mercado-05') {
           document.getElementById('mercado-05-tbody').innerHTML =
-            `<tr><td colspan="14" class="empty">${msg}</td></tr>`;
+            `<tr><td colspan="15" class="empty">${msg}</td></tr>`;
         }
       }
     }

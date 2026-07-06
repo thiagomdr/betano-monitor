@@ -1315,7 +1315,10 @@ type MercadoGols05Row = {
   indisponivel_ate_minuto: number | null;
   had_min_plus2_before: boolean;
   over_05_odd: number | null;
+  estrategia?: string | null;
 };
+
+type MercadoEstrategia = "super_05" | "imediato_05";
 
 type MercadoGols05Context = {
   home: string | null;
@@ -1327,12 +1330,41 @@ type MercadoGols05Context = {
   score_text: string;
 };
 
-/** Over +0,5 disponivel agora e antes so havia linha minima +1,5 (+2 gols). */
+/** Over +0,5 disponivel agora e antes so havia linha minima +1,5 (+2 gols) — Super Estrategia. */
 function shouldCaptureMercadoGols05(
   totals: TotalsOdds,
   hadMinPlus2: boolean,
 ): boolean {
   return totals.over_0_odd != null && hadMinPlus2;
+}
+
+async function applyMercadoGols05Capture(
+  supabase: ReturnType<typeof createClient>,
+  eventId: string,
+  ctx: MercadoGols05Context,
+  totals: TotalsOdds,
+  over0: number,
+  estrategia: MercadoEstrategia,
+  indisponivelAte: number | null,
+  hadMinPlus2: boolean,
+  onlyResultado: string | null,
+): Promise<void> {
+  const nowIso = new Date().toISOString();
+  const minute = ctx.minute;
+  let q = supabase.from("futebol_mercado_gols_05").update({
+    estrategia,
+    indisponivel_ate_minuto: indisponivelAte,
+    had_min_plus2_before: hadMinPlus2,
+    disponivel_desde_minuto: minute,
+    placar_na_captura: ctx.score_text,
+    over_05_odd: over0,
+    over_05_line: totals.over_0_line,
+    captured_at: nowIso,
+    resultado: "pending",
+    updated_at: nowIso,
+  }).eq("event_id", eventId);
+  if (onlyResultado) q = q.eq("resultado", onlyResultado);
+  await q;
 }
 
 async function countGoalsAfterMinute(
@@ -1414,11 +1446,17 @@ async function processMercadoGols05Live(
         betano_url: ctx.betano_url,
         indisponivel_ate_minuto: null,
         had_min_plus2_before: over1 != null,
-        resultado: "excluido",
+        estrategia: "imediato_05",
+        disponivel_desde_minuto: minute,
+        placar_na_captura: ctx.score_text,
+        over_05_odd: over0,
+        over_05_line: totals.over_0_line,
+        captured_at: nowIso,
+        resultado: "pending",
         is_live: true,
         updated_at: nowIso,
       });
-      return null;
+      return "captured";
     }
 
     await supabase.from("futebol_mercado_gols_05").insert({
@@ -1447,25 +1485,34 @@ async function processMercadoGols05Live(
       }).eq("event_id", eventId).eq("resultado", "watching");
       return null;
     }
-    if (!shouldCaptureMercadoGols05(totals, existing.had_min_plus2_before)) {
-      await supabase.from("futebol_mercado_gols_05").update({
-        resultado: "excluido",
-        is_live: true,
-        updated_at: nowIso,
-      }).eq("event_id", eventId).eq("resultado", "watching");
-      return null;
+    if (shouldCaptureMercadoGols05(totals, existing.had_min_plus2_before)) {
+      const indisponivel = existing.indisponivel_ate_minuto ?? (minute != null ? minute - 1 : null);
+      await applyMercadoGols05Capture(
+        supabase,
+        eventId,
+        ctx,
+        totals,
+        over0,
+        "super_05",
+        indisponivel,
+        existing.had_min_plus2_before,
+        "watching",
+      );
+      return "captured";
     }
     const indisponivel = existing.indisponivel_ate_minuto ?? (minute != null ? minute - 1 : null);
-    await supabase.from("futebol_mercado_gols_05").update({
-      indisponivel_ate_minuto: indisponivel,
-      disponivel_desde_minuto: minute,
-      placar_na_captura: ctx.score_text,
-      over_05_odd: over0,
-      over_05_line: totals.over_0_line,
-      captured_at: nowIso,
-      resultado: "pending",
-      updated_at: nowIso,
-    }).eq("event_id", eventId).eq("resultado", "watching");
+    const hadMinPlus2 = existing.had_min_plus2_before || over1 != null;
+    await applyMercadoGols05Capture(
+      supabase,
+      eventId,
+      ctx,
+      totals,
+      over0,
+      "imediato_05",
+      indisponivel,
+      hadMinPlus2,
+      "watching",
+    );
     return "captured";
   }
 
@@ -1485,7 +1532,7 @@ async function finalizeMercadoGols05OffLive(
     .from("futebol_mercado_gols_05")
     .select("event_id,resultado,disponivel_desde_minuto,over_05_odd,captured_at,indisponivel_ate_minuto,had_min_plus2_before")
     .eq("is_live", true)
-    .in("resultado", ["watching", "pending", "excluido"]);
+    .in("resultado", ["watching", "pending"]);
 
   for (const row of openRows ?? []) {
     const eventId = String(row.event_id);
@@ -1500,15 +1547,6 @@ async function finalizeMercadoGols05OffLive(
       (game?.home_score != null && game?.away_score != null
         ? `${game.home_score}-${game.away_score}`
         : "—");
-
-    if (row.resultado === "excluido") {
-      await supabase.from("futebol_mercado_gols_05").update({
-        is_live: false,
-        placar_final: scoreText,
-        updated_at: nowIso,
-      }).eq("event_id", eventId);
-      continue;
-    }
 
     if (row.resultado === "watching") {
       await supabase.from("futebol_mercado_gols_05").update({
@@ -1622,7 +1660,7 @@ Deno.serve(async (req) => {
     "Lista todos os jogos live da Betano (futebol real).",
     "Stats: Sportradar match_details (chutes a gol, escanteios, tiros de meta).",
     "Sinal 'manter placar' so a partir dos 85'; antes disso: em estudo.",
-    "Mercado +0,5: captura Over +0,5 apos fase inicial so com +1,5/+2,5; GREEN ao gol apos captura.",
+    "Mercado +0,5: Super (apos +1,5/+2,5) e Imediato (1a coleta); GREEN ao gol apos captura.",
     "Historico: jogos monitorados + gols com minuto (filtro por gol a partir de X').",
   ];
 
