@@ -508,11 +508,6 @@
               <th>Jogo</th>
               <th>Estratégia</th>
               <th>Liga</th>
-              <th title="Ultimo minuto sem Over +0,5">Sem +0,5 até</th>
-              <th title="Minuto em que Over +0,5 apareceu">Surgiu em</th>
-              <th>Placar captura</th>
-              <th title="Odd Over +0,5 e linha Mais de (total gols no placar da captura)">ODD +0,5</th>
-              <th>Gols após</th>
               <th>Gol GREEN</th>
               <th>Resultado</th>
               <th>Lucro 1u</th>
@@ -523,7 +518,7 @@
             </tr>
           </thead>
           <tbody id="mercado-05-tbody">
-            <tr><td colspan="16" class="empty">Carregando...</td></tr>
+            <tr><td colspan="11" class="empty">Carregando...</td></tr>
           </tbody>
         </table>
       </div>
@@ -771,39 +766,82 @@
     }
 
     function superEstrategiaBadge(eventId) {
-      return `<button type="button" class="estrategia-badge super estrategia-popover-btn" data-super-popover="${eventId}" title="Clique: odds acima de +0,5">Super Estratégia</button>`;
+      return `<button type="button" class="estrategia-badge super estrategia-popover-btn" data-super-popover="${eventId}" title="Clique: registro das odds +0,5">Super Estratégia</button>`;
     }
 
     function dedupeConsecutiveElevatedLines(log) {
       const out = [];
       for (const e of log) {
         const prev = out[out.length - 1];
-        if (prev && Math.abs(prev.line - e.line) < 0.01) continue;
+        if (prev &&
+          Math.abs(prev.line - e.line) < 0.01 &&
+          prev.odd != null && e.odd != null &&
+          Math.abs(prev.odd - e.odd) < 0.01) continue;
         out.push(e);
       }
       return out;
     }
 
-    function renderElevatedPopoverHtml(row) {
+    function buildSuperPopoverLog(row) {
       const log = dedupeConsecutiveElevatedLines(parseElevatedOddsLog(row?.elevated_odds_log));
+      if (!row) return log;
+
+      if (row.over_05_odd != null) {
+        const entry = {
+          at: row.captured_at,
+          minute: row.disponivel_desde_minuto ?? row.last_minute,
+          score: row.placar_na_captura,
+          line: row.over_05_line,
+          odd: row.over_05_odd,
+          capture: true,
+        };
+        const last = log[log.length - 1];
+        if (last &&
+          Math.abs((last.line ?? 0) - (entry.line ?? 0)) < 0.01 &&
+          Math.abs(last.odd - entry.odd) < 0.01) {
+          log[log.length - 1] = { ...last, capture: true };
+        } else {
+          log.push(entry);
+        }
+        return log;
+      }
+
+      if (row.resultado === 'watching') {
+        const liveOver = mercadoLiveTrueOver05(row.event_id);
+        if (liveOver) {
+          const live = mercado05LiveOdds[row.event_id];
+          log.push({
+            at: new Date().toISOString(),
+            minute: live?.minute ?? row.last_minute,
+            score: live?.score ?? '—',
+            line: liveOver.line,
+            odd: liveOver.odd,
+            live: true,
+          });
+        }
+      }
+      return log;
+    }
+
+    function renderElevatedPopoverHtml(row) {
+      const log = buildSuperPopoverLog(row);
       const match = row ? `${row.home || '—'} x ${row.away || '—'}` : '';
-      const live = row ? mercado05LiveOdds[row.event_id] : null;
-      const liveOver = row ? mercadoLiveTrueOver05(row.event_id) : null;
-      let currentHtml = '';
-      if (liveOver) {
-        currentHtml = `<p class="mercado-popover-live"><strong>+0,5 agora:</strong> Mais de ${formatNumber(liveOver.line)} @ ${formatOdd(liveOver.odd)}${live?.minute != null ? ` · ${live.minute}'` : ''}</p>`;
-      }
       if (!log.length) {
-        return `<h4>Odds acima de +0,5 · ${match}</h4>${currentHtml}<p class="muted">Nenhum historico de linhas elevadas ainda.</p>`;
+        return `<h4>Registro +0,5 · ${match}</h4><p class="muted">Nenhum registro ainda.</p>`;
       }
-      const items = log.slice().reverse().map((e) => {
+      const items = log.map((e) => {
         const when = formatDate(e.at);
         const min = e.minute != null ? `${e.minute}'` : '—';
         const score = e.score || '—';
-        const rem = e.remaining != null ? `+${formatNumber(e.remaining)} gols` : '';
-        return `<li><strong>Mais de ${formatNumber(e.line)}</strong> @ ${formatOdd(e.odd)} · ${rem}<br><span class="muted">${when} · ${min} · ${score}</span></li>`;
+        const lineLabel = e.line != null
+          ? `Mais de ${formatNumber(e.line)}`
+          : '+0,5';
+        const tag = e.capture
+          ? ' <span class="muted">(captura)</span>'
+          : (e.live ? ' <span class="muted">(agora)</span>' : '');
+        return `<li><strong>${lineLabel}</strong> @ ${formatOdd(e.odd)}${tag}<br><span class="muted">${when} · ${min} · ${score}</span></li>`;
       }).join('');
-      return `<h4>Odds acima de +0,5 · ${match}</h4>${currentHtml}<p class="muted" style="margin:0.5rem 0 0.25rem">Historico (linhas +1,5 / +2,5…)</p><ul>${items}</ul>`;
+      return `<h4>Registro +0,5 · ${match}</h4><ul>${items}</ul>`;
     }
 
     function hideMercadoElevatedPopover() {
@@ -974,19 +1012,6 @@
       return { odd: live.over_0_odd, line: live.over_0_line };
     }
 
-    function formatMercadoOdd(row) {
-      const open = row.resultado === 'watching' || row.resultado === 'pending';
-      if (row.over_05_odd != null) {
-        const oddFmt = formatOdd(row.over_05_odd);
-        if (row.over_05_line == null) return oddFmt;
-        return `${oddFmt} <span class="muted" title="Linha Mais de (total gols)">+${formatNumber(row.over_05_line)}</span>`;
-      }
-      if (!open) return '—';
-      const liveOver = mercadoLiveTrueOver05(row.event_id);
-      if (!liveOver) return '—';
-      return `${formatOdd(liveOver.odd)} <span class="muted" title="Linha Mais de (total gols)">+${formatNumber(liveOver.line)}</span> <span class="muted" title="Odd ao vivo (ainda nao capturada)">live</span>`;
-    }
-
     function mercadoVisibleRows(rows) {
       return rows.filter((r) => r.resultado !== 'excluido');
     }
@@ -1000,32 +1025,21 @@
       renderMercado05Summary(rows);
       if (!rows.length) {
         tbody.innerHTML =
-          '<tr><td colspan="16" class="empty">Nenhum jogo monitorado ainda. Novos jogos serao registrados automaticamente.</td></tr>';
+          '<tr><td colspan="11" class="empty">Nenhum jogo monitorado ainda. Novos jogos serao registrados automaticamente.</td></tr>';
         return;
       }
       tbody.innerHTML = rows.map((row, i) => {
         const match = `${row.home || '—'} x ${row.away || '—'}`;
         const league = [row.country, row.league].filter(Boolean).join(' · ') || '—';
-        const semLinha = row.resultado === 'sem_linha_05' || row.resultado === 'skipped';
-        const semAte = row.indisponivel_ate_minuto != null
-          ? (semLinha ? `${row.indisponivel_ate_minuto}' (jogo inteiro)` : `${row.indisponivel_ate_minuto}'`)
-          : '—';
-        const surgiu = row.disponivel_desde_minuto != null ? `${row.disponivel_desde_minuto}'` : '—';
         const link = row.betano_url
           ? `<a href="${row.betano_url}" target="_blank" rel="noopener">abrir</a>`
           : '—';
-        const golsApos = row.gols_apos_captura != null ? row.gols_apos_captura : '—';
         const golGreen = row.gol_green_minute != null ? `${row.gol_green_minute}'` : '—';
         return `<tr>
           <td>${i + 1}</td>
           <td><strong>${match}</strong></td>
           <td>${mercadoEstrategiaLabel(row)}</td>
           <td>${league}</td>
-          <td>${semAte}</td>
-          <td><strong>${surgiu}</strong></td>
-          <td>${row.placar_na_captura || '—'}</td>
-          <td>${formatMercadoOdd(row)}</td>
-          <td>${golsApos}</td>
           <td>${golGreen}</td>
           <td>${mercadoResultadoLabel(row.resultado)}</td>
           <td>${formatMercadoProfit(mercadoSimProfit(row))}</td>
@@ -1092,7 +1106,7 @@
       } catch (err) {
         if (tbody) {
           tbody.innerHTML =
-            `<tr><td colspan="16" class="empty">${err.message || String(err)}</td></tr>`;
+            `<tr><td colspan="11" class="empty">${err.message || String(err)}</td></tr>`;
         }
       } finally {
         mercado05Loading = false;
@@ -1551,7 +1565,7 @@
             `<tr><td colspan="18" class="empty">${msg}</td></tr>`;
         } else if (tab === 'mercado-05') {
           document.getElementById('mercado-05-tbody').innerHTML =
-            `<tr><td colspan="16" class="empty">${msg}</td></tr>`;
+            `<tr><td colspan="11" class="empty">${msg}</td></tr>`;
         }
       }
     }
