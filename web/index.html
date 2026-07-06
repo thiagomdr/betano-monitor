@@ -748,8 +748,18 @@
       return `<button type="button" class="estrategia-badge super estrategia-popover-btn" data-super-popover="${eventId}" title="Clique: odds acima de +0,5">Super Estratégia</button>`;
     }
 
+    function dedupeConsecutiveElevatedLines(log) {
+      const out = [];
+      for (const e of log) {
+        const prev = out[out.length - 1];
+        if (prev && Math.abs(prev.line - e.line) < 0.01) continue;
+        out.push(e);
+      }
+      return out;
+    }
+
     function renderElevatedPopoverHtml(row) {
-      const log = parseElevatedOddsLog(row?.elevated_odds_log);
+      const log = dedupeConsecutiveElevatedLines(parseElevatedOddsLog(row?.elevated_odds_log));
       const match = row ? `${row.home || '—'} x ${row.away || '—'}` : '';
       if (!log.length) {
         return `<h4>Odds acima de +0,5</h4><p class="muted">Nenhum registro ainda. O cron grava a cada ~2 min enquanto Monitorando.</p>`;

@@ -538,32 +538,23 @@ async function appendMercadoElevatedOddsLog(
   const lines = collectElevatedLinesForLog(totals, goalsTotal);
   if (!lines.length) return;
 
+  const snapshot = lines.reduce((a, b) => (a.line < b.line ? a : b));
   const log = parseElevatedOddsLog(existingLog);
-  const nowIso = new Date().toISOString();
-  let changed = false;
-
-  for (const { line, odd } of lines) {
-    const last = [...log].reverse().find((e) => Math.abs(e.line - line) < 0.01);
-    if (
-      last &&
-      last.minute === ctx.minute &&
-      Math.abs(last.odd - odd) < 0.001 &&
-      last.score === ctx.score_text
-    ) {
-      continue;
-    }
-    log.push({
-      at: nowIso,
-      minute: ctx.minute,
-      score: ctx.score_text,
-      line,
-      odd,
-      remaining: Math.round((line - goalsTotal) * 100) / 100,
-    });
-    changed = true;
+  const lastEntry = log.length > 0 ? log[log.length - 1] : null;
+  if (lastEntry && Math.abs(lastEntry.line - snapshot.line) < 0.01) {
+    return;
   }
 
-  if (!changed) return;
+  const nowIso = new Date().toISOString();
+  log.push({
+    at: nowIso,
+    minute: ctx.minute,
+    score: ctx.score_text,
+    line: snapshot.line,
+    odd: snapshot.odd,
+    remaining: Math.round((snapshot.line - goalsTotal) * 100) / 100,
+  });
+
   const trimmed = log.length > 300 ? log.slice(-300) : log;
   await supabase.from("futebol_mercado_gols_05").update({
     elevated_odds_log: trimmed,
