@@ -293,7 +293,7 @@
   </style>
 </head>
 <body>
-  <!-- pages-build: 0f8c411 -->
+  <!-- pages-build: lucro-estrategia -->
   <header>
     <h1 class="brand-title">
       <span class="brand-monitor">Monitor</span>
@@ -640,8 +640,7 @@
       );
       const greens = scoped.filter((r) => r.resultado === 'win').length;
       const profit = scoped.reduce((sum, r) => sum + (mercadoSimProfit(r) ?? 0), 0);
-      const roi = scoped.length > 0 ? (100 * profit) / scoped.length : null;
-      return { bets: scoped.length, greens, profit, roi };
+      return { bets: scoped.length, greens, profit };
     }
 
     function renderMercadoSummary(rows) {
@@ -658,11 +657,10 @@
       const reds = rows.filter((r) => r.resultado === 'loss').length;
       const pending = rows.filter((r) => r.resultado === 'pending' || r.resultado === 'watching').length;
       const profit = settled.reduce((sum, r) => sum + (mercadoSimProfit(r) ?? 0), 0);
-      const roi = settled.length > 0 ? (100 * profit) / settled.length : 0;
       const profitClass = profit >= 0 ? 'positive' : 'negative';
       const sign = profit > 0 ? '+' : '';
-      const fmtRoi = (v) => (v != null ? `${formatNumber(v)}%` : '—');
       const fmtG = (s) => (s.bets > 0 ? `${s.greens}/${s.bets}` : '—');
+      const fmtStrategyProfit = (s) => (s.bets > 0 ? formatMercadoProfit(s.profit) : '—');
       el.innerHTML = `
         <div class="summary-card">
           <div class="summary-label">Jogos monitorados</div>
@@ -685,16 +683,16 @@
           <div class="summary-value">${fmtG(superS)}</div>
         </div>
         <div class="summary-card summary-super">
-          <div class="summary-label">Super · ROI</div>
-          <div class="summary-value">${fmtRoi(superS.roi)}</div>
+          <div class="summary-label">Super · Lucro 1u</div>
+          <div class="summary-value">${fmtStrategyProfit(superS)}</div>
         </div>
         <div class="summary-card summary-imediato">
           <div class="summary-label">Imediato · GREEN</div>
           <div class="summary-value">${fmtG(imedS)}</div>
         </div>
         <div class="summary-card summary-imediato">
-          <div class="summary-label">Imediato · ROI</div>
-          <div class="summary-value">${fmtRoi(imedS.roi)}</div>
+          <div class="summary-label">Imediato · Lucro 1u</div>
+          <div class="summary-value">${fmtStrategyProfit(imedS)}</div>
         </div>
         <div class="summary-card summary-pendentes">
           <div class="summary-label">Pendentes</div>
@@ -703,10 +701,6 @@
         <div class="summary-card">
           <div class="summary-label">Lucro 1u (liquidadas)</div>
           <div class="summary-value mercado-profit ${profitClass}">${sign}${formatNumber(profit)} u</div>
-        </div>
-        <div class="summary-card">
-          <div class="summary-label">ROI (total)</div>
-          <div class="summary-value">${settled.length ? formatNumber(roi) + '%' : '—'}</div>
         </div>
       `;
     }
