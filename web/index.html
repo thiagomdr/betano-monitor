@@ -345,6 +345,13 @@
       border-bottom: 1px solid rgba(255, 255, 255, 0.06);
     }
     .mercado-elevated-popover li:last-child { border-bottom: none; }
+    .mercado-popover-live {
+      margin: 0 0 0.75rem;
+      padding: 0.5rem 0.6rem;
+      background: rgba(94, 179, 255, 0.12);
+      border-radius: 6px;
+      font-size: 0.9rem;
+    }
     #panel-mercado-05 tbody tr:hover td {
       background: rgba(232, 238, 247, 0.08);
     }
@@ -713,6 +720,7 @@
     let historyPagination = { offset: 0, hasMore: true, loading: false };
     let mercado05Cache = [];
     let mercado05LiveMinutes = {};
+    let mercado05LiveOdds = {};
     let mercado05Loading = false;
 
     function mercadoResultadoLabel(resultado) {
@@ -779,8 +787,13 @@
     function renderElevatedPopoverHtml(row) {
       const log = dedupeConsecutiveElevatedLines(parseElevatedOddsLog(row?.elevated_odds_log));
       const match = row ? `${row.home || '—'} x ${row.away || '—'}` : '';
+      const live = row ? mercado05LiveOdds[row.event_id] : null;
+      let currentHtml = '';
+      if (live?.over_0_odd != null && live?.over_0_line != null) {
+        currentHtml = `<p class="mercado-popover-live"><strong>+0,5 agora:</strong> Mais de ${formatNumber(live.over_0_line)} @ ${formatOdd(live.over_0_odd)}${live.minute != null ? ` · ${live.minute}'` : ''}</p>`;
+      }
       if (!log.length) {
-        return `<h4>Odds acima de +0,5</h4><p class="muted">Nenhum registro ainda. O cron grava a cada ~2 min enquanto Monitorando.</p>`;
+        return `<h4>Odds acima de +0,5 · ${match}</h4>${currentHtml}<p class="muted">Nenhum historico de linhas elevadas ainda.</p>`;
       }
       const items = log.slice().reverse().map((e) => {
         const when = formatDate(e.at);
@@ -789,7 +802,7 @@
         const rem = e.remaining != null ? `+${formatNumber(e.remaining)} gols` : '';
         return `<li><strong>Mais de ${formatNumber(e.line)}</strong> @ ${formatOdd(e.odd)} · ${rem}<br><span class="muted">${when} · ${min} · ${score}</span></li>`;
       }).join('');
-      return `<h4>Odds acima de +0,5 · ${match}</h4><ul>${items}</ul>`;
+      return `<h4>Odds acima de +0,5 · ${match}</h4>${currentHtml}<p class="muted" style="margin:0.5rem 0 0.25rem">Historico (linhas +1,5 / +2,5…)</p><ul>${items}</ul>`;
     }
 
     function hideMercadoElevatedPopover() {
@@ -934,10 +947,17 @@
     }
 
     function formatMercadoOdd(row) {
-      if (row.over_05_odd == null) return '—';
-      const odd = formatOdd(row.over_05_odd);
-      if (row.over_05_line == null) return odd;
-      return `${odd} <span class="muted" title="Linha Mais de (total gols)">+${formatNumber(row.over_05_line)}</span>`;
+      const open = row.resultado === 'watching' || row.resultado === 'pending';
+      const live = mercado05LiveOdds[row.event_id];
+      const odd = row.over_05_odd ?? (open && live?.over_0_odd != null ? live.over_0_odd : null);
+      const line = row.over_05_line ?? (open && live?.over_0_line != null ? live.over_0_line : null);
+      if (odd == null) return '—';
+      const oddFmt = formatOdd(odd);
+      if (line == null) return oddFmt;
+      const liveTag = row.over_05_odd == null && live?.over_0_odd != null
+        ? ' <span class="muted" title="Odd ao vivo (ainda nao capturada)">live</span>'
+        : '';
+      return `${oddFmt} <span class="muted" title="Linha Mais de (total gols)">+${formatNumber(line)}</span>${liveTag}`;
     }
 
     function mercadoVisibleRows(rows) {
@@ -1004,12 +1024,38 @@
           supabaseGet(
             appCfg.url,
             appCfg.anonKey,
-            'futebol_live_rows?select=event_id,minute',
+            'futebol_live_rows?select=event_id,minute,score,over_0_odd,over_0_line,over_1_odd,over_1_line,over_2_odd,over_2_line',
           ),
         ]);
+        // #region agent log
+        const mx = (liveRows ?? []).find((r) => r.event_id === '88363620');
+        if (mx) {
+          fetch('http://127.0.0.1:7904/ingest/86615625-6ae5-4e98-a1da-0a5f0f15fc42', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json', 'X-Debug-Session-Id': 'e14164' },
+            body: JSON.stringify({
+              sessionId: 'e14164',
+              hypothesisId: 'H1-H5',
+              runId: 'post-fix',
+              location: 'index.html:loadMercado05',
+              message: 'Mexico live odds from BD',
+              data: mx,
+              timestamp: Date.now(),
+            }),
+          }).catch(() => {});
+        }
+        // #endregion
         mercado05Cache = rows;
         mercado05LiveMinutes = Object.fromEntries(
           (liveRows ?? []).map((r) => [r.event_id, r.minute]),
+        );
+        mercado05LiveOdds = Object.fromEntries(
+          (liveRows ?? []).map((r) => [r.event_id, {
+            over_0_odd: r.over_0_odd,
+            over_0_line: r.over_0_line,
+            minute: r.minute,
+            score: r.score,
+          }]),
         );
         renderMercado05();
       } catch (err) {

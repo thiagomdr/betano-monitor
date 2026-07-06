@@ -911,6 +911,191 @@ function hasAnyTotalsOdds(t: TotalsOdds): boolean {
   ].some((v) => v != null);
 }
 
+/** Overview so traz linha principal (ex. 4,5); faltam alternativas (+0,5/+2,5). */
+function needsSupplementalTotalsFetch(totals: TotalsOdds, goalsTotal: number): boolean {
+  if (!hasAnyTotalsOdds(totals)) return true;
+  if (totals.over_0_odd != null) return false;
+  const needLine = goalsTotal + 0.5;
+  for (const line of [totals.over_1_line, totals.over_2_line, totals.min_over_absolute_line]) {
+    if (line != null && line > needLine + 0.01) return true;
+  }
+  if (totals.elevated_over_seen) return true;
+  if ((totals.elevated_over_lines?.length ?? 0) > 0) return true;
+  return false;
+}
+
+function mergeTotalsOdds(primary: TotalsOdds, secondary: TotalsOdds): TotalsOdds {
+  const out: TotalsOdds = {
+    ...primary,
+    elevated_over_lines: [...(primary.elevated_over_lines ?? [])],
+  };
+  for (const i of [0, 1, 2] as const) {
+    const lineKey = `under_${i}_line` as keyof TotalsOdds;
+    const oddKey = `under_${i}_odd` as keyof TotalsOdds;
+    const oLineKey = `over_${i}_line` as keyof TotalsOdds;
+    const oOddKey = `over_${i}_odd` as keyof TotalsOdds;
+    if (out[oddKey] == null && secondary[oddKey] != null) {
+      (out as Record<string, unknown>)[lineKey as string] = secondary[lineKey];
+      (out as Record<string, unknown>)[oddKey as string] = secondary[oddKey];
+    }
+    if (out[oOddKey] == null && secondary[oOddKey] != null) {
+      (out as Record<string, unknown>)[oLineKey as string] = secondary[oLineKey];
+      (out as Record<string, unknown>)[oOddKey as string] = secondary[oOddKey];
+    }
+  }
+  if (secondary.min_over_absolute_line != null) {
+    out.min_over_absolute_line = out.min_over_absolute_line == null
+      ? secondary.min_over_absolute_line
+      : Math.min(out.min_over_absolute_line, secondary.min_over_absolute_line);
+  }
+  out.elevated_over_seen = primary.elevated_over_seen || secondary.elevated_over_seen;
+  for (const e of secondary.elevated_over_lines ?? []) {
+    const idx = out.elevated_over_lines!.findIndex((x) => Math.abs(x.line - e.line) < 0.01);
+    if (idx < 0) out.elevated_over_lines!.push(e);
+    else out.elevated_over_lines![idx] = e;
+  }
+  return out;
+}
+
+/** Extrai mercados/selecoes aninhados em marketOffers (inclui HCTG alternativos). */
+function flattenOffersMarkets(data: unknown): { markets: Json; selections: Json } {
+  const markets: Json = {};
+  const selections: Json = {};
+
+  const absorbSelection = (s: Json) => {
+    const id = s.id ?? s.selectionId;
+    if (id != null) selections[String(id)] = s;
+  };
+
+  const absorbMarket = (m: Json) => {
+    const id = String(m.id ?? "");
+    if (!id) return;
+    markets[id] = m;
+    const sels = m.selections;
+    if (Array.isArray(sels)) {
+      for (const item of sels) {
+        const s = asRecord(item);
+        if (s) absorbSelection(s);
+      }
+    }
+  };
+
+  const walk = (node: unknown, depth = 0) => {
+    if (depth > 12 || node == null) return;
+    if (Array.isArray(node)) {
+      for (const item of node) walk(item, depth + 1);
+      return;
+    }
+    const obj = asRecord(node);
+    if (!obj) return;
+
+    const type = String(obj.type ?? "");
+    const name = String(obj.name ?? "").toLowerCase();
+    if (type === "HCTG" || name.includes("total de gols")) {
+      absorbMarket(obj);
+    }
+
+    if (Array.isArray(obj.selections)) {
+      for (const item of obj.selections) {
+        const s = asRecord(item);
+        if (s) absorbSelection(s);
+      }
+    }
+
+    for (const v of Object.values(obj)) walk(v, depth + 1);
+  };
+
+  const root = asRecord(asRecord(data)?.data) ?? asRecord(data);
+  walk(root?.marketOffers);
+  walk(root?.markets);
+  walk(root?.selections);
+
+  return { markets, selections };
+}
+
+/** Mercados HCTG alternativos: vizinhos handicap anchor±1 (ex. 3,5 e 5,5 quando anchor 4,5). */
+function supplementOverviewHctgOrphans(
+  event: Json,
+  overview: Json,
+  goalsTotal: number,
+  totals: TotalsOdds,
+  claimedHctg: Set<string>,
+  _offerMarketHints: Set<string> = new Set(),
+): TotalsOdds {
+  const markets = asRecord(overview.markets) ?? {};
+  const selections = asRecord(overview.selections) ?? {};
+  const marketIdList = Array.isArray(event.marketIdList)
+    ? event.marketIdList.map(String)
+    : [];
+
+  let anchorMid: string | null = null;
+  let anchorHandicap: number | null = null;
+  for (const mid of marketIdList) {
+    const rec = asRecord(markets[mid]);
+    if (rec?.type === "HCTG") {
+      anchorMid = mid;
+      anchorHandicap = toNum(rec.handicap);
+      break;
+    }
+  }
+  if (!anchorMid || anchorHandicap == null) return totals;
+
+  const pickOverOdd = (mid: string): number | null => {
+    const rec = asRecord(markets[mid]);
+    if (!rec || !Array.isArray(rec.selectionIdList)) return null;
+    for (const sid of rec.selectionIdList) {
+      const sel = asRecord(selections[String(sid)]);
+      if (!sel) continue;
+      const name = String(sel.name ?? "").toLowerCase();
+      if (name.includes("mais") || name.includes("over")) {
+        return toNum(sel.price ?? sel.odds);
+      }
+    }
+    return null;
+  };
+
+  const anchorOver = pickOverOdd(anchorMid);
+  if (anchorOver == null) return totals;
+
+  const extraIds: string[] = [];
+  for (const delta of [-1, 1] as const) {
+    const targetHc = anchorHandicap + delta;
+    let candidates: string[] = [];
+    for (const [mid, market] of Object.entries(markets)) {
+      if (mid === anchorMid || marketIdList.includes(mid) || claimedHctg.has(mid)) continue;
+      const rec = asRecord(market);
+      if (!rec || rec.type !== "HCTG") continue;
+      const line = toNum(rec.handicap);
+      if (line == null || Math.abs(line - targetHc) > 0.01) continue;
+      const over = pickOverOdd(mid);
+      if (over == null) continue;
+      if (delta < 0 && over >= anchorOver) continue;
+      if (delta > 0 && over <= anchorOver) continue;
+      candidates.push(mid);
+    }
+    if (!candidates.length) continue;
+    candidates.sort((a, b) => {
+      const oa = pickOverOdd(a)!;
+      const ob = pickOverOdd(b)!;
+      return delta < 0 ? ob - oa : oa - ob;
+    });
+    const chosen = candidates[0];
+    claimedHctg.add(chosen);
+    extraIds.push(chosen);
+  }
+
+  if (!extraIds.length) return totals;
+
+  const mergedIds = [...marketIdList, ...extraIds];
+  const patched = extractTotalsOdds(
+    String(event.id ?? event.eventId ?? ""),
+    { ...event, marketIdList: mergedIds },
+    overview,
+    goalsTotal,
+  );
+  return mergeTotalsOdds(totals, patched);
+}
+
 /** Busca mercados extras do evento (totais Under/Over) quando o overview nao traz. */
 async function fetchEventTotalsOdds(
   eventId: string,
@@ -924,9 +1109,23 @@ async function fetchEventTotalsOdds(
   for (const url of urls) {
     try {
       const data = await betanoGet(url);
+
+      const fromOffers = flattenOffersMarkets(data);
+      if (Object.keys(fromOffers.markets).length > 0) {
+        const fakeOverview = { markets: fromOffers.markets, selections: fromOffers.selections };
+        const parsed = extractTotalsOdds(
+          eventId,
+          { marketIdList: Object.keys(fromOffers.markets) },
+          fakeOverview,
+          goalsTotal,
+        );
+        if (hasAnyTotalsOdds(parsed)) return parsed;
+      }
+
       const rec = asRecord(data) ?? {};
-      const markets = asRecord(rec.markets) ?? asRecord(asRecord(rec.data)?.markets) ?? {};
-      const selections = asRecord(rec.selections) ?? asRecord(asRecord(rec.data)?.selections) ?? {};
+      const inner = asRecord(rec.result) ?? asRecord(rec.data) ?? rec;
+      const markets = asRecord(inner.markets) ?? asRecord(rec.markets) ?? {};
+      const selections = asRecord(inner.selections) ?? asRecord(rec.selections) ?? {};
       const fakeOverview = { markets, selections };
       const fromStruct = extractTotalsOdds(
         eventId,
@@ -1956,6 +2155,28 @@ Deno.serve(async (req) => {
     let mercadoCaptured = 0;
     let mercadoWins = 0;
     const liveIds: string[] = [];
+    const claimedHctgMarkets = new Set<string>();
+
+    const anchorOverForSort = (ev: Json): number => {
+      const markets = asRecord(overview.markets) ?? {};
+      const selections = asRecord(overview.selections) ?? {};
+      const ids = Array.isArray(ev.marketIdList) ? ev.marketIdList.map(String) : [];
+      for (const mid of ids) {
+        const rec = asRecord(markets[mid]);
+        if (rec?.type !== "HCTG" || !Array.isArray(rec.selectionIdList)) continue;
+        for (const sid of rec.selectionIdList) {
+          const sel = asRecord(selections[String(sid)]);
+          if (!sel) continue;
+          const name = String(sel.name ?? "").toLowerCase();
+          if (name.includes("mais") || name.includes("over")) {
+            const o = toNum(sel.price ?? sel.odds);
+            if (o != null) return o;
+          }
+        }
+      }
+      return 0;
+    };
+    candidates.sort((a, b) => anchorOverForSort(b) - anchorOverForSort(a));
 
     for (const event of candidates) {
       const eventId = String(event.event_id);
@@ -1967,9 +2188,59 @@ Deno.serve(async (req) => {
       const ml = extractMlOdds(eventId, overview);
       const goalsTotal = (score.home ?? 0) + (score.away ?? 0);
       let totals = extractTotalsOdds(eventId, event, overview, goalsTotal);
-      if (!hasAnyTotalsOdds(totals)) {
-        totals = await fetchEventTotalsOdds(eventId, goalsTotal);
+      let offerMarketHints = new Set<string>();
+      if (needsSupplementalTotalsFetch(totals, goalsTotal)) {
+        try {
+          const offersData = await betanoGet(
+            `${BETANO_BASE}/api/event/markets-offers/${eventId}`,
+          );
+          const fromOffers = flattenOffersMarkets(offersData);
+          offerMarketHints = new Set(Object.keys(fromOffers.markets));
+          if (offerMarketHints.size > 0) {
+            const offerOverview = {
+              markets: fromOffers.markets,
+              selections: fromOffers.selections,
+            };
+            const fromOffersTotals = extractTotalsOdds(
+              eventId,
+              { marketIdList: [...offerMarketHints] },
+              offerOverview,
+              goalsTotal,
+            );
+            totals = mergeTotalsOdds(totals, fromOffersTotals);
+          }
+        } catch {
+          // markets-offers opcional
+        }
+        if (needsSupplementalTotalsFetch(totals, goalsTotal)) {
+          const extra = await fetchEventTotalsOdds(eventId, goalsTotal);
+          totals = mergeTotalsOdds(totals, extra);
+        }
       }
+      totals = supplementOverviewHctgOrphans(
+        event, overview, goalsTotal, totals, claimedHctgMarkets, offerMarketHints,
+      );
+      // #region agent log
+      if (eventId === "88363620") {
+        console.log(JSON.stringify({
+          sessionId: "e14164",
+          hypothesisId: "H1-H5",
+          runId: "post-fix",
+          location: "index.ts:totals_mexico",
+          message: "totals after supplement",
+          data: {
+            goalsTotal,
+            over_0_line: totals.over_0_line,
+            over_0_odd: totals.over_0_odd,
+            over_1_line: totals.over_1_line,
+            over_1_odd: totals.over_1_odd,
+            min_over_absolute_line: totals.min_over_absolute_line,
+            canCapture: canCaptureTrueOver05(totals, goalsTotal),
+          },
+          timestamp: Date.now(),
+        }));
+      }
+      // #endregion
       const under = totals;
 
       const betradarId = extractBetradarMatchId(event);
