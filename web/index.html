@@ -306,6 +306,45 @@
     }
     .estrategia-badge.super { background: rgba(77, 150, 255, 0.45); color: #fff; }
     .estrategia-badge.imediato { background: rgba(94, 179, 255, 0.18); color: #5eb3ff; }
+    button.estrategia-popover-btn {
+      border: none;
+      cursor: pointer;
+      font: inherit;
+    }
+    button.estrategia-popover-btn:hover {
+      filter: brightness(1.12);
+    }
+    .mercado-elevated-popover {
+      display: none;
+      position: fixed;
+      z-index: 1000;
+      max-width: 360px;
+      max-height: 280px;
+      overflow: auto;
+      padding: 0.65rem 0.75rem;
+      background: #1a2332;
+      border: 1px solid rgba(94, 179, 255, 0.35);
+      border-radius: 8px;
+      box-shadow: 0 8px 24px rgba(0, 0, 0, 0.45);
+      font-size: 0.78rem;
+      line-height: 1.45;
+    }
+    .mercado-elevated-popover.open { display: block; }
+    .mercado-elevated-popover h4 {
+      margin: 0 0 0.5rem;
+      font-size: 0.82rem;
+      color: #fff;
+    }
+    .mercado-elevated-popover ul {
+      margin: 0;
+      padding: 0;
+      list-style: none;
+    }
+    .mercado-elevated-popover li {
+      padding: 0.25rem 0;
+      border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+    }
+    .mercado-elevated-popover li:last-child { border-bottom: none; }
     #panel-mercado-05 tbody tr:hover td {
       background: rgba(232, 238, 247, 0.08);
     }
@@ -481,6 +520,7 @@
           </tbody>
         </table>
       </div>
+      <div id="mercado-elevated-popover" class="mercado-elevated-popover" role="dialog" aria-hidden="true"></div>
     </section>
   </main>
   <script>
@@ -699,15 +739,57 @@
       return `<span class="history-sim-profit ${cls}">${sign}${formatNumber(rounded)} u</span>`;
     }
 
+    function parseElevatedOddsLog(raw) {
+      if (!Array.isArray(raw)) return [];
+      return raw.filter((e) => e && typeof e.line === 'number' && typeof e.odd === 'number');
+    }
+
+    function superEstrategiaBadge(eventId) {
+      return `<button type="button" class="estrategia-badge super estrategia-popover-btn" data-super-popover="${eventId}" title="Clique: odds acima de +0,5">Super Estratégia</button>`;
+    }
+
+    function renderElevatedPopoverHtml(row) {
+      const log = parseElevatedOddsLog(row?.elevated_odds_log);
+      const match = row ? `${row.home || '—'} x ${row.away || '—'}` : '';
+      if (!log.length) {
+        return `<h4>Odds acima de +0,5</h4><p class="muted">Nenhum registro ainda. O cron grava a cada ~2 min enquanto Monitorando.</p>`;
+      }
+      const items = log.slice().reverse().map((e) => {
+        const when = formatDate(e.at);
+        const min = e.minute != null ? `${e.minute}'` : '—';
+        const score = e.score || '—';
+        const rem = e.remaining != null ? `+${formatNumber(e.remaining)} gols` : '';
+        return `<li><strong>Mais de ${formatNumber(e.line)}</strong> @ ${formatOdd(e.odd)} · ${rem}<br><span class="muted">${when} · ${min} · ${score}</span></li>`;
+      }).join('');
+      return `<h4>Odds acima de +0,5 · ${match}</h4><ul>${items}</ul>`;
+    }
+
+    function hideMercadoElevatedPopover() {
+      const el = document.getElementById('mercado-elevated-popover');
+      if (!el) return;
+      el.classList.remove('open');
+      el.setAttribute('aria-hidden', 'true');
+    }
+
+    function showMercadoElevatedPopover(btn, eventId) {
+      const pop = document.getElementById('mercado-elevated-popover');
+      if (!pop) return;
+      const row = mercado05Cache.find((r) => String(r.event_id) === String(eventId));
+      pop.innerHTML = renderElevatedPopoverHtml(row);
+      const rect = btn.getBoundingClientRect();
+      pop.style.left = `${Math.min(rect.left, window.innerWidth - 380)}px`;
+      pop.style.top = `${rect.bottom + 6}px`;
+      pop.classList.add('open');
+      pop.setAttribute('aria-hidden', 'false');
+    }
+
     function mercadoEstrategiaLabel(row) {
-      const { estrategia, resultado, had_min_plus2_before: hadPhase } = row;
-      const map = {
-        super_05: { text: 'Super Estratégia', cls: 'super' },
-        imediato_05: { text: 'Imediato', cls: 'imediato' },
-      };
-      const e = map[estrategia];
-      if (e) {
-        return `<span class="estrategia-badge ${e.cls}">${e.text}</span>`;
+      const { estrategia, resultado, had_min_plus2_before: hadPhase, event_id: eventId } = row;
+      if (estrategia === 'super_05') {
+        return superEstrategiaBadge(eventId);
+      }
+      if (estrategia === 'imediato_05') {
+        return '<span class="estrategia-badge imediato">Imediato</span>';
       }
       if (resultado === 'excluido') {
         return '<span class="estrategia-badge imediato">Imediato</span>';
@@ -716,11 +798,8 @@
         return '<span class="muted">—</span>';
       }
       if (resultado === 'watching') {
-        // #region agent log
-        fetch('http://127.0.0.1:7904/ingest/86615625-6ae5-4e98-a1da-0a5f0f15fc42',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'e14164'},body:JSON.stringify({sessionId:'e14164',location:'index.html:mercadoEstrategiaLabel',message:'watching estrategia',data:{event_id:row.event_id,hadPhase,label:hadPhase?'super+aguardando':'aguardando'},timestamp:Date.now(),hypothesisId:'H1',runId:'post-fix2'})}).catch(()=>{});
-        // #endregion
         if (hadPhase) {
-          return '<span class="estrategia-badge super">Super Estratégia</span> <span class="muted">(aguardando +0,5)</span>';
+          return `${superEstrategiaBadge(eventId)} <span class="muted">(aguardando +0,5)</span>`;
         }
         return '<span class="muted">aguardando +0,5</span>';
       }
@@ -815,9 +894,6 @@
 
     function mercadoStatusLabel(row) {
       const open = row.resultado === 'watching' || row.resultado === 'pending';
-      // #region agent log
-      fetch('http://127.0.0.1:7904/ingest/86615625-6ae5-4e98-a1da-0a5f0f15fc42',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'e14164'},body:JSON.stringify({sessionId:'e14164',location:'index.html:mercadoStatusLabel',message:'status branch',data:{event_id:row.event_id,resultado:row.resultado,is_live:row.is_live,open,hasSettledAt:!!row.settled_at},timestamp:Date.now(),hypothesisId:'H1-H2'})}).catch(()=>{});
-      // #endregion
       if (open && row.is_live) {
         const m = row.last_minute ?? mercado05LiveMinutes[row.event_id];
         return m != null
@@ -903,10 +979,6 @@
         mercado05LiveMinutes = Object.fromEntries(
           (liveRows ?? []).map((r) => [r.event_id, r.minute]),
         );
-        const winStillLive = rows.filter((r) => r.resultado === 'win' && r.is_live).length;
-        // #region agent log
-        fetch('http://127.0.0.1:7904/ingest/86615625-6ae5-4e98-a1da-0a5f0f15fc42',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'e14164'},body:JSON.stringify({sessionId:'e14164',location:'index.html:loadMercado05',message:'mercado loaded',data:{total:rows.length,winStillLive,openLive:rows.filter((r)=>(r.resultado==='watching'||r.resultado==='pending')&&r.is_live).length},timestamp:Date.now(),hypothesisId:'H1'})}).catch(()=>{});
-        // #endregion
         renderMercado05();
       } catch (err) {
         if (tbody) {
@@ -1376,6 +1448,19 @@
     }
 
     document.getElementById('mercado-05-tbody')?.addEventListener('click', async (e) => {
+      const popBtn = e.target.closest('[data-super-popover]');
+      if (popBtn) {
+        e.stopPropagation();
+        const eventId = popBtn.getAttribute('data-super-popover');
+        const pop = document.getElementById('mercado-elevated-popover');
+        if (pop?.classList.contains('open') && pop.dataset.eventId === eventId) {
+          hideMercadoElevatedPopover();
+        } else {
+          if (pop) pop.dataset.eventId = eventId;
+          showMercadoElevatedPopover(popBtn, eventId);
+        }
+        return;
+      }
       const btn = e.target.closest('[data-delete-mercado]');
       if (!btn || btn.disabled) return;
       const eventId = btn.getAttribute('data-delete-mercado');
@@ -1387,6 +1472,11 @@
         window.alert(err.message || String(err));
         btn.disabled = false;
       }
+    });
+
+    document.addEventListener('click', (e) => {
+      if (e.target.closest('[data-super-popover]') || e.target.closest('#mercado-elevated-popover')) return;
+      hideMercadoElevatedPopover();
     });
 
     document.querySelectorAll('.tab-btn').forEach((btn) => {
