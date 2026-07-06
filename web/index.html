@@ -538,6 +538,19 @@
       return d.toLocaleString('pt-BR');
     }
 
+    function formatTimeOnly(iso) {
+      if (!iso) return '';
+      const d = new Date(iso);
+      if (Number.isNaN(d.getTime())) return '';
+      return d.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' });
+    }
+
+    function formatMercadoGolGreen(row) {
+      if (row.gol_green_minute == null) return '—';
+      const time = formatTimeOnly(row.settled_at);
+      return time ? `${row.gol_green_minute}' ${time}` : `${row.gol_green_minute}'`;
+    }
+
     function pair(home, away) {
       if (home == null && away == null) return '<span class="muted">—</span>';
       return `${home ?? '—'}-${away ?? '—'}`;
@@ -973,15 +986,12 @@
     }
 
     function mercadoStatusLabel(row) {
-      const open = row.resultado === 'watching' || row.resultado === 'pending';
-      if (open && row.is_live) {
+      if (row.is_live) {
         const m = row.last_minute ?? mercado05LiveMinutes[row.event_id];
         return m != null
           ? `<span class="muted">Ao Vivo ${m}'</span>`
           : '<span class="muted">Ao Vivo</span>';
       }
-      if (row.settled_at) return formatDate(row.settled_at);
-      if (row.placar_final && row.updated_at) return formatDate(row.updated_at);
       return formatDate(row.updated_at || row.created_at);
     }
 
@@ -1034,7 +1044,7 @@
         const link = row.betano_url
           ? `<a href="${row.betano_url}" target="_blank" rel="noopener">abrir</a>`
           : '—';
-        const golGreen = row.gol_green_minute != null ? `${row.gol_green_minute}'` : '—';
+        const golGreen = formatMercadoGolGreen(row);
         return `<tr>
           <td>${i + 1}</td>
           <td><strong>${match}</strong></td>

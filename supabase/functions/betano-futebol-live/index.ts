@@ -482,16 +482,17 @@ function goalsTotalFromScoreText(text: string): number {
   return (toInt(m[1]) ?? 0) + (toInt(m[2]) ?? 0);
 }
 
-/** Over +0,5 real: linha minima = placar+0,5 e sem linha Over maior ainda ofertada. */
+/**
+ * Over +0,5 real disponivel: menor linha Over ofertada = placar+0,5.
+ * "Menor odd" = menor LINHA (ex. 5,5 no 2-3), nao a cota decimal nem 6,5/7,5.
+ * Linhas maiores podem coexistir na API; over_0 deve ser a linha minima.
+ */
 function canCaptureTrueOver05(totals: TotalsOdds, goalsTotal: number): boolean {
   if (totals.over_0_odd == null || totals.over_0_line == null) return false;
   const needLine = goalsTotal + 0.5;
   if (Math.abs(totals.over_0_line - needLine) > 0.01) return false;
   if (totals.min_over_absolute_line == null) return false;
   if (Math.abs(totals.min_over_absolute_line - needLine) > 0.01) return false;
-  for (const line of [totals.over_0_line, totals.over_1_line, totals.over_2_line]) {
-    if (line != null && line > needLine + 0.01) return false;
-  }
   return true;
 }
 
@@ -504,20 +505,15 @@ type ElevatedOddLogEntry = {
   remaining: number;
 };
 
-function collectElevatedLinesForLog(
+/** Snapshot da linha +0,5: menor linha Over = placar+0,5 e sua cota (nunca 6,5/7,5). */
+function collectTrueOver05ForLog(
   totals: TotalsOdds,
   goalsTotal: number,
-): Array<{ line: number; odd: number }> {
+): { line: number; odd: number } | null {
   const needLine = goalsTotal + 0.5;
-  const out = new Map<string, { line: number; odd: number }>();
-  const add = (line: number | null, odd: number | null) => {
-    if (line == null || odd == null || line <= needLine + 0.01) return;
-    out.set(String(line), { line, odd });
-  };
-  add(totals.over_1_line, totals.over_1_odd);
-  add(totals.over_2_line, totals.over_2_odd);
-  for (const e of totals.elevated_over_lines ?? []) add(e.line, e.odd);
-  return [...out.values()];
+  if (totals.over_0_odd == null || totals.over_0_line == null) return null;
+  if (Math.abs(totals.over_0_line - needLine) > 0.01) return null;
+  return { line: totals.over_0_line, odd: totals.over_0_odd };
 }
 
 function parseElevatedOddsLog(raw: unknown): ElevatedOddLogEntry[] {
@@ -535,13 +531,16 @@ async function appendMercadoElevatedOddsLog(
   existingLog: unknown,
 ): Promise<void> {
   const goalsTotal = goalsTotalFromScoreText(ctx.score_text);
-  const lines = collectElevatedLinesForLog(totals, goalsTotal);
-  if (!lines.length) return;
+  const canonical = canonicalizeTotalsOver05(totals, goalsTotal);
+  const snapshot = collectTrueOver05ForLog(canonical, goalsTotal);
+  if (!snapshot) return;
 
-  const snapshot = lines.reduce((a, b) => (a.line < b.line ? a : b));
   const log = parseElevatedOddsLog(existingLog);
   const lastEntry = log.length > 0 ? log[log.length - 1] : null;
-  if (lastEntry && Math.abs(lastEntry.line - snapshot.line) < 0.01) {
+  if (lastEntry &&
+    Math.abs(lastEntry.line - snapshot.line) < 0.01 &&
+    lastEntry.odd != null &&
+    Math.abs(lastEntry.odd - snapshot.odd) < 0.01) {
     return;
   }
 
@@ -552,7 +551,7 @@ async function appendMercadoElevatedOddsLog(
     score: ctx.score_text,
     line: snapshot.line,
     odd: snapshot.odd,
-    remaining: Math.round((snapshot.line - goalsTotal) * 100) / 100,
+    remaining: 0.5,
   });
 
   const trimmed = log.length > 300 ? log.slice(-300) : log;
@@ -560,6 +559,16 @@ async function appendMercadoElevatedOddsLog(
     elevated_odds_log: trimmed,
     updated_at: nowIso,
   }).eq("event_id", eventId);
+  // #region agent log
+  console.log(JSON.stringify({
+    sessionId: "e14164",
+    hypothesisId: "H-log",
+    runId: "post-fix-v2",
+    location: "index.ts:appendMercadoElevatedOddsLog",
+    message: "true over05 logged",
+    data: { eventId, goalsTotal, needLine: goalsTotal + 0.5, snapshot },
+  }));
+  // #endregion
 }
 
 function assignOddSlot(
@@ -1021,6 +1030,189 @@ function mergeAndCanonicalizeTotals(
   return canonicalizeTotalsOver05(mergeTotalsOdds(primary, secondary), goalsTotal);
 }
 
+function eventZoneId(event: Json): string | null {
+  const z = event.zoneId;
+  return z != null && z !== "" ? String(z) : null;
+}
+
+/** Selecoes soltas (sem marketId) no overview do evento — ex. Mais de 0,5 alternativo. */
+function harvestLooseGoalTotals(
+  selections: Record<string, Json>,
+  goalsTotal: number,
+): Array<{ line: number; overOdd: number; underOdd?: number }> {
+  const minLine = goalsTotal + 0.5;
+  const maxLine = goalsTotal + 2.5;
+  const byLine = new Map<number, { over?: number; under?: number }>();
+  for (const sel of Object.values(selections)) {
+    const rec = asRecord(sel);
+    if (!rec) continue;
+    const name = String(rec.name ?? "").toLowerCase();
+    if (
+      !name.includes("mais") && !name.includes("menos") &&
+      !name.includes("over") && !name.includes("under")
+    ) continue;
+    const line = toNum(rec.handicap) ?? parseGoalLineFromSelectionName(name);
+    if (line == null || line < minLine - 0.01 || line > maxLine + 0.01) continue;
+    const price = toNum(rec.price ?? rec.odds);
+    if (price == null || price < 1.01 || price > 100) continue;
+    const bucket = byLine.get(line) ?? {};
+    if (name.includes("mais") || name.includes("over")) bucket.over = price;
+    if (name.includes("menos") || name.includes("under")) bucket.under = price;
+    byLine.set(line, bucket);
+  }
+  const out: Array<{ line: number; overOdd: number; underOdd?: number }> = [];
+  for (const [line, bucket] of byLine) {
+    if (bucket.over != null) {
+      out.push({ line, overOdd: bucket.over, underOdd: bucket.under });
+    }
+  }
+  return out.sort((a, b) => a.line - b.line);
+}
+
+function mainHctgAnchorOver(
+  event: Json,
+  overview: Json,
+): number | null {
+  const markets = asRecord(overview.markets) ?? {};
+  const selections = asRecord(overview.selections) ?? {};
+  const marketIdList = Array.isArray(event.marketIdList)
+    ? event.marketIdList.map(String)
+    : [];
+  for (const mid of marketIdList) {
+    const rec = asRecord(markets[mid]);
+    if (rec?.type !== "HCTG" || !Array.isArray(rec.selectionIdList)) continue;
+    for (const sid of rec.selectionIdList) {
+      const sel = asRecord(selections[String(sid)]);
+      if (!sel) continue;
+      const name = String(sel.name ?? "").toLowerCase();
+      if (name.includes("mais") || name.includes("over")) {
+        const o = toNum(sel.price ?? sel.odds);
+        if (o != null) return o;
+      }
+    }
+  }
+  return null;
+}
+
+/** Odd Over na linha exata (ex. 0,5 / 1,5) em selecoes soltas do overview do evento. */
+function pickLooseOverOddForLine(
+  selections: Record<string, Json>,
+  line: number,
+  anchorOver: number | null,
+): number | null {
+  const cands: number[] = [];
+  for (const sel of Object.values(selections)) {
+    const rec = asRecord(sel);
+    if (!rec) continue;
+    const name = String(rec.name ?? "").toLowerCase();
+    if (!name.includes("mais") && !name.includes("over")) continue;
+    const selLine = toNum(rec.handicap) ?? parseGoalLineFromSelectionName(name);
+    if (selLine == null || Math.abs(selLine - line) > 0.01) continue;
+    const price = toNum(rec.price ?? rec.odds);
+    if (price == null || price < 1.01 || price > 100) continue;
+    cands.push(price);
+  }
+  if (!cands.length) return null;
+  if (anchorOver == null) return cands[0];
+  return cands.slice().sort((a, b) =>
+    Math.abs(a - anchorOver) - Math.abs(b - anchorOver),
+  )[0];
+}
+
+function totalsFromDirectOverLine(
+  line: number,
+  overOdd: number,
+  goalsTotal: number,
+): TotalsOdds {
+  const t: TotalsOdds = {
+    ...EMPTY_TOTALS_ODDS,
+    elevated_over_lines: [],
+    over_0_line: line,
+    over_0_odd: overOdd,
+    min_over_absolute_line: line,
+  };
+  return canonicalizeTotalsOver05(t, goalsTotal);
+}
+
+function totalsFromLooseGoals(
+  loose: Array<{ line: number; overOdd: number; underOdd?: number }>,
+  goalsTotal: number,
+): TotalsOdds {
+  const empty: OddSlot = { line: null, odd: null, kind: null };
+  const underSlots: OddSlot[] = [empty, empty, empty];
+  const overSlots: OddSlot[] = [empty, empty, empty];
+  for (const { line, overOdd, underOdd } of loose) {
+    const slot = slotForLine(line, goalsTotal, "absolute");
+    if (slot == null) continue;
+    overSlots[slot] = { line, odd: overOdd, kind: "absolute" };
+    if (underOdd != null) {
+      underSlots[slot] = { line, odd: underOdd, kind: "absolute" };
+    }
+  }
+  const totals = slotsToTotalsOdds(
+    reorderSideOdds(underSlots, "under"),
+    reorderSideOdds(overSlots, "over"),
+    goalsTotal,
+  );
+  totals.min_over_absolute_line = loose.length ? loose[0].line : null;
+  return canonicalizeTotalsOver05(totals, goalsTotal);
+}
+
+/** Mercados de gols do evento: overview?eventId= + selecoes soltas + fallbacks. */
+async function fetchEventGoalMarkets(
+  eventId: string,
+  event: Json,
+  goalsTotal: number,
+  globalOverview: Json,
+): Promise<TotalsOdds> {
+  const base = `${OVERVIEW_URL}&eventId=${encodeURIComponent(eventId)}`;
+  const version = event.version;
+  const contentVersion = event.contentVersion;
+  const scopedUrls = [base];
+  if (version != null && contentVersion != null) {
+    scopedUrls.push(
+      `${base}&version=${encodeURIComponent(String(version))}` +
+      `&contentVersion=${encodeURIComponent(String(contentVersion))}`,
+    );
+  }
+
+  for (const url of scopedUrls) {
+    try {
+      const scoped = asRecord(await betanoGet(url));
+      if (!scoped?.selections) continue;
+      const selections = asRecord(scoped.selections) ?? {};
+      const anchorOver = mainHctgAnchorOver(event, scoped) ??
+        mainHctgAnchorOver(event, overview);
+      const needLine = goalsTotal + 0.5;
+      let totals = extractTotalsOdds(eventId, event, scoped, goalsTotal);
+
+      const directOver = pickLooseOverOddForLine(selections, needLine, anchorOver);
+      if (directOver != null) {
+        totals = mergeAndCanonicalizeTotals(
+          totals,
+          totalsFromDirectOverLine(needLine, directOver, goalsTotal),
+          goalsTotal,
+        );
+      }
+
+      const loose = harvestLooseGoalTotals(selections, goalsTotal);
+      if (loose.length) {
+        totals = mergeAndCanonicalizeTotals(
+          totals,
+          totalsFromLooseGoals(loose, goalsTotal),
+          goalsTotal,
+        );
+      }
+      if (canCaptureTrueOver05(totals, goalsTotal)) return totals;
+      if (totals.over_0_odd != null) return totals;
+      if (directOver != null) return totals;
+    } catch {
+      // tenta proxima URL
+    }
+  }
+  return fetchEventTotalsOdds(eventId, goalsTotal);
+}
+
 /** Extrai mercados/selecoes aninhados em marketOffers (inclui HCTG alternativos). */
 function flattenOffersMarkets(data: unknown): { markets: Json; selections: Json } {
   const markets: Json = {};
@@ -1083,8 +1275,6 @@ function supplementOverviewHctgOrphans(
   overview: Json,
   goalsTotal: number,
   totals: TotalsOdds,
-  claimedHctg: Set<string>,
-  _offerMarketHints: Set<string> = new Set(),
 ): TotalsOdds {
   const markets = asRecord(overview.markets) ?? {};
   const selections = asRecord(overview.selections) ?? {};
@@ -1106,6 +1296,44 @@ function supplementOverviewHctgOrphans(
     return null;
   };
 
+  let anchorOver: number | null = null;
+  for (const mid of marketIdList) {
+    const rec = asRecord(markets[mid]);
+    if (rec?.type === "HCTG") {
+      anchorOver = pickOverOdd(mid);
+      if (anchorOver != null) break;
+    }
+  }
+  const zoneId = eventZoneId(event);
+
+  const pickOrphan = (targetHc: number): string | null => {
+    const candidates: Array<{ mid: string; over: number }> = [];
+    for (const [mid, market] of Object.entries(markets)) {
+      if (marketIdList.includes(mid)) continue;
+      const rec = asRecord(market);
+      if (!rec || rec.type !== "HCTG") continue;
+      const line = toNum(rec.handicap);
+      if (line == null || Math.abs(line - targetHc) > 0.01) continue;
+      const meid = String(rec.eventId ?? rec.eventID ?? "");
+      const mz = String(rec.zoneId ?? "");
+      if (zoneId && mz && mz !== zoneId && meid !== String(event.id ?? event.eventId ?? "")) {
+        continue;
+      }
+      const over = pickOverOdd(mid);
+      if (over == null) continue;
+      candidates.push({ mid, over });
+    }
+    if (!candidates.length) return null;
+    if (anchorOver != null && candidates.length > 1) {
+      candidates.sort((a, b) =>
+        Math.abs(a.over - anchorOver!) - Math.abs(b.over - anchorOver!),
+      );
+    } else {
+      candidates.sort((a, b) => a.over - b.over);
+    }
+    return candidates[0].mid;
+  };
+
   const targetHandicaps = [
     goalsTotal + 0.5,
     goalsTotal + 1.5,
@@ -1118,22 +1346,8 @@ function supplementOverviewHctgOrphans(
       const hc = toNum(asRecord(markets[mid])?.handicap);
       return hc != null && Math.abs(hc - targetHc) < 0.01;
     })) continue;
-
-    const candidates: string[] = [];
-    for (const [mid, market] of Object.entries(markets)) {
-      if (marketIdList.includes(mid) || claimedHctg.has(mid)) continue;
-      const rec = asRecord(market);
-      if (!rec || rec.type !== "HCTG") continue;
-      const line = toNum(rec.handicap);
-      if (line == null || Math.abs(line - targetHc) > 0.01) continue;
-      if (pickOverOdd(mid) == null) continue;
-      candidates.push(mid);
-    }
-    if (!candidates.length) continue;
-    candidates.sort((a, b) => (pickOverOdd(a) ?? 999) - (pickOverOdd(b) ?? 999));
-    const chosen = candidates[0];
-    claimedHctg.add(chosen);
-    extraIds.push(chosen);
+    const chosen = pickOrphan(targetHc);
+    if (chosen) extraIds.push(chosen);
   }
 
   if (!extraIds.length) return totals;
@@ -1817,15 +2031,13 @@ async function touchMercadoWatching(
     last_minute: minute,
     updated_at: nowIso,
   }).eq("event_id", eventId).eq("resultado", "watching");
-  if (hadMinPlus2) {
-    await appendMercadoElevatedOddsLog(
-      supabase,
-      eventId,
-      ctx,
-      totals,
-      existing.elevated_odds_log,
-    );
-  }
+  await appendMercadoElevatedOddsLog(
+    supabase,
+    eventId,
+    ctx,
+    totals,
+    existing.elevated_odds_log,
+  );
 }
 
 async function countGoalsAfterMinute(
@@ -2003,9 +2215,7 @@ async function revertMercadoInvalidPending(
   const needLine = goalsAtCapture + 0.5;
   const lineOk = row.over_05_line != null &&
     Math.abs(row.over_05_line - needLine) <= 0.01;
-  const higherSlot = [totals.over_0_line, totals.over_1_line, totals.over_2_line]
-    .some((line) => line != null && line > needLine + 0.01);
-  if (lineOk && !higherSlot && canCaptureTrueOver05(totals, goalsAtCapture)) return;
+  if (lineOk && canCaptureTrueOver05(totals, goalsAtCapture)) return;
   const nowIso = new Date().toISOString();
   await supabase.from("futebol_mercado_gols_05").update({
     resultado: "watching",
@@ -2207,7 +2417,6 @@ Deno.serve(async (req) => {
     let mercadoCaptured = 0;
     let mercadoWins = 0;
     const liveIds: string[] = [];
-    const claimedHctgMarkets = new Set<string>();
 
     const anchorOverForSort = (ev: Json): number => {
       const markets = asRecord(overview.markets) ?? {};
@@ -2230,6 +2439,16 @@ Deno.serve(async (req) => {
     };
     candidates.sort((a, b) => anchorOverForSort(b) - anchorOverForSort(a));
 
+    const { data: mercadoLiveRows } = await supabase
+      .from("futebol_mercado_gols_05")
+      .select("event_id,resultado")
+      .eq("is_live", true)
+      .in("resultado", ["watching", "pending"]);
+    const mercadoResultadoByEvent = new Map<string, string>();
+    for (const row of mercadoLiveRows ?? []) {
+      mercadoResultadoByEvent.set(String(row.event_id), String(row.resultado));
+    }
+
     for (const event of candidates) {
       const eventId = String(event.event_id);
       const teams = extractTeams(event);
@@ -2239,15 +2458,21 @@ Deno.serve(async (req) => {
       const injury = extractInjuryTime(event);
       const ml = extractMlOdds(eventId, overview);
       const goalsTotal = (score.home ?? 0) + (score.away ?? 0);
+      const mercadoResultado = mercadoResultadoByEvent.get(eventId) ?? null;
+      const mercadoPending = mercadoResultado === "pending";
+      const mercadoWatching = mercadoResultado === "watching";
       let totals = extractTotalsOdds(eventId, event, overview, goalsTotal);
-      let offerMarketHints = new Set<string>();
-      if (needsSupplementalTotalsFetch(totals, goalsTotal)) {
+      const needDeepGoalMarkets = !mercadoPending && (
+        needsSupplementalTotalsFetch(totals, goalsTotal) ||
+        (mercadoWatching && !canCaptureTrueOver05(totals, goalsTotal))
+      );
+      if (needDeepGoalMarkets) {
         try {
           const offersData = await betanoGet(
             `${BETANO_BASE}/api/event/markets-offers/${eventId}`,
           );
           const fromOffers = flattenOffersMarkets(offersData);
-          offerMarketHints = new Set(Object.keys(fromOffers.markets));
+          const offerMarketHints = new Set(Object.keys(fromOffers.markets));
           if (offerMarketHints.size > 0) {
             const offerOverview = {
               markets: fromOffers.markets,
@@ -2264,24 +2489,32 @@ Deno.serve(async (req) => {
         } catch {
           // markets-offers opcional
         }
-        if (needsSupplementalTotalsFetch(totals, goalsTotal)) {
-          const extra = await fetchEventTotalsOdds(eventId, goalsTotal);
+        if (
+          needsSupplementalTotalsFetch(totals, goalsTotal) ||
+          (mercadoWatching && !canCaptureTrueOver05(totals, goalsTotal))
+        ) {
+          const extra = await fetchEventGoalMarkets(eventId, event, goalsTotal, overview);
           totals = mergeAndCanonicalizeTotals(totals, extra, goalsTotal);
         }
       }
-      totals = supplementOverviewHctgOrphans(
-        event, overview, goalsTotal, totals, claimedHctgMarkets, offerMarketHints,
-      );
+      if (!mercadoPending) {
+        totals = supplementOverviewHctgOrphans(
+          event, overview, goalsTotal, totals,
+        );
+      }
       // #region agent log
-      if (eventId === "88363620") {
+      if (eventId === "86656223" || eventId === "88363620") {
         console.log(JSON.stringify({
           sessionId: "e14164",
-          hypothesisId: "H1-H5",
-          runId: "post-fix",
-          location: "index.ts:totals_mexico",
-          message: "totals after supplement",
+          hypothesisId: eventId === "86656223" ? "H-TAC" : "H-MEX",
+          runId: "post-fix-tacoma",
+          location: "index.ts:totals_after_deep",
+          message: "totals after event deep fetch",
           data: {
+            eventId,
             goalsTotal,
+            mercadoResultado,
+            needDeepGoalMarkets,
             over_0_line: totals.over_0_line,
             over_0_odd: totals.over_0_odd,
             over_1_line: totals.over_1_line,
@@ -2508,12 +2741,14 @@ Deno.serve(async (req) => {
         },
         mercadoRow as MercadoGols05Row | null,
       );
-      await revertMercadoInvalidPending(
-        supabase,
-        eventId,
-        totals,
-        mercadoRow as MercadoGols05Row | null,
-      );
+      if (mercadoRow?.resultado !== "pending") {
+        await revertMercadoInvalidPending(
+          supabase,
+          eventId,
+          totals,
+          mercadoRow as MercadoGols05Row | null,
+        );
+      }
       if (mercadoAction === "captured") mercadoCaptured += 1;
 
       const needsSettle = mercadoRow?.resultado === "pending" || mercadoAction === "captured";
