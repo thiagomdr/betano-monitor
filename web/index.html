@@ -362,8 +362,12 @@
       return raw.filter((e) => e && typeof e.line === 'number' && typeof e.odd === 'number');
     }
 
+    function estrategiaPopoverBtn(eventId, label, cssClass) {
+      return `<button type="button" class="estrategia-badge ${cssClass} estrategia-popover-btn" data-super-popover="${eventId}" title="Registro das odds +0,5">${label}</button>`;
+    }
+
     function superEstrategiaBadge(eventId) {
-      return `<button type="button" class="estrategia-badge super estrategia-popover-btn" data-super-popover="${eventId}" title="Registro das odds +0,5">Super Estrategia</button>`;
+      return estrategiaPopoverBtn(eventId, 'Super Estrategia', 'super');
     }
 
     function dedupeConsecutiveElevatedLines(log) {
@@ -497,7 +501,7 @@
       const { estrategia, resultado, had_min_plus2_before: hadPhase, event_id: eventId } = row;
       if (estrategia === 'super_05') return superEstrategiaBadge(eventId);
       if (estrategia === 'imediato_05') {
-        return '<span class="estrategia-badge imediato">Imediato</span>';
+        return estrategiaPopoverBtn(eventId, 'Imediato', 'imediato');
       }
       if (resultado === 'sem_linha_05' || resultado === 'skipped') {
         return '<span class="muted">—</span>';
