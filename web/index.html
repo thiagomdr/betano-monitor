@@ -471,7 +471,7 @@
               <th>Resultado</th>
               <th>Lucro 1u</th>
               <th>Placar final</th>
-              <th>Encerrado</th>
+              <th title="Ao vivo com minuto ou data de encerramento">Status</th>
               <th>Link</th>
               <th title="Remover da lista Mercado +0,5"></th>
             </tr>
@@ -654,6 +654,7 @@
     let historyCache = { games: [], goals: [] };
     let historyPagination = { offset: 0, hasMore: true, loading: false };
     let mercado05Cache = [];
+    let mercado05LiveMinutes = {};
     let mercado05Loading = false;
 
     function mercadoResultadoLabel(resultado) {
@@ -805,10 +806,15 @@
       return row.updated_at || row.captured_at || row.created_at || '';
     }
 
-    function mercadoEncerradoLabel(row) {
-      if (row.captured_at) return formatDate(row.captured_at);
+    function mercadoStatusLabel(row) {
+      if (row.is_live) {
+        const m = row.last_minute ?? mercado05LiveMinutes[row.event_id];
+        return m != null
+          ? `<span class="muted">Ao Vivo ${m}'</span>`
+          : '<span class="muted">Ao Vivo</span>';
+      }
+      if (row.settled_at) return formatDate(row.settled_at);
       if (row.placar_final && row.updated_at) return formatDate(row.updated_at);
-      if (row.resultado === 'watching') return '<span class="muted">ao vivo</span>';
       return formatDate(row.updated_at || row.created_at);
     }
 
@@ -851,15 +857,11 @@
           <td>${mercadoResultadoLabel(row.resultado)}</td>
           <td>${formatMercadoProfit(mercadoSimProfit(row))}</td>
           <td>${row.placar_final || '—'}</td>
-          <td>${mercadoEncerradoLabel(row)}</td>
+          <td>${mercadoStatusLabel(row)}</td>
           <td>${link}</td>
           <td><button type="button" class="mercado-delete-btn" data-delete-mercado="${row.event_id}" data-delete-label="${match.replace(/"/g, '&quot;')}" title="Remover da lista">🗑</button></td>
         </tr>`;
       }).join('');
-      // #region agent log
-      const deleteBtnCount = (tbody.innerHTML.match(/data-delete-mercado/g) || []).length;
-      fetch('http://127.0.0.1:7904/ingest/86615625-6ae5-4e98-a1da-0a5f0f15fc42',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'e14164'},body:JSON.stringify({sessionId:'e14164',location:'index.html:renderMercado05',message:'mercado render',data:{rowCount:rows.length,deleteBtnCount,hasDeleteCss:!!document.querySelector('style')?.textContent?.includes('mercado-delete-btn')},timestamp:Date.now(),hypothesisId:'H1-H3'})}).catch(()=>{});
-      // #endregion
     }
 
     async function loadMercado05() {
@@ -867,10 +869,21 @@
       mercado05Loading = true;
       const tbody = document.getElementById('mercado-05-tbody');
       try {
-        mercado05Cache = await supabaseGet(
-          appCfg.url,
-          appCfg.anonKey,
-          'futebol_mercado_gols_05?select=*&order=updated_at.desc&limit=500',
+        const [rows, liveRows] = await Promise.all([
+          supabaseGet(
+            appCfg.url,
+            appCfg.anonKey,
+            'futebol_mercado_gols_05?select=*&order=updated_at.desc&limit=500',
+          ),
+          supabaseGet(
+            appCfg.url,
+            appCfg.anonKey,
+            'futebol_live_rows?select=event_id,minute',
+          ),
+        ]);
+        mercado05Cache = rows;
+        mercado05LiveMinutes = Object.fromEntries(
+          (liveRows ?? []).map((r) => [r.event_id, r.minute]),
         );
         renderMercado05();
       } catch (err) {

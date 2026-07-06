@@ -1361,6 +1361,8 @@ async function applyMercadoGols05Capture(
     over_05_line: totals.over_0_line,
     captured_at: nowIso,
     resultado: "pending",
+    last_minute: minute,
+    is_live: true,
     updated_at: nowIso,
   }).eq("event_id", eventId);
   if (onlyResultado) q = q.eq("resultado", onlyResultado);
@@ -1454,6 +1456,7 @@ async function processMercadoGols05Live(
         captured_at: nowIso,
         resultado: "pending",
         is_live: true,
+        last_minute: minute,
         updated_at: nowIso,
       });
       return "captured";
@@ -1470,6 +1473,7 @@ async function processMercadoGols05Live(
       had_min_plus2_before: over1 != null,
       resultado: "watching",
       is_live: true,
+      last_minute: minute,
       updated_at: nowIso,
     });
     return null;
@@ -1481,6 +1485,7 @@ async function processMercadoGols05Live(
       await supabase.from("futebol_mercado_gols_05").update({
         indisponivel_ate_minuto: minute,
         had_min_plus2_before: hadMinPlus2,
+        last_minute: minute,
         updated_at: nowIso,
       }).eq("event_id", eventId).eq("resultado", "watching");
       return null;
@@ -1514,6 +1519,14 @@ async function processMercadoGols05Live(
       "watching",
     );
     return "captured";
+  }
+
+  if (existing.resultado === "pending") {
+    await supabase.from("futebol_mercado_gols_05").update({
+      last_minute: minute,
+      is_live: true,
+      updated_at: nowIso,
+    }).eq("event_id", eventId).eq("resultado", "pending");
   }
 
   return null;
