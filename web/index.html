@@ -807,7 +807,11 @@
     }
 
     function mercadoStatusLabel(row) {
-      if (row.is_live) {
+      const open = row.resultado === 'watching' || row.resultado === 'pending';
+      // #region agent log
+      fetch('http://127.0.0.1:7904/ingest/86615625-6ae5-4e98-a1da-0a5f0f15fc42',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'e14164'},body:JSON.stringify({sessionId:'e14164',location:'index.html:mercadoStatusLabel',message:'status branch',data:{event_id:row.event_id,resultado:row.resultado,is_live:row.is_live,open,hasSettledAt:!!row.settled_at},timestamp:Date.now(),hypothesisId:'H1-H2'})}).catch(()=>{});
+      // #endregion
+      if (open && row.is_live) {
         const m = row.last_minute ?? mercado05LiveMinutes[row.event_id];
         return m != null
           ? `<span class="muted">Ao Vivo ${m}'</span>`
@@ -885,6 +889,10 @@
         mercado05LiveMinutes = Object.fromEntries(
           (liveRows ?? []).map((r) => [r.event_id, r.minute]),
         );
+        const winStillLive = rows.filter((r) => r.resultado === 'win' && r.is_live).length;
+        // #region agent log
+        fetch('http://127.0.0.1:7904/ingest/86615625-6ae5-4e98-a1da-0a5f0f15fc42',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'e14164'},body:JSON.stringify({sessionId:'e14164',location:'index.html:loadMercado05',message:'mercado loaded',data:{total:rows.length,winStillLive,openLive:rows.filter((r)=>(r.resultado==='watching'||r.resultado==='pending')&&r.is_live).length},timestamp:Date.now(),hypothesisId:'H1'})}).catch(()=>{});
+        // #endregion
         renderMercado05();
       } catch (err) {
         if (tbody) {

@@ -1586,6 +1586,21 @@ async function finalizeMercadoGols05OffLive(
     else if (outcome === "loss") losses += 1;
   }
 
+  const { data: settledStillLive } = await supabase
+    .from("futebol_mercado_gols_05")
+    .select("event_id")
+    .eq("is_live", true)
+    .in("resultado", ["win", "loss", "sem_linha_05", "skipped", "excluido"]);
+
+  for (const row of settledStillLive ?? []) {
+    const eventId = String(row.event_id);
+    if (liveIds.includes(eventId)) continue;
+    await supabase.from("futebol_mercado_gols_05").update({
+      is_live: false,
+      updated_at: nowIso,
+    }).eq("event_id", eventId);
+  }
+
   return { wins, losses, semLinha };
 }
 
