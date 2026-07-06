@@ -107,6 +107,9 @@
       border-color: var(--betano-orange);
       background: #fff;
     }
+    .summary-card.summary-lucro {
+      background: #000;
+    }
     .summary-card.summary-pendentes .summary-label,
     .summary-card.summary-pendentes .summary-value {
       color: var(--betano-orange);
@@ -707,7 +710,7 @@
           <div class="summary-label">Pendentes</div>
           <div class="summary-value">${formatNumber(pending)}</div>
         </div>
-        <div class="summary-card">
+        <div class="summary-card summary-lucro">
           <div class="summary-label">Lucro 1u (liquidadas)</div>
           <div class="summary-value mercado-profit ${profitClass}">${sign}${formatNumber(profit)} u</div>
         </div>
