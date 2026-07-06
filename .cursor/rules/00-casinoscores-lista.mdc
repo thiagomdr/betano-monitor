@@ -1,49 +1,67 @@
 ---
-description: Modelo padrao — Futebol live Betano via Supabase (BD-first)
+description: Modelo padrao — Mercado de Gols +0,5 Betano via Supabase (BD-first)
 alwaysApply: true
 ---
 
-# Futebol Live Betano (Supabase) — BD-first
+# Mercado de Gols +0,5 (Betano / Supabase) — BD-first
 
 ## Principio
 
-- **Fonte da verdade = PostgreSQL (Supabase)**. Painel so le tabelas/views; nunca parseia JSON bruto.
+- **Fonte da verdade = PostgreSQL (Supabase)**. Painel so le tabelas; nunca parseia JSON bruto.
 - **Minimo de parser** na Edge Function: extrair campos estruturados da API e **gravar no BD**; logica de negocio e validacao preferencialmente em **colunas + views SQL**.
-- **Nunca confiar na UI** para corrigir dados faltantes — corrigir na coleta/persistencia e marcar `goals_status` no BD.
+- **Nunca confiar na UI** para corrigir dados faltantes — corrigir na coleta/persistencia.
 
 ## Escopo
 
-- Coleta **Betano** (`danae-webapi`) + **Sportradar** (`betradarMatchId`) na Edge Function `betano-futebol-live`.
-- **Nao** coletar do IP da casa do usuario.
-- **Nao** usar cookie/sessao de conta Betano na function.
-- Painel `web/` le `futebol_live_*`, `futebol_historico_*` e view `futebol_historico_validacao` via anon key.
-- Odds Under/Over congeladas aos **85'** em `futebol_historico_jogos` (`odds_85_captured_at` + linhas `odd_*_line`).
+### Painel (`web/index.html`)
+
+- **Unica tela:** Mercado de Gols +0,5 (sem abas Ao Vivo / Historico).
+- Le **`futebol_mercado_gols_05`** (lista, resultados, snapshot ao vivo) e **`futebol_live_meta`** (ultima coleta / erro no header).
+- **Nao** le `futebol_live_rows` nem `futebol_historico_*` no frontend.
+- Exclusao pelo painel = soft-delete: `resultado = 'excluido'` (policy UPDATE anon); cron **nao** recria linha `excluido`.
+
+### Coleta (Edge Function `betano-futebol-live`)
+
+- **Betano** (`danae-webapi`) + **Sportradar** (`betradarMatchId`) na nuvem Supabase.
+- **Nao** coletar do IP da casa do usuario; **nao** usar cookie/sessao de conta Betano.
+- **Nao** gravar `futebol_live_rows` (legado); meta em `futebol_live_meta`.
+- Mercado +0,5: captura, elevated log, liquidacao GREEN/RED, snapshot ao vivo em `futebol_mercado_gols_05` (`last_minute`, `live_score`, `live_over_*`).
+- Enquanto `watching`/`pending` sem captura: deep fetch por evento (`overview/latest?eventId=` + selecoes soltas).
+- Apos captura (`pending`): **parar** deep fetch de odds; liquidar por gols/placar.
+- `futebol_historico_jogos` + `futebol_historico_gols` permanecem no backend para placar persistente e minuto do gol GREEN.
+
+## Mercado +0,5 (regra de negocio)
+
+- **Over +0,5 real** = linha **Mais de (placar + 0,5)** — menor linha Over absoluta, nunca 6,5/7,5 quando placar pede 5,5.
+- `canCaptureTrueOver05`: exige `over_0` = needLine e `min_over_absolute_line` = needLine.
+- Estrategias: `super_05` (apos fase so +1,5/+2,5) e `imediato_05`.
+- Resultados: `watching` | `pending` | `win` | `loss` | `sem_linha_05` | `excluido`.
 
 ## Integridade de odds (obrigatorio)
 
-- Slots 0/1/2 = placar + 0,5 / +1,5 / +2,5 (aceita linha absoluta ou gols restantes 0,5/1,5/2,5 na API).
+- Slots 0/1/2 = placar + 0,5 / +1,5 / +2,5 (linha absoluta ou gols restantes na API).
 - Validacao **reorderSideOdds** + monotonicidade: Under odd_0 >= odd_1 >= odd_2; Over odd_0 <= odd_1 <= odd_2; invalido = null no BD.
-- Um mercado de gols por evento (nao misturar mercados); modo `remaining` vs `absolute` separados.
+- Um mercado de gols por evento; modo `remaining` vs `absolute` separados.
+- Log Super (`elevated_odds_log`): apenas linha placar+0,5 verdadeira, nao linhas elevadas 6,5/7,5.
 
-## Integridade de gols (obrigatorio)
+## Integridade de gols (backend — liquidacao mercado)
 
-- Tabela `futebol_historico_gols`: **UNIQUE CONSTRAINT** (nao indice parcial) — `(event_id, sportradar_goal_id)` e `(event_id, minute, team_side, score_home, score_away)` — PostgREST upsert exige constraint nomeada.
-- Colunas em `futebol_historico_jogos`: `goals_expected`, `goals_recorded`, `goals_status` (`ok` | `missing` | `partial` | `mismatch`).
-- View `futebol_historico_validacao` para auditoria sem parser no frontend.
-- Apos cada persistencia de gols: **syncGoalsIntegrity** atualiza contadores e status no BD.
-- Backfill/reconciliacao na function para jogos com `goals_status != 'ok'`.
+- `futebol_historico_gols`: UNIQUE `(event_id, sportradar_goal_id)` e `(event_id, minute, team_side, score_home, score_away)`.
+- `syncGoalsIntegrity` + reconciliacao na function para `goals_status`.
+- GREEN/RED do mercado: `countGoalsAfterMinute` apos `disponivel_desde_minuto`.
 
 ## Parser (permitido vs evitar)
 
 | Permitido | Evitar |
 |-----------|--------|
-| Campos JSON tipados (`event.betradarMatchId`, `values["125"]`) | Regex em JSON.stringify para odds/gols |
-| `_doctype === 'goal'` + `_id` + `result.home/away` na timeline | Heuristicas frageis de texto (`desc.includes("goal")`) |
+| Campos JSON tipados (`event.betradarMatchId`, selecoes HCTG) | Regex em JSON.stringify para odds/gols |
+| `_doctype === 'goal'` + timeline Sportradar | Heuristicas frageis de texto |
 | Upsert idempotente no BD | delete-all + insert que apaga dados se upsert falhar |
+| `overview/latest?eventId=` para odds soltas | Scrape HTML da pagina Betano |
 
 ## Fluxo
 
-1. Migration + `supabase functions deploy betano-futebol-live --no-verify-jwt`
+1. Migration (`supabase db query --linked -f ...`) + `supabase functions deploy betano-futebol-live --no-verify-jwt`
 2. Cron `*/2 * * * *` chama a function
 3. `web/supabase.config.json` com url + anonKey
 4. `scripts/serve-monitor.ps1` → localhost:8080
@@ -51,5 +69,7 @@ alwaysApply: true
 ## Codigo
 
 - Function: `supabase/functions/betano-futebol-live/`
-- Tabelas: `futebol_live_*`, `futebol_historico_*`
-- Nao reintroduzir coleta local Betano no PC do usuario
+- Painel: `web/index.html`
+- Tabela principal UI: `futebol_mercado_gols_05`
+- Backend auxiliar: `futebol_historico_jogos`, `futebol_historico_gols`, `futebol_live_meta`, `futebol_live_coleta_config`
+- Nao reintroduzir coleta local Betano no PC do usuario nem abas Ao Vivo/Historico no painel
