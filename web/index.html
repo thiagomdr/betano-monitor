@@ -309,6 +309,24 @@
     #panel-mercado-05 tbody tr:hover td {
       background: rgba(232, 238, 247, 0.08);
     }
+    .mercado-delete-btn {
+      background: transparent;
+      border: none;
+      color: var(--muted);
+      cursor: pointer;
+      padding: 0.2rem 0.35rem;
+      font-size: 1rem;
+      line-height: 1;
+      border-radius: 4px;
+    }
+    .mercado-delete-btn:hover {
+      color: #ff6b6b;
+      background: rgba(220, 53, 69, 0.15);
+    }
+    .mercado-delete-btn:disabled {
+      opacity: 0.45;
+      cursor: wait;
+    }
   </style>
 </head>
 <body>
@@ -455,10 +473,11 @@
               <th>Placar final</th>
               <th>Encerrado</th>
               <th>Link</th>
+              <th title="Remover da lista Mercado +0,5"></th>
             </tr>
           </thead>
           <tbody id="mercado-05-tbody">
-            <tr><td colspan="15" class="empty">Carregando...</td></tr>
+            <tr><td colspan="16" class="empty">Carregando...</td></tr>
           </tbody>
         </table>
       </div>
@@ -584,6 +603,35 @@
           <td>${link}</td>
         </tr>`;
       }).join('');
+    }
+
+    async function supabaseDelete(url, anonKey, path) {
+      const res = await fetch(`${url}/rest/v1/${path}`, {
+        method: 'DELETE',
+        headers: {
+          apikey: anonKey,
+          Authorization: `Bearer ${anonKey}`,
+        },
+      });
+      if (!res.ok) {
+        const text = await res.text();
+        throw new Error(`Supabase ${res.status}: ${text.slice(0, 200)}`);
+      }
+    }
+
+    async function deleteMercado05Row(eventId, label) {
+      if (!appCfg || !eventId) return;
+      const msg = label
+        ? `Remover "${label}" da lista Mercado +0,5?\n\nO jogo permanece no Historico; o cron nao recria esta linha.`
+        : 'Remover este jogo da lista Mercado +0,5?';
+      if (!window.confirm(msg)) return;
+      await supabaseDelete(
+        appCfg.url,
+        appCfg.anonKey,
+        `futebol_mercado_gols_05?event_id=eq.${encodeURIComponent(eventId)}`,
+      );
+      mercado05Cache = mercado05Cache.filter((r) => r.event_id !== eventId);
+      renderMercado05();
     }
 
     async function supabaseGet(url, anonKey, path) {
@@ -773,7 +821,7 @@
       renderMercado05Summary(rows);
       if (!rows.length) {
         tbody.innerHTML =
-          '<tr><td colspan="15" class="empty">Nenhum jogo monitorado ainda. Novos jogos serao registrados automaticamente.</td></tr>';
+          '<tr><td colspan="16" class="empty">Nenhum jogo monitorado ainda. Novos jogos serao registrados automaticamente.</td></tr>';
         return;
       }
       tbody.innerHTML = rows.map((row, i) => {
@@ -805,6 +853,7 @@
           <td>${row.placar_final || '—'}</td>
           <td>${mercadoEncerradoLabel(row)}</td>
           <td>${link}</td>
+          <td><button type="button" class="mercado-delete-btn" data-delete-mercado="${row.event_id}" data-delete-label="${match.replace(/"/g, '&quot;')}" title="Remover da lista">🗑</button></td>
         </tr>`;
       }).join('');
     }
@@ -823,7 +872,7 @@
       } catch (err) {
         if (tbody) {
           tbody.innerHTML =
-            `<tr><td colspan="15" class="empty">${err.message || String(err)}</td></tr>`;
+            `<tr><td colspan="16" class="empty">${err.message || String(err)}</td></tr>`;
         }
       } finally {
         mercado05Loading = false;
@@ -1282,10 +1331,24 @@
             `<tr><td colspan="18" class="empty">${msg}</td></tr>`;
         } else if (tab === 'mercado-05') {
           document.getElementById('mercado-05-tbody').innerHTML =
-            `<tr><td colspan="15" class="empty">${msg}</td></tr>`;
+            `<tr><td colspan="16" class="empty">${msg}</td></tr>`;
         }
       }
     }
+
+    document.getElementById('mercado-05-tbody')?.addEventListener('click', async (e) => {
+      const btn = e.target.closest('[data-delete-mercado]');
+      if (!btn || btn.disabled) return;
+      const eventId = btn.getAttribute('data-delete-mercado');
+      const label = btn.getAttribute('data-delete-label') || '';
+      btn.disabled = true;
+      try {
+        await deleteMercado05Row(eventId, label);
+      } catch (err) {
+        window.alert(err.message || String(err));
+        btn.disabled = false;
+      }
+    });
 
     document.querySelectorAll('.tab-btn').forEach((btn) => {
       btn.addEventListener('click', () => activateTab(btn.dataset.tab));
