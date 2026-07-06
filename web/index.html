@@ -856,6 +856,10 @@
           <td><button type="button" class="mercado-delete-btn" data-delete-mercado="${row.event_id}" data-delete-label="${match.replace(/"/g, '&quot;')}" title="Remover da lista">🗑</button></td>
         </tr>`;
       }).join('');
+      // #region agent log
+      const deleteBtnCount = (tbody.innerHTML.match(/data-delete-mercado/g) || []).length;
+      fetch('http://127.0.0.1:7904/ingest/86615625-6ae5-4e98-a1da-0a5f0f15fc42',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'e14164'},body:JSON.stringify({sessionId:'e14164',location:'index.html:renderMercado05',message:'mercado render',data:{rowCount:rows.length,deleteBtnCount,hasDeleteCss:!!document.querySelector('style')?.textContent?.includes('mercado-delete-btn')},timestamp:Date.now(),hypothesisId:'H1-H3'})}).catch(()=>{});
+      // #endregion
     }
 
     async function loadMercado05() {
