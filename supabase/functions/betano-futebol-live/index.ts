@@ -471,7 +471,9 @@ function isElevatedOverLine(
   return selLine > goalsTotal + 0.5 + 0.01;
 }
 
-function mercadoHadElevatedOverPhase(totals: TotalsOdds): boolean {
+/** Fase so com linhas Over elevadas (+1,5/+2,5), sem +0,5 real no mesmo snapshot. */
+function mercadoHadElevatedOverPhase(totals: TotalsOdds, goalsTotal: number): boolean {
+  if (canCaptureTrueOver05(totals, goalsTotal)) return false;
   return totals.over_1_odd != null || totals.over_2_odd != null ||
     totals.elevated_over_seen;
 }
@@ -2115,7 +2117,7 @@ async function processMercadoGols05Live(
   const minute = ctx.minute;
   const goalsTotal = goalsTotalFromScoreText(ctx.score_text);
   const over0 = totals.over_0_odd;
-  const elevatedPhase = mercadoHadElevatedOverPhase(totals);
+  const elevatedPhase = mercadoHadElevatedOverPhase(totals, goalsTotal);
   const trueOver05 = canCaptureTrueOver05(totals, goalsTotal);
 
   if (existing?.resultado === "excluido") return null;

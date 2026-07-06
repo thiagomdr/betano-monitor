@@ -34,7 +34,7 @@ alwaysApply: true
 
 - **Over +0,5 real** = linha **Mais de (placar + 0,5)** — menor linha Over absoluta, nunca 6,5/7,5 quando placar pede 5,5.
 - `canCaptureTrueOver05`: exige `over_0` = needLine e `min_over_absolute_line` = needLine.
-- Estrategias: `super_05` (apos fase so +1,5/+2,5) e `imediato_05`.
+- Estrategias: `super_05` (apos fase **sem** +0,5 real, so +1,5/+2,5) e `imediato_05` (+0,5 na 1a detecao). `mercadoHadElevatedOverPhase` ignora snapshot que ja tem +0,5 real.
 - Resultados: `watching` | `pending` | `win` | `loss` | `sem_linha_05` | `excluido`.
 
 ## Integridade de odds (obrigatorio)
