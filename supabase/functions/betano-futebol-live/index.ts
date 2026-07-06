@@ -1635,7 +1635,6 @@ async function processMercadoGols05Live(
   eventId: string,
   totals: TotalsOdds,
   ctx: MercadoGols05Context,
-  isNewGame: boolean,
   existing: MercadoGols05Row | null,
 ): Promise<"captured" | "win" | "loss" | null> {
   const nowIso = new Date().toISOString();
@@ -1645,9 +1644,9 @@ async function processMercadoGols05Live(
   const elevatedPhase = mercadoHadElevatedOverPhase(totals);
   const trueOver05 = canCaptureTrueOver05(totals, goalsTotal);
 
-  if (!existing) {
-    if (!isNewGame) return null;
+  if (existing?.resultado === "excluido") return null;
 
+  if (!existing) {
     if (over0 != null && trueOver05) {
       await supabase.from("futebol_mercado_gols_05").insert({
         event_id: eventId,
@@ -2163,7 +2162,6 @@ Deno.serve(async (req) => {
         goalsMissing += 1;
       }
 
-      const isNewGame = !prevGame;
       const { data: mercadoRow } = await supabase
         .from("futebol_mercado_gols_05")
         .select(
@@ -2185,7 +2183,6 @@ Deno.serve(async (req) => {
           minute,
           score_text: score.text,
         },
-        isNewGame,
         mercadoRow as MercadoGols05Row | null,
       );
       await revertMercadoInvalidPending(

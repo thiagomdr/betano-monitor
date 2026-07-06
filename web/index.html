@@ -376,12 +376,12 @@
   </header>
   <main>
     <div class="tabs">
-      <button type="button" class="tab-btn active" data-tab="live">Ao vivo</button>
+      <button type="button" class="tab-btn active" data-tab="mercado-05">Mercado de Gols +0,5</button>
+      <button type="button" class="tab-btn" data-tab="live">Ao vivo</button>
       <button type="button" class="tab-btn" data-tab="history">Histórico</button>
-      <button type="button" class="tab-btn" data-tab="mercado-05">Mercado de Gols +0,5</button>
     </div>
 
-    <section class="panel active" id="panel-live">
+    <section class="panel" id="panel-live">
       <p class="hint">
         Todos os jogos <strong>live</strong> da Betano (para estudar antes) ·
         destaque a partir dos <strong>85'</strong> para manter placar ·
@@ -486,7 +486,7 @@
       </div>
     </section>
 
-    <section class="panel" id="panel-mercado-05">
+    <section class="panel active" id="panel-mercado-05">
       <p class="hint">
         <strong>Super Estratégia</strong> = fase com linha acima do +0,5 (+1,5/+2,5 ou Mais de 4,5/5,5) antes do +0,5 ·
         <strong>Imediato</strong> = +0,5 já na 1ª coleta ou ao surgir sem esperar +1,5 ·
@@ -645,6 +645,23 @@
       }).join('');
     }
 
+    async function supabasePatch(url, anonKey, path, body) {
+      const res = await fetch(`${url}/rest/v1/${path}`, {
+        method: 'PATCH',
+        headers: {
+          apikey: anonKey,
+          Authorization: `Bearer ${anonKey}`,
+          'Content-Type': 'application/json',
+          Prefer: 'return=minimal',
+        },
+        body: JSON.stringify(body),
+      });
+      if (!res.ok) {
+        const text = await res.text();
+        throw new Error(`Supabase ${res.status}: ${text.slice(0, 200)}`);
+      }
+    }
+
     async function supabaseDelete(url, anonKey, path) {
       const res = await fetch(`${url}/rest/v1/${path}`, {
         method: 'DELETE',
@@ -665,10 +682,11 @@
         ? `Remover "${label}" da lista Mercado +0,5?\n\nO jogo permanece no Historico; o cron nao recria esta linha.`
         : 'Remover este jogo da lista Mercado +0,5?';
       if (!window.confirm(msg)) return;
-      await supabaseDelete(
+      await supabasePatch(
         appCfg.url,
         appCfg.anonKey,
         `futebol_mercado_gols_05?event_id=eq.${encodeURIComponent(eventId)}`,
+        { resultado: 'excluido', updated_at: new Date().toISOString() },
       );
       mercado05Cache = mercado05Cache.filter((r) => r.event_id !== eventId);
       renderMercado05();
@@ -922,10 +940,14 @@
       return `${odd} <span class="muted" title="Linha Mais de (total gols)">+${formatNumber(row.over_05_line)}</span>`;
     }
 
+    function mercadoVisibleRows(rows) {
+      return rows.filter((r) => r.resultado !== 'excluido');
+    }
+
     function renderMercado05() {
       const tbody = document.getElementById('mercado-05-tbody');
       if (!tbody) return;
-      const rows = mercado05Cache.slice().sort((a, b) =>
+      const rows = mercadoVisibleRows(mercado05Cache).slice().sort((a, b) =>
         String(mercadoSortKey(b)).localeCompare(String(mercadoSortKey(a))),
       );
       renderMercado05Summary(rows);
@@ -1414,11 +1436,11 @@
 
     function tabFromHash() {
       const h = location.hash.replace('#', '');
-      return VALID_TABS.has(h) ? h : 'live';
+      return VALID_TABS.has(h) ? h : 'mercado-05';
     }
 
     async function activateTab(tab) {
-      if (!VALID_TABS.has(tab)) tab = 'live';
+      if (!VALID_TABS.has(tab)) tab = 'mercado-05';
 
       document.querySelectorAll('.tab-btn').forEach((b) => {
         b.classList.toggle('active', b.dataset.tab === tab);
@@ -1512,7 +1534,9 @@
 
     activateTab(tabFromHash());
     setInterval(() => {
-      if (tabFromHash() === 'live') initLive();
+      const tab = tabFromHash();
+      if (tab === 'live') initLive();
+      else if (tab === 'mercado-05') loadMercado05();
     }, 60000);
   </script>
 </body>
