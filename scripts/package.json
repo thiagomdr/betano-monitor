@@ -1,0 +1,13 @@
+{
+  "name": "betano-monitor-scripts",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "scrape-hctg": "node scrape-betano-hctg.mjs",
+    "screenshot-odds": "node screenshot-betano-odds.mjs",
+    "postinstall": "playwright install chromium"
+  },
+  "devDependencies": {
+    "playwright": "^1.61.1"
+  }
+}

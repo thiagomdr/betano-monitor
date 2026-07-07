@@ -25,3 +25,7 @@ logs/*
 Thumbs.db
 
 supabase/.temp/
+
+scripts/node_modules/
+.cursor/hctg-test-*.json
+out/betano-screenshot/
