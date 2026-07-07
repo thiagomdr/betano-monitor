@@ -297,7 +297,6 @@ async function scrapeAndAnalyze() {
     JSON.stringify(geminiOdds ?? { error: geminiError }, null, 2),
     "utf8",
   );
-  writeFileSync(join(outDir, "result.json"), JSON.stringify(result, null, 2), "utf8");
 
   console.log(JSON.stringify(result, null, 2));
 
@@ -312,7 +311,96 @@ async function scrapeAndAnalyze() {
     throw new Error(pageError ?? geminiError ?? "Falha na coleta: sem screenshot, DOM ou Gemini");
   }
 
+  try {
+    result.persistedToSupabase = await persistScreenshotDebug(result, { fullPng, blockPng });
+  } catch (err) {
+    result.persistError = String(err?.message ?? err);
+    console.warn(`Persistencia Supabase falhou: ${result.persistError}`);
+  }
+
+  writeFileSync(join(outDir, "result.json"), JSON.stringify(result, null, 2), "utf8");
+
   return result;
+}
+
+async function uploadStorageObject(supabaseUrl, serviceKey, bucket, objectPath, body, contentType) {
+  const res = await fetch(`${supabaseUrl}/storage/v1/object/${bucket}/${objectPath}`, {
+    method: "POST",
+    headers: {
+      Authorization: `Bearer ${serviceKey}`,
+      apikey: serviceKey,
+      "Content-Type": contentType,
+      "x-upsert": "true",
+    },
+    body,
+  });
+  if (!res.ok) {
+    const text = await res.text();
+    throw new Error(`Storage ${res.status}: ${text.slice(0, 300)}`);
+  }
+}
+
+async function persistScreenshotDebug(result, files) {
+  const supabaseUrl = process.env.SUPABASE_URL?.replace(/\/$/, "");
+  const serviceKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
+  if (!supabaseUrl || !serviceKey) {
+    return { skipped: true, reason: "SUPABASE_URL ou SUPABASE_SERVICE_ROLE_KEY ausentes" };
+  }
+
+  const bucket = "betano-screenshot-debug";
+  const runId = process.env.GITHUB_RUN_ID ?? String(Date.now());
+  const prefix = `${result.eventId}/${runId}`;
+  let screenshotFullUrl = null;
+  let screenshotBlockUrl = null;
+
+  if (files.fullPng) {
+    const objectPath = `${prefix}/screenshot-full.png`;
+    await uploadStorageObject(supabaseUrl, serviceKey, bucket, objectPath, files.fullPng, "image/png");
+    screenshotFullUrl = `${supabaseUrl}/storage/v1/object/public/${bucket}/${objectPath}`;
+  }
+  if (files.blockPng) {
+    const objectPath = `${prefix}/screenshot-total-gols.png`;
+    await uploadStorageObject(supabaseUrl, serviceKey, bucket, objectPath, files.blockPng, "image/png");
+    screenshotBlockUrl = `${supabaseUrl}/storage/v1/object/public/${bucket}/${objectPath}`;
+  }
+
+  const repo = process.env.GITHUB_REPOSITORY ?? "thiagomdr/betano-monitor";
+  const githubRunUrl = process.env.GITHUB_RUN_ID
+    ? `https://github.com/${repo}/actions/runs/${process.env.GITHUB_RUN_ID}`
+    : null;
+
+  const row = {
+    event_id: String(result.eventId),
+    slug: result.slug,
+    status: result.status,
+    page_error: result.pageError,
+    gemini_error: result.geminiError,
+    dom_lines: result.dom?.lines ?? [],
+    gemini_lines: result.gemini?.lines ?? [],
+    screenshot_full_url: screenshotFullUrl,
+    screenshot_block_url: screenshotBlockUrl,
+    github_run_id: process.env.GITHUB_RUN_ID ?? null,
+    github_run_url: githubRunUrl,
+    scraped_at: result.scrapedAt,
+    updated_at: new Date().toISOString(),
+  };
+
+  const res = await fetch(`${supabaseUrl}/rest/v1/futebol_screenshot_debug`, {
+    method: "POST",
+    headers: {
+      Authorization: `Bearer ${serviceKey}`,
+      apikey: serviceKey,
+      "Content-Type": "application/json",
+      Prefer: "resolution=merge-duplicates,return=minimal",
+    },
+    body: JSON.stringify(row),
+  });
+  if (!res.ok) {
+    const text = await res.text();
+    throw new Error(`Supabase debug ${res.status}: ${text.slice(0, 300)}`);
+  }
+
+  return { ok: true, screenshotFullUrl, screenshotBlockUrl };
 }
 
 scrapeAndAnalyze().catch((err) => {

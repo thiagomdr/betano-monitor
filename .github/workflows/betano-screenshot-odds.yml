@@ -1,6 +1,7 @@
 # Teste: screenshot Betano + Gemini Vision (IP do runner GitHub, nao IP da casa).
 # Secrets necessarios em Settings -> Secrets -> Actions:
 #   GEMINI_API_KEY  (obrigatorio)
+#   SUPABASE_URL + SUPABASE_SERVICE_ROLE_KEY (opcional — grava debug no painel)
 name: Betano screenshot odds (test)
 
 on:
@@ -47,6 +48,10 @@ jobs:
         working-directory: scripts
         env:
           GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+          GITHUB_RUN_ID: ${{ github.run_id }}
+          GITHUB_REPOSITORY: ${{ github.repository }}
           EVENT_ID: ${{ inputs.event_id }}
           SLUG: ${{ inputs.slug }}
           OUTPUT_DIR: ${{ github.workspace }}/out/betano-screenshot
