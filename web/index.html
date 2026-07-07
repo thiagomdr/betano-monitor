@@ -130,6 +130,30 @@
       gap: 0.75rem;
       margin-bottom: 0.75rem;
     }
+    .mercado-filters {
+      margin-bottom: 0.75rem;
+      font-size: 0.85rem;
+      color: var(--muted);
+    }
+    .filter-validados {
+      display: inline-flex;
+      align-items: center;
+      gap: 0.45rem;
+      cursor: pointer;
+      user-select: none;
+    }
+    .filter-validados input { cursor: pointer; accent-color: var(--accent); }
+    .validacao-badge {
+      display: inline-block;
+      font-size: 0.76rem;
+      font-weight: 700;
+      padding: 0.12rem 0.4rem;
+      border-radius: 4px;
+      text-transform: uppercase;
+    }
+    .validacao-badge.ok { background: rgba(61, 214, 140, 0.2); color: var(--accent); }
+    .validacao-badge.erro { background: rgba(255, 107, 107, 0.2); color: #ff6b6b; }
+    .validacao-badge.pendente { background: rgba(255, 209, 102, 0.2); color: var(--warn); }
     .table-wrap {
       overflow: auto;
       border: 1px solid var(--border);
@@ -326,6 +350,12 @@
       Monitoramento automatico da linha <strong>Over +0,5</strong> (placar + 0,5).
       Novos jogos entram sozinhos; use a lixeira para ocultar da lista.
     </p>
+    <div class="mercado-filters">
+      <label class="filter-validados">
+        <input type="checkbox" id="filtro-validados" />
+        Somente jogos validados (Telegram)
+      </label>
+    </div>
     <section class="mercado-summary" id="mercado-summary" aria-live="polite"></section>
     <div class="table-wrap">
       <table>
@@ -337,6 +367,7 @@
             <th>Liga</th>
             <th>Gol GREEN</th>
             <th>Resultado</th>
+            <th>Validação</th>
             <th>Lucro 1u</th>
             <th>Placar</th>
             <th title="Ao vivo com minuto ou data de encerramento">Status</th>
@@ -345,7 +376,7 @@
           </tr>
         </thead>
         <tbody id="mercado-tbody">
-          <tr><td colspan="11" class="empty">Carregando…</td></tr>
+          <tr><td colspan="12" class="empty">Carregando…</td></tr>
         </tbody>
       </table>
     </div>
@@ -355,6 +386,8 @@
     let appCfg = null;
     let mercadoCache = [];
     let mercadoLoading = false;
+    let mercadoFilterValidadosOnly = localStorage.getItem('mercadoFilterValidados') === '1';
+    let mercadoMetaCache = null;
 
     function formatNumber(n) {
       if (n == null || Number.isNaN(Number(n))) return '—';
@@ -742,20 +775,46 @@
       return row.placar_final || '—';
     }
 
+    function mercadoValidacaoLabel(row) {
+      if (row.telegram_confirmacao === 'correta') {
+        return '<span class="validacao-badge ok">Validado</span>';
+      }
+      if (row.telegram_confirmacao === 'incorreta') {
+        return '<span class="validacao-badge erro">Erro</span>';
+      }
+      if (row.captured_at) {
+        return '<span class="validacao-badge pendente">Pendente</span>';
+      }
+      return '<span class="muted">—</span>';
+    }
+
+    function mercadoIsValidado(row) {
+      return row.telegram_confirmacao === 'correta';
+    }
+
     function mercadoVisibleRows(rows) {
       return rows.filter((r) => r.resultado !== 'excluido');
+    }
+
+    function mercadoDisplayRows(rows) {
+      let list = mercadoVisibleRows(rows);
+      if (mercadoFilterValidadosOnly) {
+        list = list.filter(mercadoIsValidado);
+      }
+      return list;
     }
 
     function renderMercado() {
       const tbody = document.getElementById('mercado-tbody');
       if (!tbody) return;
-      const rows = mercadoVisibleRows(mercadoCache).slice().sort((a, b) =>
+      const rows = mercadoDisplayRows(mercadoCache).slice().sort((a, b) =>
         String(mercadoSortKey(b)).localeCompare(String(mercadoSortKey(a))),
       );
       renderMercadoSummary(rows);
       if (!rows.length) {
-        tbody.innerHTML =
-          '<tr><td colspan="11" class="empty">Nenhum jogo monitorado ainda. Novos jogos serao registrados automaticamente.</td></tr>';
+        tbody.innerHTML = mercadoFilterValidadosOnly
+          ? '<tr><td colspan="12" class="empty">Nenhum jogo validado no Telegram ainda.</td></tr>'
+          : '<tr><td colspan="12" class="empty">Nenhum jogo monitorado ainda. Novos jogos serao registrados automaticamente.</td></tr>';
         return;
       }
       tbody.innerHTML = rows.map((row, i) => {
@@ -771,6 +830,7 @@
           <td data-label="Liga">${league}</td>
           <td data-label="Gol GREEN">${formatMercadoGolGreen(row)}</td>
           <td data-label="Resultado">${mercadoResultadoLabel(row.resultado)}</td>
+          <td data-label="Validação">${mercadoValidacaoLabel(row)}</td>
           <td data-label="Lucro 1u">${formatMercadoProfit(mercadoSimProfit(row))}</td>
           <td data-label="Placar">${mercadoPlacarLabel(row)}</td>
           <td data-label="Status">${mercadoStatusLabel(row)}</td>
@@ -780,7 +840,7 @@
       }).join('');
     }
 
-    function updateMercadoStatus(meta, visibleCount) {
+    function updateMercadoStatus(meta, visibleCount, displayCount) {
       const status = document.getElementById('status');
       if (!status) return;
       if (meta?.last_error) {
@@ -791,8 +851,10 @@
       status.className = 'status';
       const when = meta?.fetched_at ? formatDate(meta.fetched_at) : '—';
       const source = meta?.source || 'betano-danae';
-      status.textContent =
-        `${formatNumber(visibleCount)} jogos na lista · atualizado ${when} · fonte ${source}`;
+      const listLabel = mercadoFilterValidadosOnly
+        ? `${formatNumber(displayCount)} validados de ${formatNumber(visibleCount)}`
+        : `${formatNumber(visibleCount)} jogos na lista`;
+      status.textContent = `${listLabel} · atualizado ${when} · fonte ${source}`;
     }
 
     async function loadMercado() {
@@ -814,8 +876,10 @@
           ),
         ]);
         mercadoCache = rows ?? [];
+        mercadoMetaCache = metaRows?.[0] ?? null;
         const visible = mercadoVisibleRows(mercadoCache);
-        updateMercadoStatus(metaRows?.[0], visible.length);
+        const display = mercadoDisplayRows(mercadoCache);
+        updateMercadoStatus(mercadoMetaCache, visible.length, display.length);
         renderMercado();
       } catch (err) {
         const status = document.getElementById('status');
@@ -825,11 +889,24 @@
         }
         if (tbody) {
           tbody.innerHTML =
-            `<tr><td colspan="11" class="empty">${err.message || String(err)}</td></tr>`;
+            `<tr><td colspan="12" class="empty">${err.message || String(err)}</td></tr>`;
         }
       } finally {
         mercadoLoading = false;
       }
+    }
+
+    const filtroValidados = document.getElementById('filtro-validados');
+    if (filtroValidados) {
+      filtroValidados.checked = mercadoFilterValidadosOnly;
+      filtroValidados.addEventListener('change', (e) => {
+        mercadoFilterValidadosOnly = e.target.checked;
+        localStorage.setItem('mercadoFilterValidados', mercadoFilterValidadosOnly ? '1' : '0');
+        const visible = mercadoVisibleRows(mercadoCache);
+        const display = mercadoDisplayRows(mercadoCache);
+        updateMercadoStatus(mercadoMetaCache, visible.length, display.length);
+        renderMercado();
+      });
     }
 
     document.getElementById('mercado-tbody')?.closest('main')?.addEventListener('click', async (e) => {

@@ -4,6 +4,8 @@
  *
  * POST/GET /functions/v1/betano-futebol-live
  * Header opcional: x-cron-secret (se CRON_SECRET estiver definido)
+ *
+ * Telegram (captura +0,5): TELEGRAM_BOT_TOKEN, TELEGRAM_CHAT_ID, TELEGRAM_NOTIFY_CAPTURE=1
  */
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.49.1";
 
@@ -1988,13 +1990,94 @@ type MercadoGols05Context = {
   score_text: string;
 };
 
-/** Over +0,5 disponivel agora e antes so havia linha minima +1,5 (+2 gols) — Super Estrategia. */
-function shouldCaptureMercadoGols05(
-  totals: TotalsOdds,
-  hadMinPlus2: boolean,
-  goalsTotal: number,
-): boolean {
-  return canCaptureTrueOver05(totals, goalsTotal) && hadMinPlus2;
+type TelegramCaptureRow = {
+  event_id: string;
+  home: string | null;
+  away: string | null;
+  league: string | null;
+  country: string | null;
+  estrategia: string | null;
+  disponivel_desde_minuto: number | null;
+  placar_na_captura: string | null;
+  over_05_line: number | null;
+  over_05_odd: number | null;
+  betano_url: string | null;
+  captured_at: string | null;
+};
+
+function formatTelegramNumber(n: number | null | undefined): string {
+  if (n == null || Number.isNaN(Number(n))) return "—";
+  return Number(n).toLocaleString("pt-BR", { maximumFractionDigits: 2 });
+}
+
+function formatTelegramDate(iso: string | null | undefined): string {
+  if (!iso) return "—";
+  const d = new Date(iso);
+  if (Number.isNaN(d.getTime())) return iso;
+  return d.toLocaleString("pt-BR");
+}
+
+function mercadoEstrategiaTelegramLabel(estrategia: string | null | undefined): string {
+  if (estrategia === "super_05") return "Super Estrategia";
+  if (estrategia === "imediato_05") return "Imediato";
+  return "—";
+}
+
+async function notifyTelegramCapture(row: TelegramCaptureRow): Promise<void> {
+  if (Deno.env.get("TELEGRAM_NOTIFY_CAPTURE") !== "1") return;
+  const token = Deno.env.get("TELEGRAM_BOT_TOKEN");
+  const chatId = Deno.env.get("TELEGRAM_CHAT_ID");
+  if (!token || !chatId) {
+    console.warn("telegram capture notify skipped: missing TELEGRAM_BOT_TOKEN or TELEGRAM_CHAT_ID");
+    return;
+  }
+
+  const leagueLine = [row.league, row.country].filter(Boolean).join(" · ") || "—";
+  const minute = row.disponivel_desde_minuto != null ? `${row.disponivel_desde_minuto}'` : "—";
+  const text = [
+    "CAPTURA +0,5",
+    "",
+    `${row.home ?? "—"} x ${row.away ?? "—"}`,
+    leagueLine,
+    "",
+    `Estrategia: ${mercadoEstrategiaTelegramLabel(row.estrategia)}`,
+    `Minuto: ${minute} | Placar: ${row.placar_na_captura ?? "—"}`,
+    `Linha: Mais de ${formatTelegramNumber(row.over_05_line)}`,
+    `Odd: ${formatTelegramNumber(row.over_05_odd)}`,
+    "",
+    `Event ID: ${row.event_id}`,
+    `Coletado: ${formatTelegramDate(row.captured_at)}`,
+    row.betano_url ? `\n${row.betano_url}` : "",
+  ].join("\n");
+
+  try {
+    const res = await fetch(`https://api.telegram.org/bot${token}/sendMessage`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        chat_id: chatId,
+        text,
+        disable_web_page_preview: false,
+      }),
+    });
+    if (!res.ok) {
+      console.error("telegram capture notify failed", res.status, await res.text());
+    }
+  } catch (err) {
+    console.error("telegram capture notify error", err);
+  }
+}
+
+/** Super: houve fase sem +0,5 real antes da captura. Imediato: +0,5 ja no inicio (min 0-1). */
+function resolveMercadoEstrategiaOnCapture(
+  existing: MercadoGols05Row,
+  captureMinute: number | null,
+): MercadoEstrategia {
+  if (!existing.had_min_plus2_before) return "imediato_05";
+  const indisponivel = existing.indisponivel_ate_minuto ?? 0;
+  const cap = captureMinute ?? 0;
+  if (cap <= 1 && indisponivel <= 1) return "imediato_05";
+  return "super_05";
 }
 
 async function applyMercadoGols05Capture(
@@ -2175,30 +2258,35 @@ async function processMercadoGols05Live(
       await touchMercadoWatching(supabase, eventId, ctx, totals, existing, hadMinPlus2);
       return null;
     }
-    if (shouldCaptureMercadoGols05(totals, existing.had_min_plus2_before, goalsTotal)) {
-      const indisponivel = existing.indisponivel_ate_minuto ?? (minute != null ? minute - 1 : null);
-      await applyMercadoGols05Capture(
-        supabase,
-        eventId,
-        ctx,
-        totals,
-        over0,
-        "super_05",
-        indisponivel,
-        existing.had_min_plus2_before,
-        "watching",
-      );
-      return "captured";
-    }
+    const estrategia = resolveMercadoEstrategiaOnCapture(existing, minute);
     const indisponivel = existing.indisponivel_ate_minuto ?? (minute != null ? minute - 1 : null);
-    const hadMinPlus2 = existing.had_min_plus2_before || elevatedPhase;
+    const hadMinPlus2 = estrategia === "super_05";
+    // #region agent log
+    console.log(JSON.stringify({
+      sessionId: "e14164",
+      hypothesisId: "H1-H3",
+      runId: "estrategia-capture",
+      location: "index.ts:processMercadoGols05Live:capture",
+      message: "estrategia on capture from watching",
+      data: {
+        eventId,
+        estrategia,
+        minute,
+        indisponivel_ate_minuto: existing.indisponivel_ate_minuto,
+        had_min_plus2_before: existing.had_min_plus2_before,
+        elevatedPhase,
+        trueOver05,
+      },
+      timestamp: Date.now(),
+    }));
+    // #endregion
     await applyMercadoGols05Capture(
       supabase,
       eventId,
       ctx,
       totals,
       over0,
-      "imediato_05",
+      estrategia,
       indisponivel,
       hadMinPlus2,
       "watching",
@@ -2730,7 +2818,17 @@ Deno.serve(async (req) => {
           mercadoRow as MercadoGols05Row | null,
         );
       }
-      if (mercadoAction === "captured") mercadoCaptured += 1;
+      if (mercadoAction === "captured") {
+        mercadoCaptured += 1;
+        const { data: capturedRow } = await supabase
+          .from("futebol_mercado_gols_05")
+          .select(
+            "event_id,home,away,league,country,estrategia,disponivel_desde_minuto,placar_na_captura,over_05_line,over_05_odd,betano_url,captured_at",
+          )
+          .eq("event_id", eventId)
+          .maybeSingle();
+        if (capturedRow) await notifyTelegramCapture(capturedRow as TelegramCaptureRow);
+      }
 
       const needsSettle = mercadoRow?.resultado === "pending" || mercadoAction === "captured";
       if (needsSettle) {
