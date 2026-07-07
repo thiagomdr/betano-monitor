@@ -266,16 +266,25 @@ async function scrapeAndAnalyze() {
     }
   }
 
+  const hasDom = (domSnap?.lines?.length ?? 0) > 0;
+  const hasGemini = geminiOdds != null && !geminiOdds.skipped;
+  const hasScreenshot = !!visionInput;
+  const warnings = [];
+  if (pageError) warnings.push(pageError);
+  if (geminiError) warnings.push(geminiError);
+
   const result = {
     eventId,
     slug,
     url: pageUrl,
     scrapedAt: new Date().toISOString(),
     runner: process.env.GITHUB_ACTIONS ? "github-actions" : "local",
+    status: hasDom || hasGemini ? "ok" : hasScreenshot ? "partial" : "failed",
     pageError,
     dom: domSnap,
     gemini: geminiOdds,
     geminiError,
+    warnings,
     artifacts: {
       blockScreenshot: blockPng ? blockPath : null,
       fullScreenshot: fullPng ? fullPath : null,
@@ -292,11 +301,15 @@ async function scrapeAndAnalyze() {
 
   console.log(JSON.stringify(result, null, 2));
 
-  if (pageError && !visionInput) {
-    throw new Error(pageError);
+  if (geminiError) {
+    console.warn(`Gemini indisponivel (artifacts salvos): ${geminiError.slice(0, 240)}`);
   }
-  if (geminiError && !domSnap?.lines?.length) {
-    throw new Error(geminiError ?? pageError ?? "Falha na coleta");
+  if (pageError && hasScreenshot) {
+    console.warn(`Pagina parcial (screenshot salvo): ${pageError.slice(0, 240)}`);
+  }
+
+  if (!hasScreenshot && !hasDom && !hasGemini) {
+    throw new Error(pageError ?? geminiError ?? "Falha na coleta: sem screenshot, DOM ou Gemini");
   }
 
   return result;
