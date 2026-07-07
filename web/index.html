@@ -207,6 +207,18 @@
       border-color: rgba(143, 163, 191, 0.35);
       color: var(--muted);
     }
+    .jogo-cell {
+      display: inline-flex;
+      align-items: center;
+      gap: 0.45rem;
+      flex-wrap: wrap;
+      max-width: 100%;
+    }
+    .table-scroll-hint {
+      margin: 0 0 0.5rem;
+      font-size: 0.78rem;
+      color: var(--muted);
+    }
     .empty { text-align: center; color: var(--muted); padding: 2rem; }
     a { color: var(--accent); }
     .resultado-badge {
@@ -273,13 +285,15 @@
     }
     .mercado-elevated-popover li:last-child { border-bottom: none; }
     .mercado-debug-btn {
-      font-size: 0.75rem;
-      padding: 0.25rem 0.5rem;
+      font-size: 0.72rem;
+      padding: 0.2rem 0.45rem;
       border-radius: 6px;
-      border: 1px solid var(--border);
-      background: #1a2433;
-      color: var(--muted);
+      border: 1px solid var(--warn);
+      background: rgba(255, 209, 102, 0.12);
+      color: var(--warn);
       cursor: pointer;
+      font-weight: 700;
+      flex-shrink: 0;
     }
     .mercado-debug-btn:hover {
       color: var(--text);
@@ -443,7 +457,7 @@
   </style>
 </head>
 <body>
-  <!-- pages-build: debug-screenshot-panel -->
+  <!-- pages-build: debug-jogo-inline-v2 -->
   <header>
     <h1 class="brand-title">
       <span class="brand-monitor">Monitor</span>
@@ -465,6 +479,7 @@
       </label>
     </div>
     <section class="mercado-summary" id="mercado-summary" aria-live="polite"></section>
+    <p class="table-scroll-hint">Dica: role a tabela horizontalmente para ver Link e excluir.</p>
     <div class="table-wrap">
       <table>
         <thead>
@@ -481,12 +496,11 @@
             <th>Placar</th>
             <th title="Ao vivo com minuto ou data de encerramento">Status</th>
             <th>Link</th>
-            <th>Debug</th>
             <th title="Ocultar da lista"></th>
           </tr>
         </thead>
         <tbody id="mercado-tbody">
-          <tr><td colspan="12" class="empty">Carregando…</td></tr>
+          <tr><td colspan="13" class="empty">Carregando…</td></tr>
         </tbody>
       </table>
     </div>
@@ -1087,8 +1101,8 @@
       renderMercadoSummary(rows);
       if (!rows.length) {
         tbody.innerHTML = mercadoFilterValidadosOnly
-          ? '<tr><td colspan="14" class="empty">Nenhum jogo validado no Telegram ainda.</td></tr>'
-          : '<tr><td colspan="14" class="empty">Nenhum jogo monitorado ainda. Novos jogos serao registrados automaticamente.</td></tr>';
+          ? '<tr><td colspan="13" class="empty">Nenhum jogo validado no Telegram ainda.</td></tr>'
+          : '<tr><td colspan="13" class="empty">Nenhum jogo monitorado ainda. Novos jogos serao registrados automaticamente.</td></tr>';
         return;
       }
       tbody.innerHTML = rows.map((row, i) => {
@@ -1099,7 +1113,7 @@
           : '—';
         return `<tr>
           <td data-label="#">${i + 1}</td>
-          <td data-label="Jogo"><strong>${match}</strong></td>
+          <td data-label="Jogo"><div class="jogo-cell"><strong>${match}</strong><button type="button" class="mercado-debug-btn" data-debug-mercado="${row.event_id}" title="Coleta Edge + screenshot teste">Debug</button></div></td>
           <td data-label="Total de Gols">${formatHctgPills(row.hctg_lines)}</td>
           <td data-label="Estrategia">${mercadoEstrategiaLabel(row)}</td>
           <td data-label="Liga">${league}</td>
@@ -1110,7 +1124,6 @@
           <td data-label="Placar">${mercadoPlacarLabel(row)}</td>
           <td data-label="Status">${mercadoStatusLabel(row)}</td>
           <td data-label="Link">${link}</td>
-          <td data-label="Debug"><button type="button" class="mercado-debug-btn" data-debug-mercado="${row.event_id}" title="Coleta Edge + screenshot teste">Debug</button></td>
           <td data-label=""><button type="button" class="mercado-delete-btn" data-delete-mercado="${row.event_id}" data-delete-label="${match.replace(/"/g, '&quot;')}" title="Remover da lista">🗑</button></td>
         </tr>`;
       }).join('');
@@ -1166,7 +1179,7 @@
         }
         if (tbody) {
           tbody.innerHTML =
-            `<tr><td colspan="14" class="empty">${err.message || String(err)}</td></tr>`;
+            `<tr><td colspan="13" class="empty">${err.message || String(err)}</td></tr>`;
         }
       } finally {
         mercadoLoading = false;
