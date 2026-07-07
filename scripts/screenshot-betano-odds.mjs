@@ -35,7 +35,11 @@ const BETANO_BASE = "https://www.betano.bet.br";
 const eventId = process.argv[2] ?? process.env.EVENT_ID ?? "88494497";
 const slug = process.argv[3] ?? process.env.SLUG ?? "suica-colombia";
 const geminiKey = process.env.GEMINI_API_KEY ?? "";
-const geminiModel = process.env.GEMINI_MODEL ?? "gemini-2.0-flash";
+const geminiModel = process.env.GEMINI_MODEL ?? "gemini-2.0-flash-lite";
+const geminiModels = (process.env.GEMINI_MODELS ?? geminiModel)
+  .split(",")
+  .map((s) => s.trim())
+  .filter(Boolean);
 const headless = process.env.HEADLESS !== "0";
 const outDir =
   process.env.OUTPUT_DIR ?? join(__dirname, "..", "out", "betano-screenshot");
@@ -115,35 +119,8 @@ async function screenshotTotalGolsBlock(page) {
   return page.screenshot({ type: "png", fullPage: false });
 }
 
-async function analyzeWithGemini(pngBuffer, meta) {
-  if (!geminiKey) {
-    return { skipped: true, reason: "GEMINI_API_KEY ausente" };
-  }
-
-  const url = `https://generativelanguage.googleapis.com/v1beta/models/${geminiModel}:generateContent`;
-
-  const prompt = `Voce analisa um recorte da pagina ao vivo da Betano (mercado "Total de Gols" / handicap de gols).
-
-Extraia TODAS as linhas visiveis com odds decimal (formato brasileiro ou internacional).
-Cada linha tem "Mais de X" (over) e "Menos de X" (under).
-
-Retorne SOMENTE JSON valido, sem markdown:
-{
-  "eventId": "${meta.eventId}",
-  "teams": "time casa x time visitante ou null",
-  "score": "0-0 ou null",
-  "lines": [
-    { "line": 0.5, "over": 1.62, "under": 2.20 }
-  ],
-  "confidence": "high|medium|low",
-  "notes": "observacoes curtas ou null"
-}
-
-Regras:
-- "line" e o numero do handicap (0.5, 1.5, 2.5, etc.)
-- odds sao numeros decimais (ex: 1.62), nunca fracao
-- se nao conseguir ler, lines: [] e confidence: "low"`;
-
+async function callGeminiModel(model, pngBuffer, meta, prompt) {
+  const url = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent`;
   const res = await fetch(url, {
     method: "POST",
     headers: {
@@ -173,7 +150,7 @@ Regras:
 
   if (!res.ok) {
     const errText = await res.text();
-    throw new Error(`Gemini HTTP ${res.status}: ${errText.slice(0, 500)}`);
+    throw new Error(`Gemini HTTP ${res.status} (${model}): ${errText.slice(0, 500)}`);
   }
 
   const data = await res.json();
@@ -181,16 +158,54 @@ Regras:
     data?.candidates?.[0]?.content?.parts?.map((p) => p.text ?? "").join("") ?? "";
 
   if (!text.trim()) {
-    throw new Error("Gemini retornou resposta vazia");
+    throw new Error(`Gemini retornou resposta vazia (${model})`);
   }
 
   try {
-    return JSON.parse(text);
+    return { ...JSON.parse(text), modelUsed: model };
   } catch {
     const match = text.match(/\{[\s\S]*\}/);
-    if (match) return JSON.parse(match[0]);
-    throw new Error(`Gemini JSON invalido: ${text.slice(0, 300)}`);
+    if (match) return { ...JSON.parse(match[0]), modelUsed: model };
+    throw new Error(`Gemini JSON invalido (${model}): ${text.slice(0, 300)}`);
   }
+}
+
+async function analyzeWithGemini(pngBuffer, meta) {
+  if (!geminiKey) {
+    return { skipped: true, reason: "GEMINI_API_KEY ausente" };
+  }
+
+  const prompt = `Voce analisa um recorte da pagina ao vivo da Betano (mercado "Total de Gols" / handicap de gols).
+
+Extraia TODAS as linhas visiveis com odds decimal (formato brasileiro ou internacional).
+Cada linha tem "Mais de X" (over) e "Menos de X" (under).
+
+Retorne SOMENTE JSON valido, sem markdown:
+{
+  "eventId": "${meta.eventId}",
+  "teams": "time casa x time visitante ou null",
+  "score": "0-0 ou null",
+  "lines": [
+    { "line": 0.5, "over": 1.62, "under": 2.20 }
+  ],
+  "confidence": "high|medium|low",
+  "notes": "observacoes curtas ou null"
+}
+
+Regras:
+- "line" e o numero do handicap (0.5, 1.5, 2.5, etc.)
+- odds sao numeros decimais (ex: 1.62), nunca fracao
+- se nao conseguir ler, lines: [] e confidence: "low"`;
+
+  const errors = [];
+  for (const model of geminiModels) {
+    try {
+      return await callGeminiModel(model, pngBuffer, meta, prompt);
+    } catch (err) {
+      errors.push(String(err?.message ?? err));
+    }
+  }
+  throw new Error(errors.join(" | "));
 }
 
 async function scrapeAndAnalyze() {
