@@ -186,6 +186,27 @@
     }
     .muted { color: var(--muted); }
     .odd { color: var(--accent); font-weight: 600; }
+    .hctg-pills {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 0.35rem;
+      line-height: 1.45;
+    }
+    .hctg-pill {
+      display: inline-block;
+      padding: 0.15rem 0.4rem;
+      border-radius: 4px;
+      font-size: 0.78rem;
+      font-weight: 600;
+      background: rgba(61, 214, 140, 0.12);
+      border: 1px solid rgba(61, 214, 140, 0.35);
+      white-space: nowrap;
+    }
+    .hctg-pill.under {
+      background: rgba(143, 163, 191, 0.12);
+      border-color: rgba(143, 163, 191, 0.35);
+      color: var(--muted);
+    }
     .empty { text-align: center; color: var(--muted); padding: 2rem; }
     a { color: var(--accent); }
     .resultado-badge {
@@ -335,7 +356,7 @@
   </style>
 </head>
 <body>
-  <!-- pages-build: lucro-estrategia -->
+  <!-- pages-build: hctg-total-de-gols -->
   <header>
     <h1 class="brand-title">
       <span class="brand-monitor">Monitor</span>
@@ -363,6 +384,7 @@
           <tr>
             <th>#</th>
             <th>Jogo</th>
+            <th>Total de Gols</th>
             <th>Estrategia</th>
             <th>Liga</th>
             <th>Gol GREEN</th>
@@ -756,6 +778,31 @@
       `;
     }
 
+    function parseHctgLines(raw) {
+      if (!Array.isArray(raw)) return [];
+      return raw.filter((e) =>
+        e && typeof e.line === 'number' &&
+        (e.over == null || typeof e.over === 'number') &&
+        (e.under == null || typeof e.under === 'number'),
+      );
+    }
+
+    function formatHctgPills(raw) {
+      const lines = parseHctgLines(raw).slice().sort((a, b) => a.line - b.line);
+      if (!lines.length) return '<span class="muted">—</span>';
+      const bits = [];
+      for (const l of lines) {
+        const lineLabel = formatNumber(l.line);
+        if (l.over != null) {
+          bits.push(`<span class="hctg-pill">+${lineLabel} (${formatNumber(l.over)})</span>`);
+        }
+        if (l.under != null) {
+          bits.push(`<span class="hctg-pill under">-${lineLabel} (${formatNumber(l.under)})</span>`);
+        }
+      }
+      return `<div class="hctg-pills">${bits.join('')}</div>`;
+    }
+
     function mercadoSortKey(row) {
       return row.updated_at || row.captured_at || row.created_at || '';
     }
@@ -807,14 +854,17 @@
     function renderMercado() {
       const tbody = document.getElementById('mercado-tbody');
       if (!tbody) return;
-      const rows = mercadoDisplayRows(mercadoCache).slice().sort((a, b) =>
-        String(mercadoSortKey(b)).localeCompare(String(mercadoSortKey(a))),
-      );
+      const rows = mercadoDisplayRows(mercadoCache).slice().sort((a, b) => {
+        const liveA = a.is_live ? 1 : 0;
+        const liveB = b.is_live ? 1 : 0;
+        if (liveB !== liveA) return liveB - liveA;
+        return String(mercadoSortKey(b)).localeCompare(String(mercadoSortKey(a)));
+      });
       renderMercadoSummary(rows);
       if (!rows.length) {
         tbody.innerHTML = mercadoFilterValidadosOnly
-          ? '<tr><td colspan="12" class="empty">Nenhum jogo validado no Telegram ainda.</td></tr>'
-          : '<tr><td colspan="12" class="empty">Nenhum jogo monitorado ainda. Novos jogos serao registrados automaticamente.</td></tr>';
+          ? '<tr><td colspan="13" class="empty">Nenhum jogo validado no Telegram ainda.</td></tr>'
+          : '<tr><td colspan="13" class="empty">Nenhum jogo monitorado ainda. Novos jogos serao registrados automaticamente.</td></tr>';
         return;
       }
       tbody.innerHTML = rows.map((row, i) => {
@@ -826,6 +876,7 @@
         return `<tr>
           <td data-label="#">${i + 1}</td>
           <td data-label="Jogo"><strong>${match}</strong></td>
+          <td data-label="Total de Gols">${formatHctgPills(row.hctg_lines)}</td>
           <td data-label="Estrategia">${mercadoEstrategiaLabel(row)}</td>
           <td data-label="Liga">${league}</td>
           <td data-label="Gol GREEN">${formatMercadoGolGreen(row)}</td>
@@ -889,7 +940,7 @@
         }
         if (tbody) {
           tbody.innerHTML =
-            `<tr><td colspan="12" class="empty">${err.message || String(err)}</td></tr>`;
+            `<tr><td colspan="13" class="empty">${err.message || String(err)}</td></tr>`;
         }
       } finally {
         mercadoLoading = false;
