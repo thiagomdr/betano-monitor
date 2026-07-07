@@ -3,17 +3,33 @@
  *
  * Local:
  *   cd scripts && npm ci
- *   $env:GEMINI_API_KEY="..." ; node screenshot-betano-odds.mjs 88494497 suica-colombia
+ *   node screenshot-betano-odds.mjs 88494497 suica-colombia
+ *   (GEMINI_API_KEY em ../.env ou variavel de ambiente)
  *
  * GitHub Actions: .github/workflows/betano-screenshot-odds.yml
  */
 import { chromium } from "playwright";
-import { mkdirSync, writeFileSync } from "node:fs";
+import { mkdirSync, writeFileSync, readFileSync, existsSync } from "node:fs";
 import { join, dirname } from "node:path";
 import { fileURLToPath } from "node:url";
 import { extractMatchTotalsFromDom } from "./lib/betano-hctg-html.mjs";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
+
+function loadDotEnv(path) {
+  if (!existsSync(path)) return;
+  for (const line of readFileSync(path, "utf8").split(/\r?\n/)) {
+    const trimmed = line.trim();
+    if (!trimmed || trimmed.startsWith("#")) continue;
+    const eq = trimmed.indexOf("=");
+    if (eq <= 0) continue;
+    const key = trimmed.slice(0, eq).trim();
+    const value = trimmed.slice(eq + 1).trim();
+    if (key && process.env[key] == null) process.env[key] = value;
+  }
+}
+
+loadDotEnv(join(__dirname, "..", ".env"));
 const BETANO_BASE = "https://www.betano.bet.br";
 
 const eventId = process.argv[2] ?? process.env.EVENT_ID ?? "88494497";
@@ -104,7 +120,7 @@ async function analyzeWithGemini(pngBuffer, meta) {
     return { skipped: true, reason: "GEMINI_API_KEY ausente" };
   }
 
-  const url = `https://generativelanguage.googleapis.com/v1beta/models/${geminiModel}:generateContent?key=${encodeURIComponent(geminiKey)}`;
+  const url = `https://generativelanguage.googleapis.com/v1beta/models/${geminiModel}:generateContent`;
 
   const prompt = `Voce analisa um recorte da pagina ao vivo da Betano (mercado "Total de Gols" / handicap de gols).
 
@@ -130,7 +146,10 @@ Regras:
 
   const res = await fetch(url, {
     method: "POST",
-    headers: { "Content-Type": "application/json" },
+    headers: {
+      "Content-Type": "application/json",
+      "x-goog-api-key": geminiKey,
+    },
     body: JSON.stringify({
       contents: [
         {
