@@ -29,3 +29,5 @@ supabase/.temp/
 scripts/node_modules/
 .cursor/hctg-test-*.json
 out/betano-screenshot/
+scripts/oracle/oci.local.env
+.oci/

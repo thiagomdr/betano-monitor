@@ -1,0 +1,2 @@
+oci>=2.120.0
+cryptography>=42.0.0
