@@ -131,6 +131,87 @@
       cursor: pointer;
     }
     .btn-logout:hover { color: var(--text); border-color: var(--muted); }
+    .app-tabs {
+      display: flex;
+      gap: 0.35rem;
+      margin-top: 0.85rem;
+      flex-wrap: wrap;
+    }
+    .app-tab {
+      padding: 0.45rem 0.9rem;
+      border-radius: 6px;
+      border: 1px solid var(--border);
+      background: transparent;
+      color: var(--muted);
+      font-size: 0.85rem;
+      font-weight: 600;
+      cursor: pointer;
+    }
+    .app-tab:hover { color: var(--text); border-color: var(--muted); }
+    .app-tab.active {
+      background: var(--panel);
+      color: var(--text);
+      border-color: var(--accent);
+    }
+    .log-toolbar {
+      display: flex;
+      flex-wrap: wrap;
+      align-items: center;
+      justify-content: space-between;
+      gap: 0.75rem;
+      margin-bottom: 0.75rem;
+    }
+    .log-toolbar-actions {
+      display: flex;
+      gap: 0.5rem;
+      flex-wrap: wrap;
+    }
+    .btn-secondary {
+      padding: 0.4rem 0.75rem;
+      border-radius: 6px;
+      border: 1px solid var(--border);
+      background: var(--panel);
+      color: var(--text);
+      font-size: 0.8rem;
+      cursor: pointer;
+    }
+    .btn-secondary:hover { border-color: var(--muted); }
+    .btn-danger {
+      border-color: #8b3a3a;
+      color: #ff8a8a;
+    }
+    .btn-danger:hover { background: rgba(255, 107, 107, 0.12); }
+    .log-level {
+      display: inline-block;
+      padding: 0.15rem 0.45rem;
+      border-radius: 4px;
+      font-size: 0.7rem;
+      font-weight: 700;
+      text-transform: uppercase;
+    }
+    .log-level.info { background: rgba(61, 214, 140, 0.15); color: var(--accent); }
+    .log-level.warn { background: rgba(255, 209, 102, 0.15); color: var(--warn); }
+    .log-level.error { background: rgba(255, 107, 107, 0.15); color: #ff6b6b; }
+    .log-source {
+      font-size: 0.75rem;
+      color: var(--muted);
+      font-family: ui-monospace, monospace;
+    }
+    .log-message { font-size: 0.85rem; line-height: 1.35; }
+    .log-payload {
+      margin-top: 0.35rem;
+      font-size: 0.72rem;
+      color: var(--muted);
+      font-family: ui-monospace, monospace;
+      white-space: pre-wrap;
+      word-break: break-word;
+      max-height: 8rem;
+      overflow: auto;
+    }
+    tr.log-row-error td { background: rgba(255, 107, 107, 0.06); }
+    tr.log-row-warn td { background: rgba(255, 209, 102, 0.04); }
+    #panel-log[hidden] { display: none; }
+    #panel-mercado[hidden] { display: none; }
     main { padding: 1rem 1.25rem 2rem; }
     .hint {
       color: var(--muted);
@@ -463,9 +544,13 @@
       </div>
       <button type="button" class="btn-logout" id="btn-logout">Sair</button>
     </div>
+    <nav class="app-tabs" role="tablist" aria-label="Navegacao principal">
+      <button type="button" class="app-tab active" id="tab-mercado" data-tab="mercado" role="tab" aria-selected="true">Mercado</button>
+      <button type="button" class="app-tab" id="tab-log" data-tab="log" role="tab" aria-selected="false">Log do Sistema</button>
+    </nav>
     <div class="status" id="status">Carregando…</div>
   </header>
-  <main>
+  <main id="panel-mercado">
     <p class="hint">
       Monitoramento automatico da linha <strong>Over +0,5</strong> (placar + 0,5).
       Novos jogos entram sozinhos; use a lixeira para ocultar da lista.
@@ -485,13 +570,13 @@
             <th>#</th>
             <th>Jogo</th>
             <th>Total de Gols</th>
+            <th>Placar</th>
             <th>Estrategia</th>
             <th>Liga</th>
             <th>Gol GREEN</th>
             <th>Resultado</th>
             <th>Validação</th>
             <th>Lucro 1u</th>
-            <th>Placar</th>
             <th title="Ao vivo com minuto ou data de encerramento">Status</th>
             <th>Link</th>
             <th title="Ocultar da lista"></th>
@@ -504,6 +589,33 @@
     </div>
     <div id="mercado-elevated-popover" class="mercado-elevated-popover" role="dialog" aria-hidden="true"></div>
   </main>
+  <main id="panel-log" hidden>
+    <div class="log-toolbar">
+      <p class="hint" style="margin:0">Registro de coletas, capturas, GREEN/RED, Telegram e erros. Retencao automatica: 30 dias.</p>
+      <div class="log-toolbar-actions">
+        <button type="button" class="btn-secondary" id="btn-log-refresh">Atualizar</button>
+        <button type="button" class="btn-secondary btn-danger" id="btn-log-clear">Limpar log</button>
+      </div>
+    </div>
+    <p class="status" id="log-status" aria-live="polite"></p>
+    <div class="table-wrap">
+      <table>
+        <thead>
+          <tr>
+            <th>Data/Hora</th>
+            <th>Nivel</th>
+            <th>Origem</th>
+            <th>Acao</th>
+            <th>Mensagem</th>
+            <th>Jogo</th>
+          </tr>
+        </thead>
+        <tbody id="log-tbody">
+          <tr><td colspan="6" class="empty">Carregando…</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </main>
   </div>
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
   <script>
@@ -514,6 +626,26 @@
     let mercadoLoading = false;
     let mercadoFilterValidadosOnly = localStorage.getItem('mercadoFilterValidados') === '1';
     let mercadoMetaCache = null;
+    let logPollTimer = null;
+    let logLoading = false;
+    let logCache = [];
+    let activeTab = 'mercado';
+
+    const LOG_ACTION_LABELS = {
+      overview_coleta: 'Placares JSON',
+      cron_tick: 'Cron live',
+      gols_timeline: 'Gols timeline',
+      hctg_odds: 'ODDS HCTG',
+      hctg_falha: 'HCTG falhou',
+      mercado_captura: 'Captura +0,5',
+      mercado_green: 'GREEN',
+      mercado_red: 'RED',
+      mercado_sem_linha: 'Sem linha',
+      telegram_captura: 'Telegram captura',
+      telegram_settle: 'Telegram liquidacao',
+      telegram_validacao: 'Telegram validacao',
+      erro: 'Erro',
+    };
 
     function formatNumber(n) {
       if (n == null || Number.isNaN(Number(n))) return '—';
@@ -668,6 +800,35 @@
       }
       const rows = await res.json();
       return Array.isArray(rows) ? rows : [];
+    }
+
+    async function supabaseRpc(fn, args = {}) {
+      const token = await getAccessToken();
+      if (!token) throw new Error('Faca login para continuar.');
+      const res = await fetch(`${appCfg.url}/rest/v1/rpc/${fn}`, {
+        method: 'POST',
+        headers: {
+          apikey: appCfg.anonKey,
+          Authorization: `Bearer ${token}`,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(args),
+      });
+      if (res.status === 401 || res.status === 403) {
+        showLogin();
+        throw new Error('Sessao expirada. Faca login novamente.');
+      }
+      if (!res.ok) {
+        const text = await res.text();
+        throw new Error(`Supabase RPC ${res.status}: ${text.slice(0, 200)}`);
+      }
+      const text = await res.text();
+      if (!text) return null;
+      try {
+        return JSON.parse(text);
+      } catch {
+        return text;
+      }
     }
 
     async function deleteMercadoRow(eventId, label) {
@@ -1048,13 +1209,13 @@
           <td data-label="#">${i + 1}</td>
           <td data-label="Jogo"><strong>${match}</strong></td>
           <td data-label="Total de Gols">${formatHctgPills(row.hctg_lines)}</td>
+          <td data-label="Placar">${mercadoPlacarLabel(row)}</td>
           <td data-label="Estrategia">${mercadoEstrategiaLabel(row)}</td>
           <td data-label="Liga">${league}</td>
           <td data-label="Gol GREEN">${formatMercadoGolGreen(row)}</td>
           <td data-label="Resultado">${mercadoResultadoLabel(row.resultado)}</td>
           <td data-label="Validação">${mercadoValidacaoLabel(row)}</td>
           <td data-label="Lucro 1u">${formatMercadoProfit(mercadoSimProfit(row))}</td>
-          <td data-label="Placar">${mercadoPlacarLabel(row)}</td>
           <td data-label="Status">${mercadoStatusLabel(row)}</td>
           <td data-label="Link">${link}</td>
           <td data-label=""><button type="button" class="mercado-delete-btn" data-delete-mercado="${row.event_id}" data-delete-label="${match.replace(/"/g, '&quot;')}" title="Remover da lista">🗑</button></td>
@@ -1159,7 +1320,114 @@
     async function startMercadoPolling() {
       await loadMercado();
       if (mercadoPollTimer) clearInterval(mercadoPollTimer);
-      mercadoPollTimer = setInterval(loadMercado, 60000);
+      mercadoPollTimer = setInterval(() => {
+        if (activeTab === 'mercado') loadMercado();
+      }, 60000);
+    }
+
+    function logActionLabel(action) {
+      return LOG_ACTION_LABELS[action] || action || '—';
+    }
+
+    function renderSistemaLog() {
+      const tbody = document.getElementById('log-tbody');
+      if (!tbody) return;
+      if (!logCache.length) {
+        tbody.innerHTML = '<tr><td colspan="6" class="empty">Nenhum registro no log.</td></tr>';
+        return;
+      }
+      tbody.innerHTML = logCache.map((row) => {
+        const lvl = row.level || 'info';
+        const payload = row.payload && Object.keys(row.payload).length
+          ? `<div class="log-payload">${JSON.stringify(row.payload, null, 2)}</div>`
+          : '';
+        return `<tr class="log-row-${lvl}">
+          <td data-label="Data/Hora">${formatDate(row.created_at)}</td>
+          <td data-label="Nivel"><span class="log-level ${lvl}">${lvl}</span></td>
+          <td data-label="Origem"><span class="log-source">${row.source ?? '—'}</span></td>
+          <td data-label="Acao">${logActionLabel(row.action)}</td>
+          <td data-label="Mensagem"><div class="log-message">${row.message ?? '—'}${payload}</div></td>
+          <td data-label="Jogo">${row.match_label ? `<strong>${row.match_label}</strong>` : '<span class="muted">—</span>'}</td>
+        </tr>`;
+      }).join('');
+    }
+
+    function updateLogStatus() {
+      const el = document.getElementById('log-status');
+      if (!el) return;
+      const when = logCache[0]?.created_at ? formatDate(logCache[0].created_at) : '—';
+      el.textContent = `${logCache.length} registro(s) · mais recente ${when}`;
+    }
+
+    async function loadSistemaLog() {
+      if (logLoading) return;
+      logLoading = true;
+      const tbody = document.getElementById('log-tbody');
+      try {
+        await initAppCfg();
+        const rows = await supabaseGet(
+          'futebol_sistema_log?select=*&order=created_at.desc&limit=300',
+        );
+        logCache = rows ?? [];
+        renderSistemaLog();
+        updateLogStatus();
+      } catch (err) {
+        if (tbody) {
+          tbody.innerHTML = `<tr><td colspan="6" class="empty">${err.message || String(err)}</td></tr>`;
+        }
+        const el = document.getElementById('log-status');
+        if (el) {
+          el.className = 'status error';
+          el.textContent = err.message || String(err);
+        }
+      } finally {
+        logLoading = false;
+      }
+    }
+
+    async function clearSistemaLog() {
+      if (!window.confirm('Excluir todos os registros do log do sistema?')) return;
+      const btn = document.getElementById('btn-log-clear');
+      if (btn) btn.disabled = true;
+      try {
+        await supabaseRpc('clear_futebol_sistema_log');
+        logCache = [];
+        renderSistemaLog();
+        updateLogStatus();
+      } catch (err) {
+        window.alert(err.message || String(err));
+      } finally {
+        if (btn) btn.disabled = false;
+      }
+    }
+
+    function switchTab(tab) {
+      activeTab = tab;
+      const mercadoPanel = document.getElementById('panel-mercado');
+      const logPanel = document.getElementById('panel-log');
+      const tabMercado = document.getElementById('tab-mercado');
+      const tabLog = document.getElementById('tab-log');
+      const isMercado = tab === 'mercado';
+      if (mercadoPanel) mercadoPanel.hidden = !isMercado;
+      if (logPanel) logPanel.hidden = isMercado;
+      if (tabMercado) {
+        tabMercado.classList.toggle('active', isMercado);
+        tabMercado.setAttribute('aria-selected', isMercado ? 'true' : 'false');
+      }
+      if (tabLog) {
+        tabLog.classList.toggle('active', !isMercado);
+        tabLog.setAttribute('aria-selected', !isMercado ? 'true' : 'false');
+      }
+      if (logPollTimer) {
+        clearInterval(logPollTimer);
+        logPollTimer = null;
+      }
+      if (isMercado) {
+        loadMercado();
+      } else {
+        loadSistemaLog();
+        logPollTimer = setInterval(loadSistemaLog, 30000);
+      }
     }
 
     async function handleLoginSubmit(e) {
@@ -1234,6 +1502,10 @@
 
     document.getElementById('login-form')?.addEventListener('submit', handleLoginSubmit);
     document.getElementById('btn-logout')?.addEventListener('click', handleLogout);
+    document.getElementById('tab-mercado')?.addEventListener('click', () => switchTab('mercado'));
+    document.getElementById('tab-log')?.addEventListener('click', () => switchTab('log'));
+    document.getElementById('btn-log-refresh')?.addEventListener('click', () => loadSistemaLog());
+    document.getElementById('btn-log-clear')?.addEventListener('click', () => clearSistemaLog());
     bootstrapApp();
   </script>
 </body>
