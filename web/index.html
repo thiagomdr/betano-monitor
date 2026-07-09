@@ -1125,9 +1125,6 @@
         if (l.over != null) {
           bits.push(`<span class="hctg-pill">+${lineLabel} (${formatNumber(l.over)})</span>`);
         }
-        if (l.under != null) {
-          bits.push(`<span class="hctg-pill under">-${lineLabel} (${formatNumber(l.under)})</span>`);
-        }
       }
       return `<div class="hctg-pills">${bits.join('')}</div>`;
     }
