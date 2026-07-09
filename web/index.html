@@ -676,6 +676,24 @@
       return appCfg;
     }
 
+    function debugAuthLog(location, message, data, hypothesisId) {
+      // #region agent log
+      fetch('http://127.0.0.1:7904/ingest/86615625-6ae5-4e98-a1da-0a5f0f15fc42', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'X-Debug-Session-Id': 'a1d288' },
+        body: JSON.stringify({
+          sessionId: 'a1d288',
+          location,
+          message,
+          data,
+          hypothesisId,
+          timestamp: Date.now(),
+          runId: 'auth-bypass',
+        }),
+      }).catch(() => {});
+      // #endregion
+    }
+
     async function initSupabaseClient() {
       const cfg = await initAppCfg();
       if (!supabaseClient) {
@@ -683,7 +701,9 @@
           auth: {
             persistSession: true,
             autoRefreshToken: true,
-            detectSessionInUrl: true,
+            detectSessionInUrl: false,
+            storage: window.sessionStorage,
+            storageKey: 'betano-monitor-auth',
           },
         });
       }
@@ -1399,6 +1419,10 @@
         await initAppCfg();
         const sb = await initSupabaseClient();
         const { error } = await sb.auth.signInWithPassword({ email, password });
+        debugAuthLog('index.html:handleLoginSubmit', 'signIn result', {
+          ok: !error,
+          err: error?.message ?? null,
+        }, 'D');
         if (error) {
           if (errEl) errEl.textContent = error.message;
           return;
@@ -1423,8 +1447,22 @@
         await initAppCfg();
         const sb = await initSupabaseClient();
         const { data: { session } } = await sb.auth.getSession();
-        sb.auth.onAuthStateChange((_event, session) => {
-          if (!session) showLogin();
+        const lsKeys = Object.keys(localStorage).filter((k) => k.includes('auth') || k.startsWith('sb-'));
+        const ssKeys = Object.keys(sessionStorage).filter((k) => k.includes('auth') || k.startsWith('sb-'));
+        debugAuthLog('index.html:bootstrapApp', 'session check', {
+          hasSession: !!session,
+          userId: session?.user?.id ? 'present' : null,
+          expiresAt: session?.expires_at ?? null,
+          localStorageAuthKeys: lsKeys.length,
+          sessionStorageAuthKeys: ssKeys.length,
+          branch: session ? 'showApp' : 'showLogin',
+        }, 'A');
+        sb.auth.onAuthStateChange((event, nextSession) => {
+          debugAuthLog('index.html:onAuthStateChange', event, {
+            hasSession: !!nextSession,
+            branch: nextSession ? 'stay-app' : 'showLogin',
+          }, 'C');
+          if (!nextSession) showLogin();
         });
         if (session) {
           showApp();
@@ -1433,6 +1471,7 @@
           showLogin();
         }
       } catch (err) {
+        debugAuthLog('index.html:bootstrapApp', 'bootstrap error', { err: String(err.message || err) }, 'B');
         showLogin();
         const errEl = document.getElementById('login-error');
         if (errEl) errEl.textContent = err.message || String(err);
