@@ -283,13 +283,6 @@
       border-color: rgba(143, 163, 191, 0.35);
       color: var(--muted);
     }
-    .jogo-cell {
-      display: inline-flex;
-      align-items: center;
-      gap: 0.45rem;
-      flex-wrap: wrap;
-      max-width: 100%;
-    }
     .table-scroll-hint {
       margin: 0 0 0.5rem;
       font-size: 0.78rem;
@@ -360,95 +353,6 @@
       border-bottom: 1px solid rgba(255, 255, 255, 0.06);
     }
     .mercado-elevated-popover li:last-child { border-bottom: none; }
-    .mercado-debug-btn {
-      font-size: 0.72rem;
-      padding: 0.2rem 0.45rem;
-      border-radius: 6px;
-      border: 1px solid var(--warn);
-      background: rgba(255, 209, 102, 0.12);
-      color: var(--warn);
-      cursor: pointer;
-      font-weight: 700;
-      flex-shrink: 0;
-    }
-    .mercado-debug-btn:hover {
-      color: var(--text);
-      border-color: var(--warn);
-    }
-    .mercado-debug-modal {
-      display: none;
-      position: fixed;
-      inset: 0;
-      z-index: 1000;
-      background: rgba(0, 0, 0, 0.72);
-      padding: 1rem;
-      overflow: auto;
-    }
-    .mercado-debug-modal.open { display: flex; align-items: flex-start; justify-content: center; }
-    .mercado-debug-panel {
-      width: min(920px, 100%);
-      margin-top: 2vh;
-      background: var(--panel);
-      border: 1px solid var(--border);
-      border-radius: 10px;
-      padding: 1rem 1.1rem 1.25rem;
-      position: relative;
-      max-height: 92vh;
-      overflow: auto;
-    }
-    .mercado-debug-close {
-      position: absolute;
-      top: 0.5rem;
-      right: 0.65rem;
-      border: none;
-      background: transparent;
-      color: var(--muted);
-      font-size: 1.5rem;
-      line-height: 1;
-      cursor: pointer;
-    }
-    .mercado-debug-close:hover { color: var(--text); }
-    .mercado-debug-panel h4 {
-      margin: 0 2rem 0.75rem 0;
-      font-size: 1.05rem;
-    }
-    .debug-section {
-      margin: 0 0 1rem;
-      padding: 0.75rem;
-      border: 1px solid var(--border);
-      border-radius: 8px;
-      background: rgba(0, 0, 0, 0.15);
-    }
-    .debug-section h5 {
-      margin: 0 0 0.5rem;
-      font-size: 0.8rem;
-      text-transform: uppercase;
-      letter-spacing: 0.04em;
-      color: var(--muted);
-    }
-    .debug-pre {
-      margin: 0;
-      padding: 0.65rem;
-      border-radius: 6px;
-      background: #0a1018;
-      font-size: 0.75rem;
-      line-height: 1.45;
-      overflow: auto;
-      max-height: 220px;
-      white-space: pre-wrap;
-      word-break: break-word;
-    }
-    .debug-screenshot {
-      display: block;
-      max-width: 100%;
-      border-radius: 6px;
-      border: 1px solid var(--border);
-      margin-top: 0.5rem;
-    }
-    .debug-status-ok { color: var(--accent); }
-    .debug-status-partial { color: var(--warn); }
-    .debug-status-failed { color: #ff6b6b; }
-    .debug-links a { color: #7eb8ff; margin-right: 1rem; }
     .mercado-delete-btn {
       background: transparent;
       border: none;
@@ -547,7 +451,6 @@
   </section>
 
   <div id="app-shell" hidden>
-  <!-- pages-build: debug-jogo-inline-v2 -->
   <header>
     <div class="header-row">
       <div>
@@ -600,12 +503,6 @@
       </table>
     </div>
     <div id="mercado-elevated-popover" class="mercado-elevated-popover" role="dialog" aria-hidden="true"></div>
-    <div id="mercado-debug-modal" class="mercado-debug-modal" role="dialog" aria-hidden="true" aria-labelledby="mercado-debug-title">
-      <div class="mercado-debug-panel">
-        <button type="button" class="mercado-debug-close" aria-label="Fechar">&times;</button>
-        <div id="mercado-debug-content"></div>
-      </div>
-    </div>
   </main>
   </div>
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
@@ -617,9 +514,6 @@
     let mercadoLoading = false;
     let mercadoFilterValidadosOnly = localStorage.getItem('mercadoFilterValidados') === '1';
     let mercadoMetaCache = null;
-    let screenshotDebugCache = {};
-    const GITHUB_SCREENSHOT_WORKFLOW_URL =
-      'https://github.com/thiagomdr/betano-monitor/actions/workflows/betano-screenshot-odds.yml';
 
     function formatNumber(n) {
       if (n == null || Number.isNaN(Number(n))) return '—';
@@ -1128,128 +1022,6 @@
       return list;
     }
 
-    function escapeHtml(value) {
-      return String(value ?? '')
-        .replace(/&/g, '&amp;')
-        .replace(/</g, '&lt;')
-        .replace(/>/g, '&gt;')
-        .replace(/"/g, '&quot;');
-    }
-
-    function debugStatusClass(status) {
-      if (status === 'ok') return 'debug-status-ok';
-      if (status === 'partial') return 'debug-status-partial';
-      return 'debug-status-failed';
-    }
-
-    function formatDebugJsonBlock(label, data) {
-      const empty = data == null || (Array.isArray(data) && !data.length);
-      if (empty) {
-        return `<div class="debug-section"><h5>${label}</h5><p class="muted">—</p></div>`;
-      }
-      return `<div class="debug-section"><h5>${label}</h5><pre class="debug-pre">${escapeHtml(JSON.stringify(data, null, 2))}</pre></div>`;
-    }
-
-    function hideMercadoDebugModal() {
-      const modal = document.getElementById('mercado-debug-modal');
-      if (!modal) return;
-      modal.classList.remove('open');
-      modal.setAttribute('aria-hidden', 'true');
-      document.getElementById('mercado-debug-content').innerHTML = '';
-    }
-
-    function buildMercadoDebugHtml(row) {
-      const shot = screenshotDebugCache[String(row.event_id)] ?? null;
-      const match = `${row.home || '—'} x ${row.away || '—'}`;
-      const meta = mercadoMetaCache ?? {};
-      const edgeHctg = parseHctgLines(row.hctg_lines);
-      const shotStatus = shot?.status ?? null;
-
-      let screenshotSection = '<div class="debug-section"><h5>Screenshot (GitHub Actions)</h5>';
-      if (!shot) {
-        screenshotSection += `<p class="muted">Nenhum teste salvo ainda. Rode o workflow e configure os secrets <code>SUPABASE_URL</code> + <code>SUPABASE_SERVICE_ROLE_KEY</code>.</p>`;
-        screenshotSection += `<p class="debug-links"><a href="${GITHUB_SCREENSHOT_WORKFLOW_URL}" target="_blank" rel="noopener">Abrir workflow no GitHub</a></p>`;
-      } else {
-        screenshotSection += `<p>Status: <strong class="${debugStatusClass(shotStatus)}">${escapeHtml(shotStatus || '—')}</strong> · ${formatDate(shot.scraped_at || shot.updated_at)}</p>`;
-        if (shot.page_error) {
-          screenshotSection += `<pre class="debug-pre">${escapeHtml(shot.page_error)}</pre>`;
-        }
-        if (shot.gemini_error) {
-          screenshotSection += `<p class="muted">Gemini:</p><pre class="debug-pre">${escapeHtml(String(shot.gemini_error).slice(0, 1200))}</pre>`;
-        }
-        if (shot.screenshot_full_url) {
-          screenshotSection += `<a href="${escapeHtml(shot.screenshot_full_url)}" target="_blank" rel="noopener"><img class="debug-screenshot" src="${escapeHtml(shot.screenshot_full_url)}" alt="Screenshot Betano no runner" loading="lazy" /></a>`;
-        } else if (shot.screenshot_block_url) {
-          screenshotSection += `<a href="${escapeHtml(shot.screenshot_block_url)}" target="_blank" rel="noopener"><img class="debug-screenshot" src="${escapeHtml(shot.screenshot_block_url)}" alt="Screenshot Total de Gols" loading="lazy" /></a>`;
-        }
-        screenshotSection += '<p class="debug-links">';
-        if (shot.github_run_url) {
-          screenshotSection += `<a href="${escapeHtml(shot.github_run_url)}" target="_blank" rel="noopener">Ver execucao GitHub</a>`;
-        }
-        screenshotSection += `<a href="${GITHUB_SCREENSHOT_WORKFLOW_URL}" target="_blank" rel="noopener">Workflow screenshot</a>`;
-        screenshotSection += '</p>';
-      }
-      screenshotSection += '</div>';
-
-      const edgeSection = [
-        '<div class="debug-section"><h5>Coleta Edge (Supabase)</h5>',
-        `<p class="muted">Fonte HCTG: ${escapeHtml(row.hctg_source || '—')} · ${formatDate(row.hctg_fetched_at)}</p>`,
-        `<p>Over +0,5: linha ${formatNumber(row.over_05_line)} · odd ${formatNumber(row.over_05_odd)} · placar captura ${escapeHtml(row.placar_na_captura || '—')}</p>`,
-        `<p>Ao vivo: ${escapeHtml(row.live_score || '—')} · min ${row.last_minute ?? '—'} · over0 ${formatNumber(row.live_over_0_odd)} (linha ${formatNumber(row.live_over_0_line)})</p>`,
-        formatDebugJsonBlock('hctg_lines (BD)', edgeHctg),
-        formatDebugJsonBlock('elevated_odds_log', parseElevatedOddsLog(row.elevated_odds_log)),
-        '</div>',
-      ].join('');
-
-      const metaSection = [
-        '<div class="debug-section"><h5>Meta da coleta</h5>',
-        `<p>Ultima coleta: ${formatDate(meta.fetched_at)} · fonte ${escapeHtml(meta.source || '—')}</p>`,
-        meta.last_error
-          ? `<pre class="debug-pre">${escapeHtml(meta.last_error)}</pre>`
-          : '<p class="muted">Sem erro na ultima coleta.</p>',
-        '</div>',
-      ].join('');
-
-      const shotDom = shot?.dom_lines ?? [];
-      const shotGemini = shot?.gemini_lines ?? [];
-
-      return [
-        `<h4 id="mercado-debug-title">Debug · ${escapeHtml(match)}</h4>`,
-        `<p class="muted">event_id ${escapeHtml(row.event_id)} · ${escapeHtml(row.betano_url || '')}</p>`,
-        metaSection,
-        edgeSection,
-        screenshotSection,
-        formatDebugJsonBlock('DOM screenshot test (runner)', shotDom),
-        formatDebugJsonBlock('Gemini Vision (runner)', shotGemini),
-      ].join('');
-    }
-
-    function showMercadoDebugModal(eventId) {
-      const row = mercadoCache.find((r) => String(r.event_id) === String(eventId));
-      if (!row) return;
-      hideMercadoElevatedPopover();
-      const modal = document.getElementById('mercado-debug-modal');
-      const content = document.getElementById('mercado-debug-content');
-      if (!modal || !content) return;
-      content.innerHTML = buildMercadoDebugHtml(row);
-      modal.classList.add('open');
-      modal.setAttribute('aria-hidden', 'false');
-    }
-
-    async function loadScreenshotDebugCache() {
-      try {
-        const rows = await supabaseGet(
-          'futebol_screenshot_debug?select=*&order=updated_at.desc&limit=100',
-        );
-        screenshotDebugCache = {};
-        for (const row of rows ?? []) {
-          screenshotDebugCache[String(row.event_id)] = row;
-        }
-      } catch {
-        screenshotDebugCache = {};
-      }
-    }
-
     function renderMercado() {
       const tbody = document.getElementById('mercado-tbody');
       if (!tbody) return;
@@ -1274,7 +1046,7 @@
           : '—';
         return `<tr>
           <td data-label="#">${i + 1}</td>
-          <td data-label="Jogo"><div class="jogo-cell"><strong>${match}</strong><button type="button" class="mercado-debug-btn" data-debug-mercado="${row.event_id}" title="Coleta Edge + screenshot teste">Debug</button></div></td>
+          <td data-label="Jogo"><strong>${match}</strong></td>
           <td data-label="Total de Gols">${formatHctgPills(row.hctg_lines)}</td>
           <td data-label="Estrategia">${mercadoEstrategiaLabel(row)}</td>
           <td data-label="Liga">${league}</td>
@@ -1316,7 +1088,6 @@
         const [rows, metaRows] = await Promise.all([
           supabaseGet('futebol_mercado_gols_05?select=*&order=updated_at.desc&limit=500'),
           supabaseGet('futebol_live_meta?id=eq.1&select=fetched_at,source,last_error'),
-          loadScreenshotDebugCache(),
         ]);
         mercadoCache = rows ?? [];
         mercadoMetaCache = metaRows?.[0] ?? null;
@@ -1353,13 +1124,6 @@
     }
 
     document.getElementById('mercado-tbody')?.closest('main')?.addEventListener('click', async (e) => {
-      const debugBtn = e.target.closest('[data-debug-mercado]');
-      if (debugBtn) {
-        e.preventDefault();
-        e.stopPropagation();
-        showMercadoDebugModal(debugBtn.getAttribute('data-debug-mercado'));
-        return;
-      }
       const popBtn = e.target.closest('[data-super-popover]');
       if (popBtn) {
         e.preventDefault();
@@ -1391,16 +1155,6 @@
       if (e.target.closest('[data-super-popover]') || e.target.closest('#mercado-elevated-popover')) return;
       hideMercadoElevatedPopover();
     }, true);
-
-    document.getElementById('mercado-debug-modal')?.addEventListener('click', (e) => {
-      if (e.target.id === 'mercado-debug-modal' || e.target.closest('.mercado-debug-close')) {
-        hideMercadoDebugModal();
-      }
-    });
-
-    document.addEventListener('keydown', (e) => {
-      if (e.key === 'Escape') hideMercadoDebugModal();
-    });
 
     async function startMercadoPolling() {
       await loadMercado();
