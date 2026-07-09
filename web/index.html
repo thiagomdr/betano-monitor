@@ -346,8 +346,15 @@
     .hctg-pills {
       display: flex;
       flex-wrap: wrap;
+      align-items: center;
       gap: 0.35rem;
       line-height: 1.45;
+    }
+    .hctg-fetched-at {
+      font-size: 0.75rem;
+      color: var(--muted);
+      white-space: nowrap;
+      flex-shrink: 0;
     }
     .hctg-pill {
       display: inline-block;
@@ -637,6 +644,7 @@
       gols_timeline: 'Gols timeline',
       hctg_odds: 'ODDS HCTG',
       hctg_falha: 'HCTG falhou',
+      worker_mem: 'RAM worker',
       mercado_captura: 'Captura +0,5',
       mercado_green: 'GREEN',
       mercado_red: 'RED',
@@ -664,6 +672,17 @@
       const d = new Date(iso);
       if (Number.isNaN(d.getTime())) return '';
       return d.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' });
+    }
+
+    function formatTimeHms(iso) {
+      if (!iso) return '';
+      const d = new Date(iso);
+      if (Number.isNaN(d.getTime())) return '';
+      return d.toLocaleTimeString('pt-BR', {
+        hour: '2-digit',
+        minute: '2-digit',
+        second: '2-digit',
+      });
     }
 
     function formatOdd(n) {
@@ -984,7 +1003,7 @@
       const log = buildSuperPopoverLog(row);
       const match = row ? `${row.home || '—'} x ${row.away || '—'}` : '';
       if (!log.length) {
-        return `<h4>Registro +0,5 · ${match}</h4><p class="muted">Nenhum registro ainda.</p>`;
+        return `<h4>Histórico odds · ${match}</h4><p class="muted">Nenhum registro ainda.</p>`;
       }
       const items = log.slice().reverse().map((e) => {
         const when = formatDate(e.at);
@@ -996,7 +1015,7 @@
           : (e.live ? ' <span class="muted">(agora)</span>' : '');
         return `<li><strong>${lineLabel}</strong> @ ${formatOdd(e.odd)}${tag}<br><span class="muted">${when} · ${min} · ${score}</span></li>`;
       }).join('');
-      return `<h4>Registro +0,5 · ${match}</h4><ul>${items}</ul>`;
+      return `<h4>Histórico odds · ${match}</h4><ul>${items}</ul>`;
     }
 
     function hideMercadoElevatedPopover() {
@@ -1116,10 +1135,16 @@
       );
     }
 
-    function formatHctgPills(raw) {
+    function formatHctgPills(raw, fetchedAt) {
       const lines = parseHctgLines(raw).slice().sort((a, b) => a.line - b.line);
       if (!lines.length) return '<span class="muted">—</span>';
       const bits = [];
+      const timeLabel = formatTimeHms(fetchedAt);
+      if (timeLabel) {
+        bits.push(
+          `<span class="hctg-fetched-at" title="Última coleta: ${formatDate(fetchedAt)}">${timeLabel}</span>`,
+        );
+      }
       for (const l of lines) {
         const lineLabel = formatNumber(l.line);
         if (l.over != null) {
@@ -1205,7 +1230,7 @@
         return `<tr>
           <td data-label="#">${i + 1}</td>
           <td data-label="Jogo"><strong>${match}</strong></td>
-          <td data-label="Total de Gols">${formatHctgPills(row.hctg_lines)}</td>
+          <td data-label="Total de Gols">${formatHctgPills(row.hctg_lines, row.hctg_fetched_at)}</td>
           <td data-label="Placar">${mercadoPlacarLabel(row)}</td>
           <td data-label="Estrategia">${mercadoEstrategiaLabel(row)}</td>
           <td data-label="Liga">${league}</td>
