@@ -55,6 +55,82 @@
       color: var(--muted);
     }
     .status.error { color: #ff6b6b; }
+    .login-screen {
+      min-height: 100vh;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: 1.5rem;
+    }
+    .login-screen[hidden] { display: none; }
+    .login-card {
+      width: 100%;
+      max-width: 360px;
+      background: var(--panel);
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      padding: 1.5rem;
+    }
+    .login-card h2 {
+      margin: 0 0 0.35rem;
+      font-size: 1.25rem;
+    }
+    .login-card p {
+      margin: 0 0 1rem;
+      color: var(--muted);
+      font-size: 0.85rem;
+    }
+    .login-card label {
+      display: block;
+      font-size: 0.8rem;
+      color: var(--muted);
+      margin-bottom: 0.25rem;
+    }
+    .login-card input {
+      width: 100%;
+      margin-bottom: 0.85rem;
+      padding: 0.55rem 0.65rem;
+      border-radius: 6px;
+      border: 1px solid var(--border);
+      background: var(--bg);
+      color: var(--text);
+      font-size: 0.95rem;
+    }
+    .login-card button[type="submit"] {
+      width: 100%;
+      padding: 0.6rem;
+      border: none;
+      border-radius: 6px;
+      background: var(--betano-orange);
+      color: #fff;
+      font-weight: 600;
+      cursor: pointer;
+    }
+    .login-card button[type="submit"]:hover { filter: brightness(1.05); }
+    .login-error {
+      margin: 0.75rem 0 0;
+      color: #ff6b6b;
+      font-size: 0.85rem;
+      min-height: 1.2em;
+    }
+    #app-shell[hidden] { display: none; }
+    .header-row {
+      display: flex;
+      flex-wrap: wrap;
+      align-items: flex-start;
+      justify-content: space-between;
+      gap: 0.75rem;
+    }
+    .btn-logout {
+      padding: 0.35rem 0.75rem;
+      border-radius: 6px;
+      border: 1px solid var(--border);
+      background: transparent;
+      color: var(--muted);
+      font-size: 0.8rem;
+      cursor: pointer;
+    }
+    .btn-logout:hover { color: var(--text); border-color: var(--muted); }
     main { padding: 1rem 1.25rem 2rem; }
     .hint {
       color: var(--muted);
@@ -457,14 +533,33 @@
   </style>
 </head>
 <body>
+  <section class="login-screen" id="login-screen">
+    <form class="login-card" id="login-form" autocomplete="on">
+      <h2>Monitor Betano</h2>
+      <p>Entre para ver o mercado de Gols +0,5.</p>
+      <label for="login-email">Email</label>
+      <input type="email" id="login-email" name="email" required autocomplete="username" />
+      <label for="login-password">Senha</label>
+      <input type="password" id="login-password" name="password" required autocomplete="current-password" />
+      <button type="submit">Entrar</button>
+      <p class="login-error" id="login-error" aria-live="polite"></p>
+    </form>
+  </section>
+
+  <div id="app-shell" hidden>
   <!-- pages-build: debug-jogo-inline-v2 -->
   <header>
+    <div class="header-row">
+      <div>
     <h1 class="brand-title">
       <span class="brand-monitor">Monitor</span>
       <a class="brand-betano" href="https://www.betano.bet.br/" target="_blank" rel="noopener noreferrer">Betano</a>
     </h1>
     <p class="page-subtitle">Mercado de Gols +0,5</p>
     <p class="subtitle">Betano via Supabase · coleta na nuvem</p>
+      </div>
+      <button type="button" class="btn-logout" id="btn-logout">Sair</button>
+    </div>
     <div class="status" id="status">Carregando…</div>
   </header>
   <main>
@@ -512,8 +607,12 @@
       </div>
     </div>
   </main>
+  </div>
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
   <script>
     let appCfg = null;
+    let supabaseClient = null;
+    let mercadoPollTimer = null;
     let mercadoCache = [];
     let mercadoLoading = false;
     let mercadoFilterValidadosOnly = localStorage.getItem('mercadoFilterValidados') === '1';
@@ -577,14 +676,54 @@
       return appCfg;
     }
 
-    async function supabaseGet(url, anonKey, path) {
-      const res = await fetch(`${url}/rest/v1/${path}`, {
+    async function initSupabaseClient() {
+      const cfg = await initAppCfg();
+      if (!supabaseClient) {
+        supabaseClient = window.supabase.createClient(cfg.url, cfg.anonKey, {
+          auth: {
+            persistSession: true,
+            autoRefreshToken: true,
+            detectSessionInUrl: true,
+          },
+        });
+      }
+      return supabaseClient;
+    }
+
+    async function getAccessToken() {
+      const sb = await initSupabaseClient();
+      const { data: { session } } = await sb.auth.getSession();
+      return session?.access_token ?? null;
+    }
+
+    function showLogin() {
+      document.getElementById('login-screen')?.removeAttribute('hidden');
+      document.getElementById('app-shell')?.setAttribute('hidden', '');
+      if (mercadoPollTimer) {
+        clearInterval(mercadoPollTimer);
+        mercadoPollTimer = null;
+      }
+    }
+
+    function showApp() {
+      document.getElementById('login-screen')?.setAttribute('hidden', '');
+      document.getElementById('app-shell')?.removeAttribute('hidden');
+    }
+
+    async function supabaseGet(path) {
+      const token = await getAccessToken();
+      if (!token) throw new Error('Faca login para continuar.');
+      const res = await fetch(`${appCfg.url}/rest/v1/${path}`, {
         headers: {
-          apikey: anonKey,
-          Authorization: `Bearer ${anonKey}`,
+          apikey: appCfg.anonKey,
+          Authorization: `Bearer ${token}`,
           Accept: 'application/json',
         },
       });
+      if (res.status === 401 || res.status === 403) {
+        showLogin();
+        throw new Error('Sessao expirada. Faca login novamente.');
+      }
       if (!res.ok) {
         const text = await res.text();
         throw new Error(`Supabase ${res.status}: ${text.slice(0, 200)}`);
@@ -592,17 +731,23 @@
       return res.json();
     }
 
-    async function supabasePatch(url, anonKey, path, body) {
-      const res = await fetch(`${url}/rest/v1/${path}`, {
+    async function supabasePatch(path, body) {
+      const token = await getAccessToken();
+      if (!token) throw new Error('Faca login para continuar.');
+      const res = await fetch(`${appCfg.url}/rest/v1/${path}`, {
         method: 'PATCH',
         headers: {
-          apikey: anonKey,
-          Authorization: `Bearer ${anonKey}`,
+          apikey: appCfg.anonKey,
+          Authorization: `Bearer ${token}`,
           'Content-Type': 'application/json',
           Prefer: 'return=representation',
         },
         body: JSON.stringify(body),
       });
+      if (res.status === 401 || res.status === 403) {
+        showLogin();
+        throw new Error('Sessao expirada. Faca login novamente.');
+      }
       if (!res.ok) {
         const text = await res.text();
         throw new Error(`Supabase ${res.status}: ${text.slice(0, 200)}`);
@@ -618,8 +763,6 @@
         : 'Remover este jogo da lista?';
       if (!window.confirm(msg)) return;
       const updated = await supabasePatch(
-        appCfg.url,
-        appCfg.anonKey,
         `futebol_mercado_gols_05?event_id=eq.${encodeURIComponent(eventId)}`,
         { resultado: 'excluido', updated_at: new Date().toISOString() },
       );
@@ -1073,11 +1216,9 @@
       modal.setAttribute('aria-hidden', 'false');
     }
 
-    async function loadScreenshotDebugCache(url, anonKey) {
+    async function loadScreenshotDebugCache() {
       try {
         const rows = await supabaseGet(
-          url,
-          anonKey,
           'futebol_screenshot_debug?select=*&order=updated_at.desc&limit=100',
         );
         screenshotDebugCache = {};
@@ -1153,17 +1294,9 @@
       try {
         await initAppCfg();
         const [rows, metaRows] = await Promise.all([
-          supabaseGet(
-            appCfg.url,
-            appCfg.anonKey,
-            'futebol_mercado_gols_05?select=*&order=updated_at.desc&limit=500',
-          ),
-          supabaseGet(
-            appCfg.url,
-            appCfg.anonKey,
-            'futebol_live_meta?id=eq.1&select=fetched_at,source,last_error',
-          ),
-          loadScreenshotDebugCache(appCfg.url, appCfg.anonKey),
+          supabaseGet('futebol_mercado_gols_05?select=*&order=updated_at.desc&limit=500'),
+          supabaseGet('futebol_live_meta?id=eq.1&select=fetched_at,source,last_error'),
+          loadScreenshotDebugCache(),
         ]);
         mercadoCache = rows ?? [];
         mercadoMetaCache = metaRows?.[0] ?? null;
@@ -1249,8 +1382,66 @@
       if (e.key === 'Escape') hideMercadoDebugModal();
     });
 
-    loadMercado();
-    setInterval(loadMercado, 60000);
+    async function startMercadoPolling() {
+      await loadMercado();
+      if (mercadoPollTimer) clearInterval(mercadoPollTimer);
+      mercadoPollTimer = setInterval(loadMercado, 60000);
+    }
+
+    async function handleLoginSubmit(e) {
+      e.preventDefault();
+      const errEl = document.getElementById('login-error');
+      if (errEl) errEl.textContent = '';
+      const email = document.getElementById('login-email')?.value?.trim();
+      const password = document.getElementById('login-password')?.value ?? '';
+      if (!email || !password) return;
+      try {
+        await initAppCfg();
+        const sb = await initSupabaseClient();
+        const { error } = await sb.auth.signInWithPassword({ email, password });
+        if (error) {
+          if (errEl) errEl.textContent = error.message;
+          return;
+        }
+        showApp();
+        await startMercadoPolling();
+      } catch (err) {
+        if (errEl) errEl.textContent = err.message || String(err);
+      }
+    }
+
+    async function handleLogout() {
+      const sb = await initSupabaseClient();
+      await sb.auth.signOut();
+      showLogin();
+      const loginPassword = document.getElementById('login-password');
+      if (loginPassword) loginPassword.value = '';
+    }
+
+    async function bootstrapApp() {
+      try {
+        await initAppCfg();
+        const sb = await initSupabaseClient();
+        const { data: { session } } = await sb.auth.getSession();
+        sb.auth.onAuthStateChange((_event, session) => {
+          if (!session) showLogin();
+        });
+        if (session) {
+          showApp();
+          await startMercadoPolling();
+        } else {
+          showLogin();
+        }
+      } catch (err) {
+        showLogin();
+        const errEl = document.getElementById('login-error');
+        if (errEl) errEl.textContent = err.message || String(err);
+      }
+    }
+
+    document.getElementById('login-form')?.addEventListener('submit', handleLoginSubmit);
+    document.getElementById('btn-logout')?.addEventListener('click', handleLogout);
+    bootstrapApp();
   </script>
 </body>
 </html>
