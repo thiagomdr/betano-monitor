@@ -6,8 +6,22 @@
  * Header opcional: x-cron-secret (se CRON_SECRET estiver definido)
  *
  * Telegram (captura +0,5): TELEGRAM_BOT_TOKEN, TELEGRAM_CHAT_ID, TELEGRAM_NOTIFY_CAPTURE=1
+ * GREEN/RED: mesma flag; uma notificacao por liquidacao (sem lembrete).
  */
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.49.1";
+import {
+  notifyTelegramCaptureOffer,
+  notifyTelegramSettleOnce,
+  processPendingTelegramReminders,
+  processPendingTelegramSettlements,
+} from "../_shared/telegram-capture-notify.ts";
+import {
+  canCaptureNeedLineFromHctg,
+  minHctgOverLine,
+  needLineOverFromHctg,
+  type HctgSnapshot,
+} from "../_shared/hctg-match-totals.ts";
+import { insertSistemaLog, matchLabel } from "../_shared/sistema-log.ts";
 
 const BETANO_BASE = "https://www.betano.bet.br";
 const OVERVIEW_URL =
@@ -40,13 +54,13 @@ function toNum(value: unknown): number | null {
   return Number.isFinite(n) ? n : null;
 }
 
-async function betanoGet(url: string): Promise<unknown> {
+async function betanoGet(url: string, referer = `${BETANO_BASE}/live/`): Promise<unknown> {
   const res = await fetch(url, {
     headers: {
       Accept: "application/json, text/plain, */*",
       "User-Agent": USER_AGENT,
       "Accept-Language": "pt-BR,pt;q=0.9",
-      Referer: `${BETANO_BASE}/live/`,
+      Referer: referer,
       Origin: BETANO_BASE,
     },
   });
@@ -55,6 +69,63 @@ async function betanoGet(url: string): Promise<unknown> {
     throw new Error(`Betano HTTP ${res.status}: ${text.slice(0, 200)}`);
   }
   return await res.json();
+}
+
+/** Slots over/under a partir da linha principal do overview (aba Total de Gols). */
+function buildTotalsFromHctgSnapshot(snap: HctgSnapshot, goalsTotal: number): TotalsOdds {
+  if (!snap.lines.length) {
+    return { ...EMPTY_TOTALS_ODDS, elevated_over_lines: [] };
+  }
+  const loose = snap.lines
+    .filter((l) => l.over != null)
+    .map((l) => ({
+      line: l.line,
+      overOdd: l.over as number,
+      underOdd: l.under ?? undefined,
+    }));
+  let totals = totalsFromLooseGoals(loose, goalsTotal);
+  const minLine = minHctgOverLine(snap.lines);
+  if (minLine != null) totals.min_over_absolute_line = minLine;
+  const needLine = goalsTotal + 0.5;
+  totals.elevated_over_lines = snap.lines
+    .filter((l) => l.over != null && l.line > needLine + 0.01)
+    .map((l) => ({ line: l.line, odd: l.over as number }));
+  totals.elevated_over_seen = totals.elevated_over_lines.length > 0;
+  return canonicalizeTotalsOver05(totals, goalsTotal);
+}
+
+function mercadoHadElevatedFromHctg(snap: HctgSnapshot, goalsTotal: number): boolean {
+  if (canCaptureNeedLineFromHctg(snap.lines, goalsTotal)) return false;
+  const minLine = minHctgOverLine(snap.lines);
+  return minLine != null && minLine > goalsTotal + 0.5 + 0.01;
+}
+
+
+/** HCTG vem do worker OddsPapi (WebSocket) / legado HTML — Edge so le do BD. */
+const EMPTY_HCTG: HctgSnapshot = { lines: [], source: "pending", marketIds: [] };
+
+function hctgSnapshotFromDbRow(row: Json | null | undefined): HctgSnapshot {
+  if (!row) return { ...EMPTY_HCTG };
+  const raw = row.hctg_lines;
+  const lines = Array.isArray(raw) ? raw as HctgSnapshot["lines"] : [];
+  const source = row.hctg_source != null ? String(row.hctg_source) : "pending";
+  return { lines, source, marketIds: [] };
+}
+
+async function loadHctgSnapshotsByEvent(
+  supabase: ReturnType<typeof createClient>,
+  eventIds: string[],
+): Promise<Map<string, HctgSnapshot>> {
+  const map = new Map<string, HctgSnapshot>();
+  if (!eventIds.length) return map;
+  const { data } = await supabase
+    .from("futebol_mercado_gols_05")
+    .select("event_id,hctg_lines,hctg_source")
+    .in("event_id", eventIds);
+  for (const row of data ?? []) {
+    map.set(String(row.event_id), hctgSnapshotFromDbRow(row as Json));
+  }
+  return map;
 }
 
 function asRecord(value: unknown): Json | null {
@@ -520,6 +591,36 @@ function collectTrueOver05ForLog(
   return { line: totals.over_0_line, odd: totals.over_0_odd };
 }
 
+/** Menor linha Over HCTG apostavel: +0,5 real ou linha elevada (fase Super). */
+function collectHctgMinOverForLog(
+  lines: HctgSnapshot["lines"],
+  goalsTotal: number,
+): { line: number; odd: number; remaining: number } | null {
+  const needHit = needLineOverFromHctg(lines, goalsTotal);
+  if (needHit) {
+    return { line: needHit.line, odd: needHit.odd, remaining: 0.5 };
+  }
+  const minLine = minHctgOverLine(lines);
+  if (minLine == null) return null;
+  const hit = lines.find((l) =>
+    l.over != null && Math.abs(l.line - minLine) < 0.01
+  );
+  if (!hit?.over) return null;
+  return {
+    line: minLine,
+    odd: hit.over,
+    remaining: Math.round((minLine - goalsTotal) * 10) / 10,
+  };
+}
+
+function isImediatoFirstHctgSnapshot(
+  scoreText: string,
+  line: number,
+): boolean {
+  return goalsTotalFromScoreText(scoreText) === 0 &&
+    Math.abs(line - 0.5) < 0.01;
+}
+
 function parseElevatedOddsLog(raw: unknown): ElevatedOddLogEntry[] {
   if (!Array.isArray(raw)) return [];
   return raw.filter((e) =>
@@ -531,20 +632,16 @@ async function appendMercadoElevatedOddsLog(
   supabase: ReturnType<typeof createClient>,
   eventId: string,
   ctx: MercadoGols05Context,
-  totals: TotalsOdds,
+  hctgSnap: HctgSnapshot,
   existingLog: unknown,
 ): Promise<void> {
   const goalsTotal = goalsTotalFromScoreText(ctx.score_text);
-  const canonical = canonicalizeTotalsOver05(totals, goalsTotal);
-  const snapshot = collectTrueOver05ForLog(canonical, goalsTotal);
+  const snapshot = collectHctgMinOverForLog(hctgSnap.lines, goalsTotal);
   if (!snapshot) return;
 
   const log = parseElevatedOddsLog(existingLog);
   const lastEntry = log.length > 0 ? log[log.length - 1] : null;
-  if (lastEntry &&
-    Math.abs(lastEntry.line - snapshot.line) < 0.01 &&
-    lastEntry.odd != null &&
-    Math.abs(lastEntry.odd - snapshot.odd) < 0.01) {
+  if (lastEntry && Math.abs(lastEntry.line - snapshot.line) < 0.01) {
     return;
   }
 
@@ -555,7 +652,7 @@ async function appendMercadoElevatedOddsLog(
     score: ctx.score_text,
     line: snapshot.line,
     odd: snapshot.odd,
-    remaining: 0.5,
+    remaining: snapshot.remaining,
   });
 
   const trimmed = log.length > 300 ? log.slice(-300) : log;
@@ -1976,6 +2073,8 @@ type MercadoGols05Row = {
   placar_na_captura?: string | null;
   elevated_odds_log?: unknown;
   estrategia?: string | null;
+  telegram_capture_sent_at?: string | null;
+  telegram_confirmacao?: string | null;
 };
 
 type MercadoEstrategia = "super_05" | "imediato_05";
@@ -1990,90 +2089,25 @@ type MercadoGols05Context = {
   score_text: string;
 };
 
-type TelegramCaptureRow = {
-  event_id: string;
-  home: string | null;
-  away: string | null;
-  league: string | null;
-  country: string | null;
-  estrategia: string | null;
-  disponivel_desde_minuto: number | null;
-  placar_na_captura: string | null;
-  over_05_line: number | null;
-  over_05_odd: number | null;
-  betano_url: string | null;
-  captured_at: string | null;
-};
-
-function formatTelegramNumber(n: number | null | undefined): string {
-  if (n == null || Number.isNaN(Number(n))) return "—";
-  return Number(n).toLocaleString("pt-BR", { maximumFractionDigits: 2 });
-}
-
-function formatTelegramDate(iso: string | null | undefined): string {
-  if (!iso) return "—";
-  const d = new Date(iso);
-  if (Number.isNaN(d.getTime())) return iso;
-  return d.toLocaleString("pt-BR");
-}
-
-function mercadoEstrategiaTelegramLabel(estrategia: string | null | undefined): string {
-  if (estrategia === "super_05") return "Super Estrategia";
-  if (estrategia === "imediato_05") return "Imediato";
-  return "—";
-}
-
-async function notifyTelegramCapture(row: TelegramCaptureRow): Promise<void> {
-  if (Deno.env.get("TELEGRAM_NOTIFY_CAPTURE") !== "1") return;
-  const token = Deno.env.get("TELEGRAM_BOT_TOKEN");
-  const chatId = Deno.env.get("TELEGRAM_CHAT_ID");
-  if (!token || !chatId) {
-    console.warn("telegram capture notify skipped: missing TELEGRAM_BOT_TOKEN or TELEGRAM_CHAT_ID");
-    return;
-  }
-
-  const leagueLine = [row.league, row.country].filter(Boolean).join(" · ") || "—";
-  const minute = row.disponivel_desde_minuto != null ? `${row.disponivel_desde_minuto}'` : "—";
-  const text = [
-    "CAPTURA +0,5",
-    "",
-    `${row.home ?? "—"} x ${row.away ?? "—"}`,
-    leagueLine,
-    "",
-    `Estrategia: ${mercadoEstrategiaTelegramLabel(row.estrategia)}`,
-    `Minuto: ${minute} | Placar: ${row.placar_na_captura ?? "—"}`,
-    `Linha: Mais de ${formatTelegramNumber(row.over_05_line)}`,
-    `Odd: ${formatTelegramNumber(row.over_05_odd)}`,
-    "",
-    `Event ID: ${row.event_id}`,
-    `Coletado: ${formatTelegramDate(row.captured_at)}`,
-    row.betano_url ? `\n${row.betano_url}` : "",
-  ].join("\n");
-
-  try {
-    const res = await fetch(`https://api.telegram.org/bot${token}/sendMessage`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        chat_id: chatId,
-        text,
-        disable_web_page_preview: false,
-      }),
-    });
-    if (!res.ok) {
-      console.error("telegram capture notify failed", res.status, await res.text());
-    }
-  } catch (err) {
-    console.error("telegram capture notify error", err);
-  }
-}
-
-/** Super: houve fase sem +0,5 real antes da captura. Imediato: +0,5 ja no inicio (min 0-1). */
+/** Super: primeira odd HCTG nao foi +0,5 em 0×0. Imediato: primeira odd em 0×0 ja e +0,5. */
 function resolveMercadoEstrategiaOnCapture(
   existing: MercadoGols05Row,
   captureMinute: number | null,
+  captureScore: string,
+  captureLine: number | null,
 ): MercadoEstrategia {
-  if (!existing.had_min_plus2_before) return "imediato_05";
+  const log = parseElevatedOddsLog(existing.elevated_odds_log);
+  const first = log[0];
+  if (first) {
+    return isImediatoFirstHctgSnapshot(first.score, first.line)
+      ? "imediato_05"
+      : "super_05";
+  }
+  if (captureLine != null &&
+    isImediatoFirstHctgSnapshot(captureScore, captureLine)) {
+    return "imediato_05";
+  }
+  if (existing.had_min_plus2_before) return "super_05";
   const indisponivel = existing.indisponivel_ate_minuto ?? 0;
   const cap = captureMinute ?? 0;
   if (cap <= 1 && indisponivel <= 1) return "imediato_05";
@@ -2115,7 +2149,7 @@ async function touchMercadoWatching(
   supabase: ReturnType<typeof createClient>,
   eventId: string,
   ctx: MercadoGols05Context,
-  totals: TotalsOdds,
+  hctgSnap: HctgSnapshot,
   existing: MercadoGols05Row,
   hadMinPlus2: boolean,
 ): Promise<void> {
@@ -2131,7 +2165,7 @@ async function touchMercadoWatching(
     supabase,
     eventId,
     ctx,
-    totals,
+    hctgSnap,
     existing.elevated_odds_log,
   );
 }
@@ -2174,6 +2208,24 @@ async function settleMercadoGols05Pending(
       placar_final: scoreText,
       updated_at: nowIso,
     }).eq("event_id", row.event_id).eq("resultado", "pending");
+    const { data: meta } = await supabase
+      .from("futebol_mercado_gols_05")
+      .select("home,away,over_05_odd")
+      .eq("event_id", row.event_id)
+      .maybeSingle();
+    await insertSistemaLog(supabase, {
+      source: "edge-live",
+      action: "mercado_green",
+      message: `GREEN — gol apos captura (${firstMinute ?? "?"}') · placar ${scoreText}`,
+      event_id: row.event_id,
+      match_label: matchLabel(meta?.home, meta?.away),
+      payload: {
+        gol_green_minute: firstMinute,
+        placar_final: scoreText,
+        over_05_odd: meta?.over_05_odd ?? null,
+      },
+    });
+    await notifyTelegramSettleOnce(supabase, row.event_id);
     return "win";
   }
   if (forceFinal) {
@@ -2184,6 +2236,23 @@ async function settleMercadoGols05Pending(
       placar_final: scoreText,
       updated_at: nowIso,
     }).eq("event_id", row.event_id).eq("resultado", "pending");
+    const { data: meta } = await supabase
+      .from("futebol_mercado_gols_05")
+      .select("home,away,over_05_odd")
+      .eq("event_id", row.event_id)
+      .maybeSingle();
+    await insertSistemaLog(supabase, {
+      source: "edge-live",
+      action: "mercado_red",
+      message: `RED — sem gol apos captura · placar final ${scoreText}`,
+      event_id: row.event_id,
+      match_label: matchLabel(meta?.home, meta?.away),
+      payload: {
+        placar_final: scoreText,
+        over_05_odd: meta?.over_05_odd ?? null,
+      },
+    });
+    await notifyTelegramSettleOnce(supabase, row.event_id);
     return "loss";
   }
   return null;
@@ -2193,20 +2262,26 @@ async function processMercadoGols05Live(
   supabase: ReturnType<typeof createClient>,
   eventId: string,
   totals: TotalsOdds,
+  hctgSnap: HctgSnapshot,
   ctx: MercadoGols05Context,
   existing: MercadoGols05Row | null,
 ): Promise<"captured" | "win" | "loss" | null> {
   const nowIso = new Date().toISOString();
   const minute = ctx.minute;
   const goalsTotal = goalsTotalFromScoreText(ctx.score_text);
-  const over0 = totals.over_0_odd;
-  const elevatedPhase = mercadoHadElevatedOverPhase(totals, goalsTotal);
-  const trueOver05 = canCaptureTrueOver05(totals, goalsTotal);
+  const needOver = needLineOverFromHctg(hctgSnap.lines, goalsTotal);
+  const over0 = needOver?.odd ?? null;
+  const over0Line = needOver?.line ?? null;
+  const elevatedPhase = mercadoHadElevatedFromHctg(hctgSnap, goalsTotal);
+  const trueOver05 = needOver != null && canCaptureNeedLineFromHctg(hctgSnap.lines, goalsTotal);
 
   if (existing?.resultado === "excluido") return null;
 
   if (!existing) {
     if (over0 != null && trueOver05) {
+      const estrategia = isImediatoFirstHctgSnapshot(ctx.score_text, over0Line ?? 0.5)
+        ? "imediato_05"
+        : "super_05";
       await supabase.from("futebol_mercado_gols_05").insert({
         event_id: eventId,
         home: ctx.home,
@@ -2215,16 +2290,19 @@ async function processMercadoGols05Live(
         country: ctx.country,
         betano_url: ctx.betano_url,
         indisponivel_ate_minuto: null,
-        had_min_plus2_before: elevatedPhase,
-        estrategia: "imediato_05",
+        had_min_plus2_before: estrategia === "super_05",
+        estrategia,
         disponivel_desde_minuto: minute,
         placar_na_captura: ctx.score_text,
         over_05_odd: over0,
-        over_05_line: totals.over_0_line,
+        over_05_line: over0Line,
         captured_at: nowIso,
         resultado: "pending",
         is_live: true,
         last_minute: minute,
+        hctg_lines: hctgSnap.lines,
+        hctg_source: hctgSnap.source,
+        hctg_fetched_at: nowIso,
         updated_at: nowIso,
       });
       return "captured";
@@ -2242,49 +2320,49 @@ async function processMercadoGols05Live(
       resultado: "watching",
       is_live: true,
       last_minute: minute,
+      hctg_lines: hctgSnap.lines,
+      hctg_source: hctgSnap.source,
+      hctg_fetched_at: hctgSnap.lines.length > 0 ? nowIso : null,
       updated_at: nowIso,
     });
+    if (hctgSnap.lines.length > 0) {
+      await appendMercadoElevatedOddsLog(
+        supabase,
+        eventId,
+        ctx,
+        hctgSnap,
+        [],
+      );
+    }
     return null;
   }
 
   if (existing.resultado === "watching") {
+    if (existing.telegram_capture_sent_at) return null;
+    if (existing.telegram_confirmacao === "recusada") return null;
     if (over0 == null) {
       const hadMinPlus2 = existing.had_min_plus2_before || elevatedPhase;
-      await touchMercadoWatching(supabase, eventId, ctx, totals, existing, hadMinPlus2);
+      await touchMercadoWatching(supabase, eventId, ctx, hctgSnap, existing, hadMinPlus2);
       return null;
     }
     if (!trueOver05) {
       const hadMinPlus2 = existing.had_min_plus2_before || elevatedPhase;
-      await touchMercadoWatching(supabase, eventId, ctx, totals, existing, hadMinPlus2);
+      await touchMercadoWatching(supabase, eventId, ctx, hctgSnap, existing, hadMinPlus2);
       return null;
     }
-    const estrategia = resolveMercadoEstrategiaOnCapture(existing, minute);
+    const estrategia = resolveMercadoEstrategiaOnCapture(
+      existing,
+      minute,
+      ctx.score_text,
+      over0Line,
+    );
     const indisponivel = existing.indisponivel_ate_minuto ?? (minute != null ? minute - 1 : null);
     const hadMinPlus2 = estrategia === "super_05";
-    // #region agent log
-    console.log(JSON.stringify({
-      sessionId: "e14164",
-      hypothesisId: "H1-H3",
-      runId: "estrategia-capture",
-      location: "index.ts:processMercadoGols05Live:capture",
-      message: "estrategia on capture from watching",
-      data: {
-        eventId,
-        estrategia,
-        minute,
-        indisponivel_ate_minuto: existing.indisponivel_ate_minuto,
-        had_min_plus2_before: existing.had_min_plus2_before,
-        elevatedPhase,
-        trueOver05,
-      },
-      timestamp: Date.now(),
-    }));
-    // #endregion
     await applyMercadoGols05Capture(
       supabase,
       eventId,
       ctx,
-      totals,
+      { ...totals, over_0_odd: over0, over_0_line: over0Line },
       over0,
       estrategia,
       indisponivel,
@@ -2300,15 +2378,13 @@ async function processMercadoGols05Live(
 async function revertMercadoInvalidPending(
   supabase: ReturnType<typeof createClient>,
   eventId: string,
-  totals: TotalsOdds,
+  hctgSnap: HctgSnapshot,
   row: MercadoGols05Row | null,
 ): Promise<void> {
   if (!row || row.resultado !== "pending" || !row.placar_na_captura) return;
+  if (row.telegram_confirmacao === "confirmada") return;
   const goalsAtCapture = goalsTotalFromScoreText(row.placar_na_captura);
-  const needLine = goalsAtCapture + 0.5;
-  const lineOk = row.over_05_line != null &&
-    Math.abs(row.over_05_line - needLine) <= 0.01;
-  if (lineOk && canCaptureTrueOver05(totals, goalsAtCapture)) return;
+  if (canCaptureNeedLineFromHctg(hctgSnap.lines, goalsAtCapture)) return;
   const nowIso = new Date().toISOString();
   await supabase.from("futebol_mercado_gols_05").update({
     resultado: "watching",
@@ -2333,7 +2409,7 @@ async function finalizeMercadoGols05OffLive(
 
   const { data: openRows } = await supabase
     .from("futebol_mercado_gols_05")
-    .select("event_id,resultado,disponivel_desde_minuto,over_05_odd,captured_at,indisponivel_ate_minuto,had_min_plus2_before")
+    .select("event_id,home,away,resultado,disponivel_desde_minuto,over_05_odd,captured_at,indisponivel_ate_minuto,had_min_plus2_before")
     .eq("is_live", true)
     .in("resultado", ["watching", "pending"]);
 
@@ -2358,6 +2434,14 @@ async function finalizeMercadoGols05OffLive(
         placar_final: scoreText,
         updated_at: nowIso,
       }).eq("event_id", eventId);
+      await insertSistemaLog(supabase, {
+        source: "edge-live",
+        action: "mercado_sem_linha",
+        message: `Encerrado sem linha +0,5 · placar ${scoreText}`,
+        event_id: eventId,
+        match_label: matchLabel(row.home as string, row.away as string),
+        payload: { placar_final: scoreText },
+      });
       semLinha += 1;
       continue;
     }
@@ -2479,6 +2563,7 @@ Deno.serve(async (req) => {
     "Stats: Sportradar match_details (chutes a gol, escanteios, tiros de meta).",
     "Sinal 'manter placar' so a partir dos 85'; antes disso: em estudo.",
     "Mercado +0,5: Super (apos +1,5/+2,5) e Imediato (1a coleta); GREEN ao gol apos captura.",
+    "Odds HCTG (Total de Gols): worker OddsPapi WebSocket (ou HTML legado); Edge so le do BD.",
     "Historico: jogos monitorados + gols com minuto (filtro por gol a partir de X').",
   ];
 
@@ -2490,6 +2575,13 @@ Deno.serve(async (req) => {
     const leagues = leaguesMap(overview);
     const allEvents = Object.entries(events);
     const football = allEvents.filter(([, ev]) => isFootballEvent(asRecord(ev) ?? {}, overview));
+
+    await insertSistemaLog(supabase, {
+      source: "edge-live",
+      action: "overview_coleta",
+      message: `Coletou ${football.length} jogo(s) ao vivo (placar e minuto via JSON danae)`,
+      payload: { live_total: football.length },
+    });
 
     // Todos os jogos live (para estudar antes dos 85')
     const candidates: Array<Json & { event_id: string }> = [];
@@ -2509,6 +2601,8 @@ Deno.serve(async (req) => {
     let goalsMissing = 0;
     let mercadoCaptured = 0;
     let mercadoWins = 0;
+    let hctgWithLines = 0;
+    let hctgEmpty = 0;
     const liveIds: string[] = [];
 
     const anchorOverForSort = (ev: Json): number => {
@@ -2542,6 +2636,11 @@ Deno.serve(async (req) => {
       mercadoResultadoByEvent.set(String(row.event_id), String(row.resultado));
     }
 
+    const hctgByEvent = await loadHctgSnapshotsByEvent(
+      supabase,
+      candidates.map((c) => String(c.event_id)),
+    );
+
     for (const event of candidates) {
       const eventId = String(event.event_id);
       const teams = extractTeams(event);
@@ -2552,49 +2651,12 @@ Deno.serve(async (req) => {
       const ml = extractMlOdds(eventId, overview);
       const goalsTotal = (score.home ?? 0) + (score.away ?? 0);
       const mercadoResultado = mercadoResultadoByEvent.get(eventId) ?? null;
-      const mercadoPending = mercadoResultado === "pending";
-      const mercadoWatching = mercadoResultado === "watching";
-      let totals = extractTotalsOdds(eventId, event, overview, goalsTotal);
-      const needDeepGoalMarkets = !mercadoPending && (
-        needsSupplementalTotalsFetch(totals, goalsTotal) ||
-        (mercadoWatching && !canCaptureTrueOver05(totals, goalsTotal))
-      );
-      if (needDeepGoalMarkets) {
-        try {
-          const offersData = await betanoGet(
-            `${BETANO_BASE}/api/event/markets-offers/${eventId}`,
-          );
-          const fromOffers = flattenOffersMarkets(offersData);
-          const offerMarketHints = new Set(Object.keys(fromOffers.markets));
-          if (offerMarketHints.size > 0) {
-            const offerOverview = {
-              markets: fromOffers.markets,
-              selections: fromOffers.selections,
-            };
-            const fromOffersTotals = extractTotalsOdds(
-              eventId,
-              { marketIdList: [...offerMarketHints] },
-              offerOverview,
-              goalsTotal,
-            );
-            totals = mergeAndCanonicalizeTotals(totals, fromOffersTotals, goalsTotal);
-          }
-        } catch {
-          // markets-offers opcional
-        }
-        if (
-          needsSupplementalTotalsFetch(totals, goalsTotal) ||
-          (mercadoWatching && !canCaptureTrueOver05(totals, goalsTotal))
-        ) {
-          const extra = await fetchEventGoalMarkets(eventId, event, goalsTotal, overview);
-          totals = mergeAndCanonicalizeTotals(totals, extra, goalsTotal);
-        }
-      }
-      if (!mercadoPending) {
-        totals = supplementOverviewHctgOrphans(
-          event, overview, goalsTotal, totals,
-        );
-      }
+      const url = betanoUrl(eventId, teams.home, teams.away);
+      const hctgSnap = hctgByEvent.get(eventId) ?? { ...EMPTY_HCTG };
+      if (hctgSnap.lines.length > 0) hctgWithLines += 1;
+      else hctgEmpty += 1;
+      const totals = buildTotalsFromHctgSnapshot(hctgSnap, goalsTotal);
+
       const under = totals;
 
       const betradarId = extractBetradarMatchId(event);
@@ -2618,7 +2680,6 @@ Deno.serve(async (req) => {
       const signal = buildSignal(rowBase);
       if (minute != null && minute >= MIN_MINUTE_DEFAULT) readyCount += 1;
 
-      const url = betanoUrl(eventId, teams.home, teams.away);
       liveIds.push(eventId);
 
       rows.push({
@@ -2790,7 +2851,7 @@ Deno.serve(async (req) => {
       const { data: mercadoRow } = await supabase
         .from("futebol_mercado_gols_05")
         .select(
-          "event_id,resultado,captured_at,disponivel_desde_minuto,indisponivel_ate_minuto,had_min_plus2_before,over_05_odd,over_05_line,placar_na_captura,elevated_odds_log",
+          "event_id,resultado,captured_at,disponivel_desde_minuto,indisponivel_ate_minuto,had_min_plus2_before,over_05_odd,over_05_line,placar_na_captura,elevated_odds_log,telegram_capture_sent_at,telegram_confirmacao",
         )
         .eq("event_id", eventId)
         .maybeSingle();
@@ -2799,6 +2860,7 @@ Deno.serve(async (req) => {
         supabase,
         eventId,
         totals,
+        hctgSnap,
         {
           home: teams.home,
           away: teams.away,
@@ -2810,24 +2872,36 @@ Deno.serve(async (req) => {
         },
         mercadoRow as MercadoGols05Row | null,
       );
-      if (mercadoRow?.resultado !== "pending") {
+      if (mercadoRow?.resultado === "pending") {
         await revertMercadoInvalidPending(
           supabase,
           eventId,
-          totals,
+          hctgSnap,
           mercadoRow as MercadoGols05Row | null,
         );
       }
       if (mercadoAction === "captured") {
         mercadoCaptured += 1;
-        const { data: capturedRow } = await supabase
+        const { data: capRow } = await supabase
           .from("futebol_mercado_gols_05")
-          .select(
-            "event_id,home,away,league,country,estrategia,disponivel_desde_minuto,placar_na_captura,over_05_line,over_05_odd,betano_url,captured_at",
-          )
+          .select("over_05_odd,over_05_line,estrategia,placar_na_captura")
           .eq("event_id", eventId)
           .maybeSingle();
-        if (capturedRow) await notifyTelegramCapture(capturedRow as TelegramCaptureRow);
+        await insertSistemaLog(supabase, {
+          source: "edge-live",
+          action: "mercado_captura",
+          message: `Capturou +0,5 @ ${capRow?.over_05_odd ?? "?"} (min ${minute ?? "?"})`,
+          event_id: eventId,
+          match_label: matchLabel(teams.home, teams.away),
+          payload: {
+            minute,
+            estrategia: capRow?.estrategia ?? null,
+            over_05_odd: capRow?.over_05_odd ?? null,
+            over_05_line: capRow?.over_05_line ?? null,
+            placar_na_captura: capRow?.placar_na_captura ?? score.text,
+          },
+        });
+        await notifyTelegramCaptureOffer(supabase, eventId);
       }
 
       const needsSettle = mercadoRow?.resultado === "pending" || mercadoAction === "captured";
@@ -2910,9 +2984,10 @@ Deno.serve(async (req) => {
         `Stats ok em ${statsOk}/${rows.length} jogos.`,
         `Gols gravados nesta rodada: ${goalsSaved}.`,
         `Mercado +0,5: ${mercadoCaptured} captura(s), ${mercadoWins} green(s), ${mercadoFinalize.losses} red(s), ${mercadoFinalize.semLinha} sem linha +0,5 nesta rodada.`,
+        `HCTG odds: worker OddsPapi/HTML (${hctgWithLines} com linhas, ${hctgEmpty} sem linha no BD).`,
         `Gols timeline ok: ${goalsTimelineOk}, timeline vazia c/ placar: ${goalsTimelineEmpty}, inferidos: ${goalsInferred}, sem gols c/ placar: ${goalsMissing}.`,
         `Reconciliacao: ${reconcile.scanned} analisados, ${reconcile.fixed} ok, ${reconcile.backfilled} parcial/missing.`,
-      ],
+      ].filter(Boolean),
       last_error: null,
       updated_at: new Date().toISOString(),
     });
@@ -2924,12 +2999,53 @@ Deno.serve(async (req) => {
       data_atualizacao: new Date().toISOString(),
     }).eq("id", "default");
 
+    const telegramRemindersSent = await processPendingTelegramReminders(supabase);
+    const telegramSettlementsSent = await processPendingTelegramSettlements(supabase);
+
+    await insertSistemaLog(supabase, {
+      source: "edge-live",
+      action: "cron_tick",
+      message: `Cron live: ${football.length} jogos · ${mercadoCaptured} captura(s) · ${mercadoWins} green · ${mercadoFinalize.losses} red · ${mercadoFinalize.semLinha} sem linha`,
+      payload: {
+        live_total: football.length,
+        stats_ok: statsOk,
+        goals_saved: goalsSaved,
+        mercado_captured: mercadoCaptured,
+        mercado_wins: mercadoWins,
+        mercado_losses: mercadoFinalize.losses,
+        mercado_sem_linha: mercadoFinalize.semLinha,
+        telegram_reminders_sent: telegramRemindersSent,
+        telegram_settlements_sent: telegramSettlementsSent,
+        hctg_with_lines: hctgWithLines,
+        hctg_empty: hctgEmpty,
+        hctg_source: "oddspapi-or-db",
+      },
+    });
+
+    if (goalsSaved > 0) {
+      await insertSistemaLog(supabase, {
+        source: "edge-live",
+        action: "gols_timeline",
+        message: `${goalsSaved} gol(s) gravado(s) na timeline nesta rodada`,
+        payload: {
+          goals_saved: goalsSaved,
+          goals_timeline_ok: goalsTimelineOk,
+          goals_inferred: goalsInferred,
+        },
+      });
+    }
+
     return jsonResponse({
       ok: true,
       live_total: football.length,
       ready_85: readyCount,
       stats_ok: statsOk,
       total: rows.length,
+      telegram_reminders_sent: telegramRemindersSent,
+      telegram_settlements_sent: telegramSettlementsSent,
+      hctg_source: "oddspapi-or-db",
+      hctg_with_lines: hctgWithLines,
+      hctg_empty: hctgEmpty,
       sample: rows.slice(0, 5).map((r) => ({
         home: r.home,
         away: r.away,
@@ -2946,6 +3062,13 @@ Deno.serve(async (req) => {
     });
   } catch (err) {
     const message = err instanceof Error ? err.message : String(err);
+    await insertSistemaLog(supabase, {
+      level: "error",
+      source: "edge-live",
+      action: "erro",
+      message: `Erro no cron live: ${message}`,
+      payload: { error: message },
+    });
     await supabase.from("futebol_live_meta").upsert({
       id: 1,
       source: "betano-danae",

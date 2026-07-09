@@ -1,8 +1,8 @@
-# Mercado de Gols +0,5 · Betano via Supabase
+# Monitor Betano — Mercado de Gols +0,5 · Betano via Supabase
 
-Monitoramento automatico da linha **Over +0,5** (placar + 0,5) em jogos ao vivo da Betano. Coleta na **nuvem Supabase** (Edge Function) — **nao usa o IP da sua casa**.
+Monitoramento automatico da linha **Over +0,5** (placar + 0,5) em jogos ao vivo da Betano. Coleta na **nuvem Supabase** (Edge Function + ScrapingBee para odds HCTG) — **nao usa o IP da sua casa**.
 
-Sem cookie de conta: apenas endpoints publicos `danae-webapi`.
+Sem cookie de conta: endpoints publicos Betano + Sportradar para placar/gols.
 
 ## Painel online
 
@@ -75,24 +75,28 @@ where id = 'default';
 
 ```
 supabase/
-  functions/betano-futebol-live/
-  migrations/
+  functions/betano-futebol-live/   # coleta principal
+  functions/telegram-*/            # captura +0,5 e liquidacao
+  migrations/                    # ver migrations/README.md
 web/
-  index.html
+  index.html                     # painel Mercado +0,5
   supabase.config.json
 scripts/
   serve-monitor.ps1
   invoke-cron.ps1
+  setup-scrapingbee.ps1
+  test-scrapingbee-hctg.mjs
 ```
+
+Legado removido do repo: CasinoScores, Sic Bo, Lightning Storm, Oracle VM, API-Football local (`src/`). Schema antigo no banco: migration `20260718280000_betano_monitor_legacy_cleanup.sql`.
 
 ## Tabelas (principais)
 
 | Tabela | Uso |
 |--------|-----|
-| `futebol_mercado_gols_05` | Painel: capturas, resultados, snapshot ao vivo |
+| `futebol_mercado_gols_05` | Painel: capturas, resultados, snapshot ao vivo, `hctg_lines` |
 | `futebol_live_meta` | Ultima coleta / erros (header do painel) |
 | `futebol_historico_jogos` | Placar persistente (FK do mercado) |
 | `futebol_historico_gols` | Gols com minuto (liquidacao GREEN/RED) |
 | `futebol_live_coleta_config` | URL da function + cron |
-
-A tabela `futebol_live_rows` existe no schema legado mas **nao e mais gravada** pela coleta.
+| `futebol_screenshot_debug` | Auditoria opcional (screenshot + odds) |

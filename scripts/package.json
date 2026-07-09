@@ -5,7 +5,14 @@
   "scripts": {
     "scrape-hctg": "node scrape-betano-hctg.mjs",
     "screenshot-odds": "node screenshot-betano-odds.mjs",
+    "vps-worker": "node vps-hctg-worker.mjs",
+    "oddspapi-test": "node test-oddspapi-ws.mjs",
+    "oddspapi-worker": "node oddspapi-hctg-worker.mjs",
     "postinstall": "playwright install chromium"
+  },
+  "dependencies": {
+    "@supabase/supabase-js": "2.49.1",
+    "ws": "^8.21.0"
   },
   "devDependencies": {
     "playwright": "^1.61.1"
