@@ -19,6 +19,7 @@ import {
   canCaptureNeedLineFromHctg,
   minHctgOverLine,
   needLineOverFromHctg,
+  trimHctgLinesForMatch,
   type HctgSnapshot,
 } from "../_shared/hctg-match-totals.ts";
 import { insertSistemaLog, matchLabel } from "../_shared/sistema-log.ts";
@@ -73,10 +74,11 @@ async function betanoGet(url: string, referer = `${BETANO_BASE}/live/`): Promise
 
 /** Slots over/under a partir da linha principal do overview (aba Total de Gols). */
 function buildTotalsFromHctgSnapshot(snap: HctgSnapshot, goalsTotal: number): TotalsOdds {
-  if (!snap.lines.length) {
+  const lines = trimHctgLinesForMatch(snap.lines, goalsTotal);
+  if (!lines.length) {
     return { ...EMPTY_TOTALS_ODDS, elevated_over_lines: [] };
   }
-  const loose = snap.lines
+  const loose = lines
     .filter((l) => l.over != null)
     .map((l) => ({
       line: l.line,
@@ -84,10 +86,10 @@ function buildTotalsFromHctgSnapshot(snap: HctgSnapshot, goalsTotal: number): To
       underOdd: l.under ?? undefined,
     }));
   let totals = totalsFromLooseGoals(loose, goalsTotal);
-  const minLine = minHctgOverLine(snap.lines);
+  const minLine = minHctgOverLine(lines);
   if (minLine != null) totals.min_over_absolute_line = minLine;
   const needLine = goalsTotal + 0.5;
-  totals.elevated_over_lines = snap.lines
+  totals.elevated_over_lines = lines
     .filter((l) => l.over != null && l.line > needLine + 0.01)
     .map((l) => ({ line: l.line, odd: l.over as number }));
   totals.elevated_over_seen = totals.elevated_over_lines.length > 0;
@@ -95,8 +97,9 @@ function buildTotalsFromHctgSnapshot(snap: HctgSnapshot, goalsTotal: number): To
 }
 
 function mercadoHadElevatedFromHctg(snap: HctgSnapshot, goalsTotal: number): boolean {
-  if (canCaptureNeedLineFromHctg(snap.lines, goalsTotal)) return false;
-  const minLine = minHctgOverLine(snap.lines);
+  const lines = trimHctgLinesForMatch(snap.lines, goalsTotal);
+  if (canCaptureNeedLineFromHctg(lines, goalsTotal)) return false;
+  const minLine = minHctgOverLine(lines);
   return minLine != null && minLine > goalsTotal + 0.5 + 0.01;
 }
 
@@ -596,13 +599,14 @@ function collectHctgMinOverForLog(
   lines: HctgSnapshot["lines"],
   goalsTotal: number,
 ): { line: number; odd: number; remaining: number } | null {
-  const needHit = needLineOverFromHctg(lines, goalsTotal);
+  const trimmed = trimHctgLinesForMatch(lines, goalsTotal);
+  const needHit = needLineOverFromHctg(trimmed, goalsTotal);
   if (needHit) {
     return { line: needHit.line, odd: needHit.odd, remaining: 0.5 };
   }
-  const minLine = minHctgOverLine(lines);
+  const minLine = minHctgOverLine(trimmed);
   if (minLine == null) return null;
-  const hit = lines.find((l) =>
+  const hit = trimmed.find((l) =>
     l.over != null && Math.abs(l.line - minLine) < 0.01
   );
   if (!hit?.over) return null;

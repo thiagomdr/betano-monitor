@@ -508,48 +508,38 @@ export function hctgOverLineCount(snap: HctgSnapshot): number {
 export function trimHctgLinesForMatch(
   lines: HctgLine[],
   goalsTotal: number,
-  maxLines = 3,
+  maxLines = 6,
 ): HctgLine[] {
   const need = goalsTotal + 0.5;
-  const cleaned = lines
+  let cleaned = lines
     .filter((l) =>
       l.line >= 0.5 &&
       l.line <= 12.5 &&
       Math.abs(l.line % 1 - 0.5) < 0.01 &&
-      (l.over != null || l.under != null)
+      l.over != null &&
+      l.over >= 1.01
     )
     .filter((l) => l.line + 0.01 >= need)
     .sort((a, b) => a.line - b.line);
 
-  // Descarta Over com monotonicidade invertida (linha maior com odd Over maior)
-  const withOver = cleaned.filter((l) => l.over != null);
-  const mono: HctgLine[] = [];
-  for (const line of withOver) {
-    const prev = mono[mono.length - 1];
-    if (prev?.over != null && line.over != null && line.over > prev.over + 0.01) {
-      // Odd Over sobe com a linha = suspeito; pula esta linha
+  // Linha inferior com odd quase igual a uma mais alta = DOM fantasma (ex. 2.5@1.45 vs 3.5@1.47)
+  const filtered: HctgLine[] = [];
+  for (let i = 0; i < cleaned.length; i++) {
+    const cur = cleaned[i];
+    const next = cleaned[i + 1];
+    if (
+      next?.over != null &&
+      cur.over != null &&
+      next.line - cur.line >= 0.99 &&
+      next.over <= cur.over + 0.06
+    ) {
       continue;
     }
-    mono.push(line);
+    filtered.push(cur);
   }
-  const undersOnly = cleaned.filter((l) => l.over == null && l.under != null);
-  const merged = [...mono, ...undersOnly].sort((a, b) => a.line - b.line);
+  cleaned = filtered;
 
-  if (merged.length <= maxLines) return merged;
-
-  const priority = [need, need + 1, need + 2];
-  const picked: HctgLine[] = [];
-  for (const target of priority) {
-    const hit = merged.find((l) =>
-      Math.abs(l.line - target) < 0.01 && !picked.includes(l)
-    );
-    if (hit) picked.push(hit);
-  }
-  for (const line of merged) {
-    if (picked.length >= maxLines) break;
-    if (!picked.includes(line)) picked.push(line);
-  }
-  return picked.sort((a, b) => a.line - b.line);
+  return cleaned.slice(0, maxLines);
 }
 
 /** Faltam linhas Over tipicas (+0,5 / +1,5 / +2,5 a partir do placar). */

@@ -1153,18 +1153,21 @@
       return { odd: live.over_0_odd, line: live.over_0_line };
     }
 
-    /** Menor linha Over HCTG (mais perto do +0,5 real) para exibir em Monitorando. */
+    /** Menor linha Over HCTG apostavel para exibir em Monitorando (linha absoluta Mais de X,X). */
     function mercadoMinOverSnapshot(row) {
       if (!row) return null;
       const score = row.is_live && row.live_score ? row.live_score : null;
       const goals = score ? goalsTotalFromScoreText(score) : null;
 
-      const withOver = parseHctgLines(row.hctg_lines)
+      let pool = parseHctgLines(row.hctg_lines)
         .filter((l) => l.over != null)
         .slice()
         .sort((a, b) => a.line - b.line);
-      if (withOver.length) {
-        const best = withOver[0];
+      if (goals != null) {
+        pool = trimHctgLinesForMatch(pool, goals);
+      }
+      if (pool.length) {
+        const best = pool[0];
         const remaining = goals != null
           ? Math.round((best.line - goals) * 10) / 10
           : null;
@@ -1186,10 +1189,7 @@
 
     function formatMercadoMinOverLabel(snap) {
       if (!snap || snap.odd == null) return null;
-      const rel = snap.remaining != null && snap.remaining >= 0.49
-        ? snap.remaining
-        : snap.line;
-      return `+${formatNumber(rel)} (${formatOddFixed2(snap.odd)})`;
+      return `+${formatNumber(snap.line)} (${formatOddFixed2(snap.odd)})`;
     }
 
     function buildEstrategia05PopoverLog(row) {
@@ -1426,6 +1426,45 @@
         (e.over == null || typeof e.over === 'number') &&
         (e.under == null || typeof e.under === 'number'),
       );
+    }
+
+    /** Linhas HCTG plausiveis para o placar (descarta fantasmas do DOM). */
+    function trimHctgLinesForMatch(lines, goalsTotal, maxLines = 6) {
+      if (!Array.isArray(lines) || goalsTotal == null || !Number.isFinite(goalsTotal)) {
+        return Array.isArray(lines) ? lines : [];
+      }
+      const need = goalsTotal + 0.5;
+      let cleaned = lines
+        .filter((l) =>
+          l &&
+          Number.isFinite(l.line) &&
+          l.line >= 0.5 &&
+          l.line <= 12.5 &&
+          Math.abs((l.line % 1) - 0.5) < 0.01 &&
+          l.over != null &&
+          l.over >= 1.01,
+        )
+        .filter((l) => l.line + 0.01 >= need)
+        .sort((a, b) => a.line - b.line);
+
+      const filtered = [];
+      for (let i = 0; i < cleaned.length; i++) {
+        const cur = cleaned[i];
+        const next = cleaned[i + 1];
+        if (
+          next &&
+          next.over != null &&
+          cur.over != null &&
+          next.line - cur.line >= 0.99 &&
+          next.over <= cur.over + 0.06
+        ) {
+          continue;
+        }
+        filtered.push(cur);
+      }
+      cleaned = filtered;
+
+      return cleaned.slice(0, maxLines);
     }
 
     function formatOddFixed2(n) {

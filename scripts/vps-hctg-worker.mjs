@@ -29,7 +29,7 @@ import {
   setupPageRoutes,
   slugFromBetanoUrl,
 } from "./lib/betano-hctg-playwright.mjs";
-import { formatLinesTable } from "./lib/betano-hctg-html.mjs";
+import { formatLinesTable, trimHctgLinesForMatch, goalsTotalFromScoreText } from "./lib/betano-hctg-html.mjs";
 import { insertSistemaLog, matchLabel } from "./lib/sistema-log.mjs";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
@@ -252,17 +252,21 @@ function formatOddFixed2(n) {
   });
 }
 
-/** Menor linha Over HCTG (mais perto do +0,5). */
-function minOverHctgLine(lines) {
-  const withOver = (lines ?? [])
+/** Menor linha Over HCTG valida para o placar (linha absoluta Mais de X,X). */
+function minOverHctgLine(lines, goalsTotal = null) {
+  const pool =
+    goalsTotal != null && Number.isFinite(goalsTotal)
+      ? trimHctgLinesForMatch(lines ?? [], goalsTotal)
+      : (lines ?? []);
+  const withOver = pool
     .filter((l) => l && l.over != null && Number.isFinite(Number(l.line)))
     .slice()
     .sort((a, b) => Number(a.line) - Number(b.line));
   return withOver[0] ?? null;
 }
 
-function hctgOddsLogMessage(lines) {
-  const best = minOverHctgLine(lines);
+function hctgOddsLogMessage(lines, goalsTotal = null) {
+  const best = minOverHctgLine(lines, goalsTotal);
   if (!best) return "Total de Gols: sem linha Over";
   const lineLabel = Number(best.line).toLocaleString("pt-BR", {
     maximumFractionDigits: 2,
@@ -383,24 +387,34 @@ async function runCycle() {
         });
         continue;
       }
-      await persistHctg(row, snap);
+      const goalsTotal =
+        snap.goalsTotal ??
+        goalsTotalFromScoreText(snap.scoreText) ??
+        goalsTotalFromScoreText(row.live_score);
+      const lines =
+        goalsTotal != null
+          ? trimHctgLinesForMatch(snap.lines, goalsTotal)
+          : snap.lines;
+      await persistHctg(row, { ...snap, lines, goalsTotal });
       await insertSistemaLog(supabase, {
         source: workerSource,
         action: "hctg_odds",
-        message: hctgOddsLogMessage(snap.lines),
+        message: hctgOddsLogMessage(lines, goalsTotal),
         event_id: eventId,
         match_label: label,
         duration_ms: Date.now() - t0,
         payload: {
-          line_count: snap.lines.length,
-          min_over_line: minOverHctgLine(snap.lines),
-          lines: snap.lines,
+          line_count: lines.length,
+          min_over_line: minOverHctgLine(lines, goalsTotal),
+          lines,
+          scoreText: snap.scoreText ?? row.live_score ?? null,
+          goalsTotal,
         },
       });
       console.log(
-        `[worker] OK ${eventId} ${row.home} x ${row.away} — ${snap.lines.length} linhas em ${((Date.now() - t0) / 1000).toFixed(1)}s`,
+        `[worker] OK ${eventId} ${row.home} x ${row.away} — ${lines.length} linhas em ${((Date.now() - t0) / 1000).toFixed(1)}s`,
       );
-      console.log(formatLinesTable(snap.lines));
+      console.log(formatLinesTable(lines));
     } catch (err) {
       console.error(`[worker] ERRO ${eventId}:`, err?.message ?? err);
       await insertSistemaLog(supabase, {
