@@ -2987,13 +2987,6 @@ Deno.serve(async (req) => {
     const allEvents = Object.entries(events);
     const football = allEvents.filter(([, ev]) => isFootballEvent(asRecord(ev) ?? {}, overview));
 
-    await insertSistemaLog(supabase, {
-      source: "edge-live",
-      action: "overview_coleta",
-      message: `Coletou ${football.length} jogo(s) ao vivo (placar e minuto via JSON danae)`,
-      payload: { live_total: football.length },
-    });
-
     // Todos os jogos live (para estudar antes dos 85')
     const candidates: Array<Json & { event_id: string }> = [];
     for (const [id, raw] of football) {
@@ -3493,27 +3486,12 @@ Deno.serve(async (req) => {
     await processPendingTelegramReminders(supabase);
     await processPendingTelegramSettlements(supabase);
 
-    if (goalsSaved > 0) {
-      await insertSistemaLog(supabase, {
-        source: "edge-live",
-        action: "gols_timeline",
-        message: `${goalsSaved} gol(s) gravado(s) na timeline nesta rodada`,
-        payload: {
-          goals_saved: goalsSaved,
-          goals_timeline_ok: goalsTimelineOk,
-          goals_inferred: goalsInferred,
-        },
-      });
-    }
-
     return jsonResponse({
       ok: true,
       live_total: football.length,
       ready_85: readyCount,
       stats_ok: statsOk,
       total: rows.length,
-      telegram_reminders_sent: telegramRemindersSent,
-      telegram_settlements_sent: telegramSettlementsSent,
       hctg_source: "oddspapi-or-db",
       hctg_with_lines: hctgWithLines,
       hctg_empty: hctgEmpty,
