@@ -1536,15 +1536,12 @@
       }
       tbody.innerHTML = logCache.map((row) => {
         const lvl = row.level || 'info';
-        const payload = row.payload && Object.keys(row.payload).length
-          ? `<div class="log-payload">${JSON.stringify(row.payload, null, 2)}</div>`
-          : '';
         return `<tr class="log-row-${lvl}">
           <td data-label="Data/Hora">${formatDate(row.created_at)}</td>
           <td data-label="Nivel"><span class="log-level ${lvl}">${lvl}</span></td>
           <td data-label="Origem"><span class="log-source">${row.source ?? '—'}</span></td>
           <td data-label="Acao">${logActionLabel(row.action)}</td>
-          <td data-label="Mensagem"><div class="log-message">${row.message ?? '—'}${payload}</div></td>
+          <td data-label="Mensagem"><div class="log-message">${row.message ?? '—'}</div></td>
           <td data-label="Jogo">${row.match_label ? `<strong>${row.match_label}</strong>` : '<span class="muted">—</span>'}</td>
         </tr>`;
       }).join('');
