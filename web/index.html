@@ -664,12 +664,11 @@
           <tr>
             <th>Data/Hora</th>
             <th title="Clique para detalhes técnicos">Nivel</th>
-            <th>Mensagem</th>
-            <th>Jogo</th>
+            <th>Detalhes</th>
           </tr>
         </thead>
         <tbody id="log-tbody">
-          <tr><td colspan="4" class="empty">Carregando…</td></tr>
+          <tr><td colspan="3" class="empty">Carregando…</td></tr>
         </tbody>
       </table>
     </div>
@@ -1647,7 +1646,7 @@
       const tbody = document.getElementById('log-tbody');
       if (!tbody) return;
       if (!logCache.length) {
-        tbody.innerHTML = '<tr><td colspan="4" class="empty">Nenhum registro no log.</td></tr>';
+        tbody.innerHTML = '<tr><td colspan="3" class="empty">Nenhum registro no log.</td></tr>';
         return;
       }
       tbody.innerHTML = logCache.map((row) => {
@@ -1660,11 +1659,14 @@
           ? 'log-row-error'
           : (tech === 'warn' ? 'log-row-warn' : '');
         const logId = row.id || '';
+        const msg = row.message ?? '—';
+        const detalhes = row.match_label
+          ? `<strong>${row.match_label}</strong> / ${msg}`
+          : msg;
         return `<tr class="${rowCls}">
           <td data-label="Data/Hora">${formatDate(row.created_at)}</td>
           <td data-label="Nivel"><button type="button" class="log-level log-cat-btn ${catCls}" data-log-detail="${logId}" title="Detalhes técnicos">${cat}</button></td>
-          <td data-label="Mensagem"><div class="log-message">${row.message ?? '—'}</div></td>
-          <td data-label="Jogo">${row.match_label ? `<strong>${row.match_label}</strong>` : '<span class="muted">—</span>'}</td>
+          <td data-label="Detalhes"><div class="log-message">${detalhes}</div></td>
         </tr>`;
       }).join('');
     }
@@ -1690,7 +1692,7 @@
         updateLogStatus();
       } catch (err) {
         if (tbody) {
-          tbody.innerHTML = `<tr><td colspan="4" class="empty">${err.message || String(err)}</td></tr>`;
+          tbody.innerHTML = `<tr><td colspan="3" class="empty">${err.message || String(err)}</td></tr>`;
         }
         const el = document.getElementById('log-status');
         if (el) {
