@@ -3305,33 +3305,8 @@ Deno.serve(async (req) => {
       data_atualizacao: new Date().toISOString(),
     }).eq("id", "default");
 
-    const telegramRemindersSent = await processPendingTelegramReminders(supabase);
-    const telegramSettlementsSent = await processPendingTelegramSettlements(supabase);
-
-    await insertSistemaLog(supabase, {
-      source: "edge-live",
-      action: "cron_tick",
-      message: `Cron live: ${football.length} jogos · ${mercadoCaptured} captura(s) · ${mercadoWins} green · ${mercadoFinalize.losses} red · ${mercadoFinalize.semLinha} sem linha`,
-      payload: {
-        live_total: football.length,
-        stats_ok: statsOk,
-        goals_saved: goalsSaved,
-        mercado_captured: mercadoCaptured,
-        mercado_wins: mercadoWins,
-        mercado_losses: mercadoFinalize.losses,
-        mercado_sem_linha: mercadoFinalize.semLinha,
-        live_json: mercadoFinalize.reconcile.json_live,
-        live_mercado_open: mercadoFinalize.reconcile.mercado_live_open,
-        live_historico: mercadoFinalize.reconcile.historico_live,
-        live_held_grace: mercadoFinalize.reconcile.held_by_grace.length,
-        live_finalized: mercadoFinalize.reconcile.finalized.length,
-        telegram_reminders_sent: telegramRemindersSent,
-        telegram_settlements_sent: telegramSettlementsSent,
-        hctg_with_lines: hctgWithLines,
-        hctg_empty: hctgEmpty,
-        hctg_source: "oddspapi-or-db",
-      },
-    });
+    await processPendingTelegramReminders(supabase);
+    await processPendingTelegramSettlements(supabase);
 
     if (goalsSaved > 0) {
       await insertSistemaLog(supabase, {
