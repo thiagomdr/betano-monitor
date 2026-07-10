@@ -14,7 +14,7 @@
       --accent: #3dd68c;
       --warn: #ffd166;
       --betano-orange: #ff5500;
-      --super-blue: #0B57DD;
+      --estrategia-05-blue: #0B57DD;
     }
     * { box-sizing: border-box; }
     body {
@@ -322,16 +322,16 @@
       font-size: 1.1rem;
       font-weight: 700;
     }
-    .summary-card.summary-super {
-      border-color: var(--super-blue);
+    .summary-card.summary-estrategia-05 {
+      border-color: var(--estrategia-05-blue);
     }
-    .summary-card.summary-super .summary-label,
-    .summary-card.summary-super .summary-value {
-      color: var(--super-blue);
+    .summary-card.summary-estrategia-05 .summary-label,
+    .summary-card.summary-estrategia-05 .summary-value {
+      color: var(--estrategia-05-blue);
     }
-    .summary-card.summary-super .summary-value .mercado-profit,
-    .summary-card.summary-super .summary-value .muted {
-      color: var(--super-blue);
+    .summary-card.summary-estrategia-05 .summary-value .mercado-profit,
+    .summary-card.summary-estrategia-05 .summary-value .muted {
+      color: var(--estrategia-05-blue);
     }
     .summary-card.summary-imediato {
       border-color: #fff;
@@ -496,7 +496,7 @@
       padding: 0.12rem 0.4rem;
       border-radius: 4px;
     }
-    .estrategia-badge.super { background: var(--super-blue); color: #fff; }
+    .estrategia-badge.estrategia-05 { background: var(--estrategia-05-blue); color: #fff; }
     .estrategia-badge.imediato {
       background: transparent;
       color: #fff;
@@ -1067,11 +1067,11 @@
     }
 
     function estrategiaPopoverBtn(eventId, label, cssClass) {
-      return `<button type="button" class="estrategia-badge ${cssClass} estrategia-popover-btn" data-super-popover="${eventId}" title="Registro das odds +0,5">${label}</button>`;
+      return `<button type="button" class="estrategia-badge ${cssClass} estrategia-popover-btn" data-estrategia-popover="${eventId}" title="Registro das odds +0,5">${label}</button>`;
     }
 
-    function superEstrategiaBadge(eventId) {
-      return estrategiaPopoverBtn(eventId, 'Super Estrategia', 'super');
+    function estrategia05Badge(eventId) {
+      return estrategiaPopoverBtn(eventId, 'Estratégia +0,5', 'estrategia-05');
     }
 
     function dedupeConsecutiveElevatedLines(log) {
@@ -1122,7 +1122,7 @@
       return { odd: live.over_0_odd, line: live.over_0_line };
     }
 
-    function buildSuperPopoverLog(row) {
+    function buildEstrategia05PopoverLog(row) {
       const log = dedupeConsecutiveElevatedLines(parseElevatedOddsLog(row?.elevated_odds_log));
       if (!row) return log;
 
@@ -1164,7 +1164,7 @@
     }
 
     function renderElevatedPopoverHtml(row) {
-      const log = buildSuperPopoverLog(row);
+      const log = buildEstrategia05PopoverLog(row);
       const match = row ? formatMatchHtml(row.home, row.away) : '';
       if (!log.length) {
         return `<h4>Histórico odds · ${match}</h4><p class="muted">Nenhum registro ainda.</p>`;
@@ -1227,8 +1227,13 @@
       if (resultado === 'excluido') return '<span class="muted">—</span>';
 
       let strat = '';
-      if (estrategia === 'super_05' || (resultado === 'watching' && hadPhase && !estrategia)) {
-        strat = superEstrategiaBadge(eventId);
+      // estrategia_05 = nome atual; super_05 = legado até a migration rodar no BD
+      if (
+        estrategia === 'estrategia_05' ||
+        estrategia === 'super_05' ||
+        (resultado === 'watching' && hadPhase && !estrategia)
+      ) {
+        strat = estrategia05Badge(eventId);
       } else if (estrategia === 'imediato_05') {
         strat = estrategiaPopoverBtn(eventId, 'Imediato', 'imediato');
       }
@@ -1239,8 +1244,9 @@
     }
 
     function mercadoStrategyStats(rows, estrategia) {
+      const keys = Array.isArray(estrategia) ? estrategia : [estrategia];
       const scoped = rows.filter((r) =>
-        r.estrategia === estrategia && (r.resultado === 'win' || r.resultado === 'loss'),
+        keys.includes(r.estrategia) && (r.resultado === 'win' || r.resultado === 'loss'),
       );
       const greens = scoped.filter((r) => r.resultado === 'win').length;
       const profit = scoped.reduce((sum, r) => sum + (mercadoSimProfit(r) ?? 0), 0);
@@ -1255,7 +1261,7 @@
       const semLinha = rows.filter((r) =>
         r.resultado === 'sem_linha_05' || r.resultado === 'skipped',
       ).length;
-      const superS = mercadoStrategyStats(rows, 'super_05');
+      const estrat05 = mercadoStrategyStats(rows, ['estrategia_05', 'super_05']);
       const imedS = mercadoStrategyStats(rows, 'imediato_05');
       const greens = rows.filter((r) => r.resultado === 'win').length;
       const reds = rows.filter((r) => r.resultado === 'loss').length;
@@ -1282,13 +1288,13 @@
           <div class="summary-label"><span class="summary-green">GREEN</span> / <span class="summary-red">RED</span></div>
           <div class="summary-value"><span class="summary-green">${greens}</span> / <span class="summary-red">${reds}</span></div>
         </div>
-        <div class="summary-card summary-super">
-          <div class="summary-label">Super · GREEN</div>
-          <div class="summary-value">${fmtG(superS)}</div>
+        <div class="summary-card summary-estrategia-05">
+          <div class="summary-label">+0,5 · GREEN</div>
+          <div class="summary-value">${fmtG(estrat05)}</div>
         </div>
-        <div class="summary-card summary-super">
-          <div class="summary-label">Super · Lucro 1u</div>
-          <div class="summary-value">${fmtStrategyProfit(superS)}</div>
+        <div class="summary-card summary-estrategia-05">
+          <div class="summary-label">+0,5 · Lucro 1u</div>
+          <div class="summary-value">${fmtStrategyProfit(estrat05)}</div>
         </div>
         <div class="summary-card summary-imediato">
           <div class="summary-label">Imediato · GREEN</div>
@@ -1607,11 +1613,11 @@
         showMercadoTipPopover(tipBtn, tipKey, html || '<span class="muted">—</span>');
         return;
       }
-      const popBtn = e.target.closest('[data-super-popover]');
+      const popBtn = e.target.closest('[data-estrategia-popover]');
       if (popBtn) {
         e.preventDefault();
         e.stopPropagation();
-        const eventId = popBtn.getAttribute('data-super-popover');
+        const eventId = popBtn.getAttribute('data-estrategia-popover');
         const pop = document.getElementById('mercado-elevated-popover');
         if (pop?.classList.contains('open') && pop.dataset.eventId === eventId) {
           hideMercadoElevatedPopover();
@@ -1635,7 +1641,7 @@
 
     document.addEventListener('click', (e) => {
       if (
-        e.target.closest('[data-super-popover]') ||
+        e.target.closest('[data-estrategia-popover]') ||
         e.target.closest('[data-table-tip]') ||
         e.target.closest('[data-placar-goals]') ||
         e.target.closest('[data-log-detail]') ||
