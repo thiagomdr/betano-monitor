@@ -613,14 +613,6 @@ function collectHctgMinOverForLog(
   };
 }
 
-function isImediatoFirstHctgSnapshot(
-  scoreText: string,
-  line: number,
-): boolean {
-  return goalsTotalFromScoreText(scoreText) === 0 &&
-    Math.abs(line - 0.5) < 0.01;
-}
-
 function parseElevatedOddsLog(raw: unknown): ElevatedOddLogEntry[] {
   if (!Array.isArray(raw)) return [];
   return raw.filter((e) =>
@@ -2132,7 +2124,7 @@ type MercadoGols05Row = {
   hctg_fetched_at?: string | null;
 };
 
-type MercadoEstrategia = "estrategia_05" | "imediato_05";
+type MercadoEstrategia = "estrategia_05";
 
 type MercadoGols05Context = {
   home: string | null;
@@ -2143,31 +2135,6 @@ type MercadoGols05Context = {
   minute: number | null;
   score_text: string;
 };
-
-/** Estrategia +0,5: primeira odd HCTG nao foi +0,5 em 0×0. Imediato: primeira odd em 0×0 ja e +0,5. */
-function resolveMercadoEstrategiaOnCapture(
-  existing: MercadoGols05Row,
-  captureMinute: number | null,
-  captureScore: string,
-  captureLine: number | null,
-): MercadoEstrategia {
-  const log = parseElevatedOddsLog(existing.elevated_odds_log);
-  const first = log[0];
-  if (first) {
-    return isImediatoFirstHctgSnapshot(first.score, first.line)
-      ? "imediato_05"
-      : "estrategia_05";
-  }
-  if (captureLine != null &&
-    isImediatoFirstHctgSnapshot(captureScore, captureLine)) {
-    return "imediato_05";
-  }
-  if (existing.had_min_plus2_before) return "estrategia_05";
-  const indisponivel = existing.indisponivel_ate_minuto ?? 0;
-  const cap = captureMinute ?? 0;
-  if (cap <= 1 && indisponivel <= 1) return "imediato_05";
-  return "estrategia_05";
-}
 
 async function applyMercadoGols05Capture(
   supabase: ReturnType<typeof createClient>,
@@ -2349,9 +2316,6 @@ async function processMercadoGols05Live(
 
   if (!existing) {
     if (over0 != null && trueOver05) {
-      const estrategia = isImediatoFirstHctgSnapshot(ctx.score_text, over0Line ?? 0.5)
-        ? "imediato_05"
-        : "estrategia_05";
       await supabase.from("futebol_mercado_gols_05").insert({
         event_id: eventId,
         home: ctx.home,
@@ -2360,8 +2324,8 @@ async function processMercadoGols05Live(
         country: ctx.country,
         betano_url: ctx.betano_url,
         indisponivel_ate_minuto: null,
-        had_min_plus2_before: estrategia === "estrategia_05",
-        estrategia,
+        had_min_plus2_before: elevatedPhase,
+        estrategia: "estrategia_05",
         disponivel_desde_minuto: minute,
         placar_na_captura: ctx.score_text,
         over_05_odd: over0,
@@ -2429,21 +2393,15 @@ async function processMercadoGols05Live(
       await touchMercadoWatching(supabase, eventId, ctx, hctgSnap, existing, hadMinPlus2);
       return null;
     }
-    const estrategia = resolveMercadoEstrategiaOnCapture(
-      existing,
-      minute,
-      ctx.score_text,
-      over0Line,
-    );
     const indisponivel = existing.indisponivel_ate_minuto ?? (minute != null ? minute - 1 : null);
-    const hadMinPlus2 = estrategia === "estrategia_05";
+    const hadMinPlus2 = existing.had_min_plus2_before || elevatedPhase;
     await applyMercadoGols05Capture(
       supabase,
       eventId,
       ctx,
       { ...totals, over_0_odd: over0, over_0_line: over0Line },
       over0,
-      estrategia,
+      "estrategia_05",
       indisponivel,
       hadMinPlus2,
       "watching",
@@ -2480,18 +2438,15 @@ async function processMercadoGols05Live(
     // #endregion
 
     if (over0 != null && trueOver05) {
-      const estrategia = isImediatoFirstHctgSnapshot(ctx.score_text, over0Line ?? 0.5)
-        ? "imediato_05"
-        : "estrategia_05";
       await applyMercadoGols05Capture(
         supabase,
         eventId,
         ctx,
         { ...totals, over_0_odd: over0, over_0_line: over0Line },
         over0,
-        estrategia,
+        "estrategia_05",
         existing.indisponivel_ate_minuto ?? (minute != null ? minute - 1 : null),
-        estrategia === "estrategia_05",
+        existing.had_min_plus2_before || elevatedPhase,
         existing.resultado,
       );
       await insertSistemaLog(supabase, {
@@ -3070,7 +3025,7 @@ Deno.serve(async (req) => {
     "Lista todos os jogos live da Betano (futebol real).",
     "Stats: Sportradar match_details (chutes a gol, escanteios, tiros de meta).",
     "Sinal 'manter placar' so a partir dos 85'; antes disso: em estudo.",
-    "Mercado +0,5: Estrategia +0,5 (apos +1,5/+2,5) e Imediato (1a coleta); GREEN ao gol apos captura.",
+    "Mercado +0,5: Estrategia +0,5 (1a oportunidade, monitora odd ate gol); GREEN ao gol apos captura.",
     "Odds HCTG (Total de Gols): worker OddsPapi WebSocket (ou HTML legado); Edge so le do BD.",
     "Historico: jogos monitorados + gols com minuto (filtro por gol a partir de X').",
   ];

@@ -333,17 +333,6 @@
     .summary-card.summary-estrategia-05 .summary-value .muted {
       color: var(--estrategia-05-blue);
     }
-    .summary-card.summary-imediato {
-      border-color: #fff;
-    }
-    .summary-card.summary-imediato .summary-label,
-    .summary-card.summary-imediato .summary-value {
-      color: #fff;
-    }
-    .summary-card.summary-imediato .summary-value .mercado-profit,
-    .summary-card.summary-imediato .summary-value .muted {
-      color: #fff;
-    }
     .summary-card.summary-sem-linha {
       background: rgba(143, 163, 191, 0.25);
     }
@@ -497,11 +486,6 @@
       border-radius: 4px;
     }
     .estrategia-badge.estrategia-05 { background: var(--estrategia-05-blue); color: #fff; }
-    .estrategia-badge.imediato {
-      background: transparent;
-      color: #fff;
-      border: 1px solid #fff;
-    }
     button.estrategia-popover-btn {
       border: none;
       cursor: pointer;
@@ -1293,15 +1277,17 @@
       if (resultado === 'excluido') return '<span class="muted">—</span>';
 
       let strat = '';
-      // estrategia_05 = nome atual; super_05 = legado até a migration rodar no BD
+      // estrategia_05 = unico; super_05 / imediato_05 = legado ate migration
+      const settledOrPending =
+        resultado === 'pending' || resultado === 'win' || resultado === 'loss';
       if (
         estrategia === 'estrategia_05' ||
         estrategia === 'super_05' ||
-        (resultado === 'watching' && hadPhase && !estrategia)
+        estrategia === 'imediato_05' ||
+        (resultado === 'watching' && hadPhase && !estrategia) ||
+        (settledOrPending && !estrategia && row.captured_at)
       ) {
         strat = estrategia05Badge(eventId);
-      } else if (estrategia === 'imediato_05') {
-        strat = estrategiaPopoverBtn(eventId, 'Imediato', 'imediato');
       }
 
       const resultBadge = mercadoResultadoLabel(resultado);
@@ -1334,8 +1320,7 @@
       const semLinha = rows.filter((r) =>
         r.resultado === 'sem_linha_05' || r.resultado === 'skipped',
       ).length;
-      const estrat05 = mercadoStrategyStats(rows, ['estrategia_05', 'super_05']);
-      const imedS = mercadoStrategyStats(rows, 'imediato_05');
+      const estrat05 = mercadoStrategyStats(rows, ['estrategia_05', 'super_05', 'imediato_05']);
       const greens = rows.filter((r) => r.resultado === 'win').length;
       const reds = rows.filter((r) => r.resultado === 'loss').length;
       const pending = rows.filter((r) => r.resultado === 'pending' || r.resultado === 'watching').length;
@@ -1373,14 +1358,6 @@
         <div class="summary-card summary-estrategia-05">
           <div class="summary-label">+0,5 · Lucro 1u</div>
           <div class="summary-value">${fmtStrategyProfitPair(estrat05)}</div>
-        </div>
-        <div class="summary-card summary-imediato">
-          <div class="summary-label">Imediato · GREEN</div>
-          <div class="summary-value">${fmtG(imedS)}</div>
-        </div>
-        <div class="summary-card summary-imediato">
-          <div class="summary-label">Imediato · Lucro 1u</div>
-          <div class="summary-value">${fmtStrategyProfitPair(imedS)}</div>
         </div>
         <div class="summary-card summary-pendentes">
           <div class="summary-label">Pendentes</div>

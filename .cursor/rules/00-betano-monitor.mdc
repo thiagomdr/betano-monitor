@@ -1,9 +1,9 @@
 ---
-description: Monitor Betano — mercado Gols +0,5, Supabase + OddsPapi WS (BD-first)
+description: Monitor Betano — mercado Gols +0,5, Supabase + HCTG HTML local (BD-first)
 alwaysApply: true
 ---
 
-# Monitor Betano — Mercado Gols +0,5 (Supabase + OddsPapi)
+# Monitor Betano — Mercado Gols +0,5 (Supabase)
 
 Projeto vigente: **betano-monitor**. Toda documentação, regras Cursor, scripts e nomenclatura devem referir-se apenas a este monitor (Betano futebol ao vivo, mercado Over +0,5).
 
@@ -12,18 +12,20 @@ Projeto vigente: **betano-monitor**. Toda documentação, regras Cursor, scripts
 - **Não** usar nomes de projetos anteriores (ex.: CasinoScores, Sic Bo, Lightning Storm) em código novo, regras, scripts ou UI.
 - Pastas legadas **removidas**: `scripts/oracle/`, ScrapingBee em produção.
 - Migrations `20260710`–`20260716` = histórico; reset futebol: `20260719000000_futebol_reset_vps_hctg.sql`.
-- Worker VPS HTML (`vps-hctg-worker.mjs`) = **legado**; HCTG preferido via **OddsPapi WebSocket**.
+- Worker VPS HTML (`vps-hctg-worker.mjs` em HostGator/Lightsail) = **legado** se IP for bloqueado.
+- **HCTG produção preferido:** worker HTML no **PC local** (IP residencial) via `scripts/run-local-hctg-worker.ps1`.
 - **Não** usar JSON Betano (`overview` / `markets-offers`) para gravar `hctg_lines` — gerou odds erradas.
+- OddsPapi = opcional (REST limitado; WS exige B2B).
 
 ## Princípio
 
 - **Fonte da verdade = PostgreSQL (Supabase)**. Painel só lê tabelas.
-- **Odds Total de Gols (HCTG)** = worker `scripts/oddspapi-hctg-worker.mjs` (WebSocket OddsPapi, bookmaker `betano.bet.br`), `hctg_source = oddspapi-ws`.
+- **Odds Total de Gols (HCTG)** = scrape DOM Playwright → `hctg_lines`, `hctg_source = html-dom-local`.
 - Edge `betano-futebol-live`: placar, lista, mercado +0,5 — **lê** `hctg_lines` do BD; **não** gera odds HCTG.
 
 ## HCTG — fonte e proibições
 
-**Fonte de produção:** OddsPapi WebSocket → `hctg_lines` (Over/Under fulltime, handicaps .5).
+**Fonte de produção:** Playwright HTML no PC local (IP casa) → aba Gols → Total de Gols.
 
 **Proibido para odds HCTG em produção:**
 - Extrair/gravar HCTG a partir de `overview/latest`, `overview?eventId=`, `markets-offers` da Betano (mistura mercados).
@@ -37,29 +39,31 @@ Projeto vigente: **betano-monitor**. Toda documentação, regras Cursor, scripts
 | Componente | Função |
 |------------|--------|
 | `betano-futebol-live` (cron */2) | Jogos live, placar, gols, mercado +0,5; lê `hctg_lines` do BD |
-| `oddspapi-hctg-worker` | WebSocket OddsPapi → grava `hctg_lines` |
-| `vps-hctg-worker` (opcional) | Legado HTML |
+| `run-local-hctg-worker.ps1` | PC casa → DOM HCTG → grava `hctg_lines` |
+| `vps-hctg-worker` (opcional) | Mesmo código; VPS se IP BR funcionar |
 | Painel `web/index.html` | Login Supabase Auth; leitura só com JWT |
 
 ## Mercado +0,5
 
-- Over +0,5 real = Mais de (placar + 0,5); estratégias `super_05` | `imediato_05`.
+- Over +0,5 real = Mais de (placar + 0,5); estrategia unica `estrategia_05`.
+- Apos 1ª oportunidade +0,5: monitora a odd ate o gol (GREEN) ou fim (RED); `over_05_odd` = abertura, `over_05_odd_ultima` = ultima antes do settle.
 - Resultados: `watching` | `pending` | `win` | `loss` | `sem_linha_05` | `excluido`.
 
 ## Secrets
 
 - Edge: secrets Supabase; Telegram opcional
-- Worker OddsPapi: `ODDSPAPI_API_KEY`, `SUPABASE_URL`, `SUPABASE_SERVICE_ROLE_KEY`
+- Worker local: `SUPABASE_URL`, `SUPABASE_SERVICE_ROLE_KEY` no `.env`
 - **Não** usar `SCRAPINGBEE_API_KEY` em produção
 
 ## Fluxo
 
 1. `supabase functions deploy betano-futebol-live`
-2. `ODDSPAPI_API_KEY=...` no `.env` → `node scripts/test-oddspapi-ws.mjs` (validar)
-3. `node scripts/oddspapi-hctg-worker.mjs` (grava BD)
+2. Smoke IP: `cd scripts; npm run local-ip-test` → `BETANO_OK`
+3. Worker: `.\scripts\run-local-hctg-worker.ps1` (deixar rodando)
 4. Painel: `scripts/serve-monitor.ps1`
 
 ## Código
 
 - Edge: `supabase/functions/betano-futebol-live/`
-- OddsPapi: `scripts/oddspapi-hctg-worker.mjs`, `scripts/lib/oddspapi-hctg.mjs`, `scripts/test-oddspapi-ws.mjs`
+- HCTG HTML: `scripts/vps-hctg-worker.mjs`, `scripts/lib/betano-hctg-playwright.mjs`
+- Launcher local: `scripts/run-local-hctg-worker.ps1`, `scripts/test-local-betano-ip.mjs`

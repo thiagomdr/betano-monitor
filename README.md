@@ -14,7 +14,7 @@ Localmente: `powershell -File scripts/serve-monitor.ps1` → http://localhost:80
 
 ## O que o painel mostra
 
-- Jogos monitorados no mercado **+0,5** (Estratégia +0,5 e Imediato)
+- Jogos monitorados no mercado **+0,5** (Estratégia +0,5)
 - Captura, GREEN/RED, lucro simulado 1u, placar e status ao vivo
 - Popover **Estratégia +0,5** com historico de odds +0,5
 - Exclusao por linha (soft-delete `excluido` — o cron nao recria)
