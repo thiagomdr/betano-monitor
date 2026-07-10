@@ -673,7 +673,7 @@
       <div class="header-actions">
         <span class="sistema-state" id="sistema-state" aria-live="polite">Sistema: …</span>
         <button type="button" class="btn-sistema running" id="btn-sistema" title="Pausar ou iniciar coleta Edge e worker">
-          Pausar sistema
+          Pausar Sistema
         </button>
         <button type="button" class="btn-logout" id="btn-logout">Sair</button>
       </div>
@@ -1941,7 +1941,7 @@
       if (!btn || !stateEl) return;
       btn.disabled = sistemaToggleBusy;
       if (sistemaAtivo) {
-        btn.textContent = 'Pausar sistema';
+        btn.textContent = 'Pausar Sistema';
         btn.classList.remove('paused');
         btn.classList.add('running');
         btn.title = 'Pausar coleta Edge, worker HCTG e lembretes Telegram';
@@ -1949,7 +1949,7 @@
         stateEl.classList.add('on');
         stateEl.classList.remove('off');
       } else {
-        btn.textContent = 'Iniciar sistema';
+        btn.textContent = 'Iniciar Sistema';
         btn.classList.remove('running');
         btn.classList.add('paused');
         btn.title = 'Iniciar coleta Edge, worker HCTG e lembretes Telegram';
