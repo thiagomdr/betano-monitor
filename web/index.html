@@ -1153,6 +1153,45 @@
       return { odd: live.over_0_odd, line: live.over_0_line };
     }
 
+    /** Menor linha Over HCTG (mais perto do +0,5 real) para exibir em Monitorando. */
+    function mercadoMinOverSnapshot(row) {
+      if (!row) return null;
+      const score = row.is_live && row.live_score ? row.live_score : null;
+      const goals = score ? goalsTotalFromScoreText(score) : null;
+
+      const withOver = parseHctgLines(row.hctg_lines)
+        .filter((l) => l.over != null)
+        .slice()
+        .sort((a, b) => a.line - b.line);
+      if (withOver.length) {
+        const best = withOver[0];
+        const remaining = goals != null
+          ? Math.round((best.line - goals) * 10) / 10
+          : null;
+        return { line: best.line, odd: best.over, remaining, source: 'hctg' };
+      }
+
+      const log = parseElevatedOddsLog(row.elevated_odds_log);
+      if (log.length) {
+        const last = log[log.length - 1];
+        return {
+          line: last.line,
+          odd: last.odd,
+          remaining: last.remaining ?? null,
+          source: 'log',
+        };
+      }
+      return null;
+    }
+
+    function formatMercadoMinOverLabel(snap) {
+      if (!snap || snap.odd == null) return null;
+      const rel = snap.remaining != null && snap.remaining >= 0.49
+        ? snap.remaining
+        : snap.line;
+      return `+${formatNumber(rel)} (${formatOddFixed2(snap.odd)})`;
+    }
+
     function buildEstrategia05PopoverLog(row) {
       const log = dedupeConsecutiveElevatedLines(parseElevatedOddsLog(row?.elevated_odds_log));
       if (!row) return log;
@@ -1184,10 +1223,25 @@
         }
       }
 
-      if (
-        (row.resultado === 'watching' || row.resultado === 'pending') &&
-        row.is_live
-      ) {
+      if (row.resultado === 'watching' && row.is_live) {
+        const snap = mercadoMinOverSnapshot(row);
+        if (snap?.odd != null) {
+          const last = log[log.length - 1];
+          const live = mercadoLiveOddsFromRow(row);
+          if (!(last &&
+            Math.abs((last.line ?? 0) - snap.line) < 0.01 &&
+            Math.abs(last.odd - snap.odd) < 0.01)) {
+            log.push({
+              at: new Date().toISOString(),
+              minute: live?.minute ?? row.last_minute,
+              score: live?.score ?? row.live_score ?? '—',
+              line: snap.line,
+              odd: snap.odd,
+              live: true,
+            });
+          }
+        }
+      } else if (row.resultado === 'pending' && row.is_live) {
         const liveOver = mercadoLiveTrueOver05(row);
         const ultima = row.over_05_odd_ultima != null
           ? { odd: row.over_05_odd_ultima, line: row.over_05_line }
@@ -1273,23 +1327,18 @@
     }
 
     function mercadoEstrategiaLabel(row) {
-      const { estrategia, resultado, had_min_plus2_before: hadPhase, event_id: eventId } = row;
+      const { estrategia, resultado, event_id: eventId } = row;
       if (resultado === 'excluido') return '<span class="muted">—</span>';
 
-      let strat = '';
-      // estrategia_05 = unico; super_05 / imediato_05 = legado ate migration
-      const settledOrPending =
-        resultado === 'pending' || resultado === 'win' || resultado === 'loss';
-      if (
+      const showStrat =
+        resultado === 'watching' ||
+        resultado === 'pending' ||
         estrategia === 'estrategia_05' ||
         estrategia === 'super_05' ||
         estrategia === 'imediato_05' ||
-        (resultado === 'watching' && hadPhase && !estrategia) ||
-        (settledOrPending && !estrategia && row.captured_at)
-      ) {
-        strat = estrategia05Badge(eventId);
-      }
+        ((resultado === 'win' || resultado === 'loss') && row.captured_at);
 
+      const strat = showStrat ? estrategia05Badge(eventId) : '';
       const resultBadge = mercadoResultadoLabel(resultado);
       if (!strat) return resultBadge;
       return `<span class="estrategia-com-resultado">${strat} ${resultBadge}</span>`;
@@ -1387,7 +1436,7 @@
       });
     }
 
-    /** Coluna Total de Gols: odd abertura / ultima (+0,5), ou Sem +0,5. */
+    /** Coluna Total de Gols: Monitorando = menor linha Over; capturado = abertura/ultima. */
     function formatMercadoTotalGolsCell(row) {
       if (row.resultado === 'sem_linha_05' || row.resultado === 'skipped') {
         return '<span class="resultado-badge sem-linha">Sem +0,5 no jogo</span>';
@@ -1395,7 +1444,11 @@
       const abertura = Number(row.over_05_odd);
       if (!Number.isFinite(abertura) || abertura < 1.01) {
         if (row.resultado === 'watching') {
-          return '<span class="muted">Aguardando +0,5</span>';
+          const label = formatMercadoMinOverLabel(mercadoMinOverSnapshot(row));
+          if (label) {
+            return `<span class="hctg-pill">${label}</span>`;
+          }
+          return '<span class="muted">Sem linha</span>';
         }
         return '<span class="muted">—</span>';
       }
