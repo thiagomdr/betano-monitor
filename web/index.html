@@ -366,6 +366,14 @@
       border: 1px solid rgba(61, 214, 140, 0.35);
       white-space: nowrap;
     }
+    button.table-tip-btn.hctg-pill {
+      color: inherit;
+      text-decoration: none;
+    }
+    button.table-tip-btn.hctg-pill:hover {
+      filter: brightness(1.15);
+      color: inherit;
+    }
     .hctg-pill.under {
       background: rgba(143, 163, 191, 0.12);
       border-color: rgba(143, 163, 191, 0.35);
@@ -1173,23 +1181,28 @@
       );
     }
 
-    function formatHctgPills(raw, fetchedAt) {
-      const lines = parseHctgLines(raw).slice().sort((a, b) => a.line - b.line);
-      if (!lines.length) return '<span class="muted">—</span>';
-      const bits = [];
-      const timeLabel = formatTimeHms(fetchedAt);
-      if (timeLabel) {
-        bits.push(
-          `<span class="hctg-fetched-at" title="Última coleta: ${formatDate(fetchedAt)}">${timeLabel}</span>`,
-        );
-      }
-      for (const l of lines) {
-        const lineLabel = formatNumber(l.line);
-        if (l.over != null) {
-          bits.push(`<span class="hctg-pill">+${lineLabel} (${formatNumber(l.over)})</span>`);
-        }
-      }
-      return `<div class="hctg-pills">${bits.join('')}</div>`;
+    function formatOddFixed2(n) {
+      if (n == null || Number.isNaN(Number(n))) return '—';
+      return Number(n).toLocaleString('pt-BR', {
+        minimumFractionDigits: 2,
+        maximumFractionDigits: 2,
+      });
+    }
+
+    /** Menor linha Over (mais perto do +0,5); odd com 2 casas; coleta so no balao. */
+    function formatHctgPills(raw, fetchedAt, eventId) {
+      const withOver = parseHctgLines(raw)
+        .filter((l) => l.over != null)
+        .slice()
+        .sort((a, b) => a.line - b.line);
+      if (!withOver.length) return '<span class="muted">—</span>';
+      const best = withOver[0];
+      const label = `+${formatNumber(best.line)} (${formatOddFixed2(best.over)})`;
+      const tip = tipLinesHtml([
+        `Coletado em: ${fetchedAt ? formatDate(fetchedAt) : '—'}`,
+      ]);
+      const tipKey = `hctg-${eventId || 'x'}`;
+      return `<button type="button" class="table-tip-btn hctg-pill" data-table-tip="${tipKey}" data-tip-html="${encodeURIComponent(tip)}">${label}</button>`;
     }
 
     function mercadoSortKey(row) {
@@ -1286,7 +1299,7 @@
           <td data-label="#">${i + 1}</td>
           <td data-label="Jogo"><strong>${match}</strong></td>
           <td data-label="Tempo">${mercadoTempoLabel(row)}</td>
-          <td data-label="Total de Gols">${formatHctgPills(row.hctg_lines, row.hctg_fetched_at)}</td>
+          <td data-label="Total de Gols">${formatHctgPills(row.hctg_lines, row.hctg_fetched_at, row.event_id)}</td>
           <td data-label="Placar">${mercadoPlacarLabel(row)}</td>
           <td data-label="Estrategia">${mercadoEstrategiaLabel(row)}</td>
           <td data-label="Liga">${league}</td>
