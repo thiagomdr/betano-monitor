@@ -2075,6 +2075,7 @@ type MercadoGols05Row = {
   estrategia?: string | null;
   telegram_capture_sent_at?: string | null;
   telegram_confirmacao?: string | null;
+  hctg_fetched_at?: string | null;
 };
 
 type MercadoEstrategia = "super_05" | "imediato_05";
@@ -2139,6 +2140,8 @@ async function applyMercadoGols05Capture(
     resultado: "pending",
     last_minute: minute,
     is_live: true,
+    placar_final: null,
+    settled_at: null,
     updated_at: nowIso,
   }).eq("event_id", eventId);
   if (onlyResultado) q = q.eq("resultado", onlyResultado);
@@ -2372,6 +2375,84 @@ async function processMercadoGols05Live(
     return "captured";
   }
 
+  // Partida saiu do overview (ex. suspensa) e voltou: reabre monitoramento
+  if (existing.resultado === "sem_linha_05" || existing.resultado === "skipped") {
+    // #region agent log
+    fetch("http://127.0.0.1:7904/ingest/86615625-6ae5-4e98-a1da-0a5f0f15fc42", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "X-Debug-Session-Id": "8438b2",
+      },
+      body: JSON.stringify({
+        sessionId: "8438b2",
+        runId: "reopen-live",
+        hypothesisId: "H2",
+        location: "betano-futebol-live/index.ts:processMercadoGols05Live",
+        message: "reopening sem_linha_05 while event back in overview",
+        data: {
+          eventId,
+          prev: existing.resultado,
+          minute,
+          score: ctx.score_text,
+          trueOver05,
+          over0,
+        },
+        timestamp: Date.now(),
+      }),
+    }).catch(() => {});
+    // #endregion
+
+    if (over0 != null && trueOver05) {
+      const estrategia = isImediatoFirstHctgSnapshot(ctx.score_text, over0Line ?? 0.5)
+        ? "imediato_05"
+        : "super_05";
+      await applyMercadoGols05Capture(
+        supabase,
+        eventId,
+        ctx,
+        { ...totals, over_0_odd: over0, over_0_line: over0Line },
+        over0,
+        estrategia,
+        existing.indisponivel_ate_minuto ?? (minute != null ? minute - 1 : null),
+        estrategia === "super_05",
+        existing.resultado,
+      );
+      await insertSistemaLog(supabase, {
+        source: "edge-live",
+        action: "mercado_reaberto",
+        message: `Jogo voltou ao vivo apos encerramento prematuro — captura +0,5`,
+        event_id: eventId,
+        match_label: matchLabel(ctx.home, ctx.away),
+        payload: { from: existing.resultado, to: "pending", minute, score: ctx.score_text },
+      });
+      return "captured";
+    }
+
+    await supabase.from("futebol_mercado_gols_05").update({
+      resultado: "watching",
+      is_live: true,
+      placar_final: null,
+      settled_at: null,
+      last_minute: minute,
+      indisponivel_ate_minuto: minute,
+      had_min_plus2_before: existing.had_min_plus2_before || elevatedPhase,
+      hctg_lines: hctgSnap.lines,
+      hctg_source: hctgSnap.source,
+      hctg_fetched_at: hctgSnap.lines.length > 0 ? nowIso : existing.hctg_fetched_at,
+      updated_at: nowIso,
+    }).eq("event_id", eventId).in("resultado", ["sem_linha_05", "skipped"]);
+    await insertSistemaLog(supabase, {
+      source: "edge-live",
+      action: "mercado_reaberto",
+      message: `Jogo voltou ao vivo apos encerramento prematuro — monitorando`,
+      event_id: eventId,
+      match_label: matchLabel(ctx.home, ctx.away),
+      payload: { from: existing.resultado, to: "watching", minute, score: ctx.score_text },
+    });
+    return null;
+  }
+
   return null;
 }
 
@@ -2398,14 +2479,133 @@ async function revertMercadoInvalidPending(
   }).eq("event_id", eventId).eq("resultado", "pending");
 }
 
+/** Minutos fora do overview antes de encerrar (suspensao/glitch). Default ~2 ciclos de 2 min. */
+const OFF_LIVE_GRACE_MIN = Math.max(
+  2,
+  Number(Deno.env.get("OFF_LIVE_GRACE_MIN") || "5") || 5,
+);
+
+type LiveValidationLine = {
+  event_id: string;
+  label: string;
+  home?: string | null;
+  away?: string | null;
+  status: "confere" | "erro" | "atencao";
+  reason?: string;
+};
+
+type LiveCountReconcile = {
+  json_live: number;
+  mercado_live_open: number;
+  historico_live: number;
+  missing_from_json: string[];
+  held_by_grace: string[];
+  finalized: string[];
+  confere: number;
+  erro: number;
+  atencao: number;
+  lines: LiveValidationLine[];
+};
+
+function minutesSinceIso(iso: string | null | undefined, nowMs: number): number | null {
+  if (!iso) return null;
+  const t = Date.parse(iso);
+  if (!Number.isFinite(t)) return null;
+  return (nowMs - t) / 60000;
+}
+
+/** Monta linhas Confere/Erro/Atenção: JSON overview vs mercado is_live. */
+function buildLiveValidationLines(
+  liveIds: string[],
+  jsonById: Map<string, { home: string | null; away: string | null }>,
+  sistemaRows: Array<{ event_id: string; home: unknown; away: unknown }>,
+  heldByGrace: Set<string>,
+): LiveValidationLine[] {
+  const sistemaById = new Map<string, { home: string | null; away: string | null }>();
+  for (const row of sistemaRows) {
+    const id = String(row.event_id);
+    sistemaById.set(id, {
+      home: row.home != null ? String(row.home) : null,
+      away: row.away != null ? String(row.away) : null,
+    });
+  }
+
+  const liveSet = new Set(liveIds.map(String));
+  const allIds = new Set<string>([...liveSet, ...sistemaById.keys()]);
+  const lines: LiveValidationLine[] = [];
+
+  for (const eventId of [...allIds].sort()) {
+    const inJson = liveSet.has(eventId);
+    const inSistema = sistemaById.has(eventId);
+    const meta = jsonById.get(eventId) ?? sistemaById.get(eventId) ?? {
+      home: null,
+      away: null,
+    };
+    const label = matchLabel(meta.home, meta.away) ?? eventId;
+
+    if (inJson && inSistema) {
+      lines.push({
+        event_id: eventId,
+        label,
+        home: meta.home,
+        away: meta.away,
+        status: "confere",
+      });
+      continue;
+    }
+
+    if (inSistema && !inJson) {
+      if (heldByGrace.has(eventId)) {
+        lines.push({
+          event_id: eventId,
+          label,
+          home: meta.home,
+          away: meta.away,
+          status: "atencao",
+          reason: "Fora do JSON — aguardando confirmação (possível suspensão)",
+        });
+      } else {
+        lines.push({
+          event_id: eventId,
+          label,
+          home: meta.home,
+          away: meta.away,
+          status: "erro",
+          reason: "Jogo já foi encerrado na Betano",
+        });
+      }
+      continue;
+    }
+
+    // Só no JSON
+    lines.push({
+      event_id: eventId,
+      label,
+      home: meta.home,
+      away: meta.away,
+      status: "erro",
+      reason: "Jogo está encerrado no sistema e está ao vivo na Betano",
+    });
+  }
+
+  return lines;
+}
+
+/**
+ * Compara contagens JSON vs tabelas a cada cron e so encerra jogo ausente
+ * do overview apos OFF_LIVE_GRACE_MIN (evita "finalizado" em partida suspensa).
+ */
 async function finalizeMercadoGols05OffLive(
   supabase: ReturnType<typeof createClient>,
   liveIds: string[],
-): Promise<{ wins: number; losses: number; semLinha: number }> {
+  jsonById: Map<string, { home: string | null; away: string | null }>,
+): Promise<{ wins: number; losses: number; semLinha: number; reconcile: LiveCountReconcile }> {
   let wins = 0;
   let losses = 0;
   let semLinha = 0;
-  const nowIso = new Date().toISOString();
+  const nowMs = Date.now();
+  const nowIso = new Date(nowMs).toISOString();
+  const liveSet = new Set(liveIds.map(String));
 
   const { data: openRows } = await supabase
     .from("futebol_mercado_gols_05")
@@ -2413,15 +2613,36 @@ async function finalizeMercadoGols05OffLive(
     .eq("is_live", true)
     .in("resultado", ["watching", "pending"]);
 
+  const { count: historicoLiveCount } = await supabase
+    .from("futebol_historico_jogos")
+    .select("event_id", { count: "exact", head: true })
+    .eq("is_live", true);
+
+  const missingFromJson: string[] = [];
+  const heldByGrace: string[] = [];
+  const finalized: string[] = [];
+
   for (const row of openRows ?? []) {
     const eventId = String(row.event_id);
-    if (liveIds.includes(eventId)) continue;
+    if (liveSet.has(eventId)) continue;
+    missingFromJson.push(eventId);
 
     const { data: game } = await supabase
       .from("futebol_historico_jogos")
-      .select("score,home_score,away_score")
+      .select("score,home_score,away_score,last_seen_at,updated_at,last_minute")
       .eq("event_id", eventId)
       .maybeSingle();
+
+    const lastSeenMin = minutesSinceIso(
+      (game?.last_seen_at as string | null) ?? (game?.updated_at as string | null),
+      nowMs,
+    );
+    // Ainda visto recentemente no historico / overview anterior → nao encerra
+    if (lastSeenMin == null || lastSeenMin < OFF_LIVE_GRACE_MIN) {
+      heldByGrace.push(eventId);
+      continue;
+    }
+
     const scoreText = game?.score ??
       (game?.home_score != null && game?.away_score != null
         ? `${game.home_score}-${game.away_score}`
@@ -2437,12 +2658,17 @@ async function finalizeMercadoGols05OffLive(
       await insertSistemaLog(supabase, {
         source: "edge-live",
         action: "mercado_sem_linha",
-        message: `Encerrado sem linha +0,5 · placar ${scoreText}`,
+        message: `Encerrado sem linha +0,5 · placar ${scoreText} (fora do live ≥${OFF_LIVE_GRACE_MIN}min)`,
         event_id: eventId,
         match_label: matchLabel(row.home as string, row.away as string),
-        payload: { placar_final: scoreText },
+        payload: {
+          placar_final: scoreText,
+          last_seen_min: lastSeenMin,
+          grace_min: OFF_LIVE_GRACE_MIN,
+        },
       });
       semLinha += 1;
+      finalized.push(eventId);
       continue;
     }
 
@@ -2458,6 +2684,7 @@ async function finalizeMercadoGols05OffLive(
     }).eq("event_id", eventId);
     if (outcome === "win") wins += 1;
     else if (outcome === "loss") losses += 1;
+    finalized.push(eventId);
   }
 
   const { data: settledStillLive } = await supabase
@@ -2468,14 +2695,70 @@ async function finalizeMercadoGols05OffLive(
 
   for (const row of settledStillLive ?? []) {
     const eventId = String(row.event_id);
-    if (liveIds.includes(eventId)) continue;
+    if (liveSet.has(eventId)) continue;
     await supabase.from("futebol_mercado_gols_05").update({
       is_live: false,
       updated_at: nowIso,
     }).eq("event_id", eventId);
   }
 
-  return { wins, losses, semLinha };
+  const graceSet = new Set(heldByGrace);
+  const lines = buildLiveValidationLines(
+    liveIds,
+    jsonById,
+    (openRows ?? []).map((r) => ({
+      event_id: String(r.event_id),
+      home: r.home,
+      away: r.away,
+    })),
+    graceSet,
+  );
+  const confere = lines.filter((l) => l.status === "confere").length;
+  const erro = lines.filter((l) => l.status === "erro").length;
+  const atencao = lines.filter((l) => l.status === "atencao").length;
+
+  const reconcile: LiveCountReconcile = {
+    json_live: liveIds.length,
+    mercado_live_open: (openRows ?? []).length,
+    historico_live: historicoLiveCount ?? 0,
+    missing_from_json: missingFromJson,
+    held_by_grace: heldByGrace,
+    finalized,
+    confere,
+    erro,
+    atencao,
+    lines,
+  };
+
+  const reportLines = [
+    `Jogos Ao Vivo no JSON: ${reconcile.json_live}`,
+    `Jogos Ao Vivo no Sistema: ${reconcile.mercado_live_open}`,
+    "",
+    "Consulta de Jogos JSON x Sistema:",
+    ...lines.map((l) => {
+      if (l.status === "confere") return `${l.label} (Confere) ✓`;
+      if (l.status === "atencao") return `${l.label} (Atenção) ${l.reason ?? ""}`.trim();
+      return `${l.label} (Erro) ${l.reason ?? ""}`.trim();
+    }),
+  ];
+
+  await insertSistemaLog(supabase, {
+    level: erro > 0 ? "warn" : "info",
+    source: "edge-live",
+    action: "live_json_vs_sistema",
+    message:
+      `Consulta JSON x Sistema: JSON=${reconcile.json_live} · Sistema=${reconcile.mercado_live_open}` +
+      ` · ${confere} confere` +
+      (atencao ? ` · ${atencao} atenção` : "") +
+      (erro ? ` · ${erro} erro` : ""),
+    payload: {
+      ...reconcile,
+      grace_min: OFF_LIVE_GRACE_MIN,
+      report: reportLines.join("\n"),
+    },
+  });
+
+  return { wins, losses, semLinha, reconcile };
 }
 
 function buildSignal(row: {
@@ -2604,6 +2887,7 @@ Deno.serve(async (req) => {
     let hctgWithLines = 0;
     let hctgEmpty = 0;
     const liveIds: string[] = [];
+    const jsonById = new Map<string, { home: string | null; away: string | null }>();
 
     const anchorOverForSort = (ev: Json): number => {
       const markets = asRecord(overview.markets) ?? {};
@@ -2681,6 +2965,7 @@ Deno.serve(async (req) => {
       if (minute != null && minute >= MIN_MINUTE_DEFAULT) readyCount += 1;
 
       liveIds.push(eventId);
+      jsonById.set(eventId, { home: teams.home, away: teams.away });
 
       rows.push({
         event_id: eventId,
@@ -2851,7 +3136,7 @@ Deno.serve(async (req) => {
       const { data: mercadoRow } = await supabase
         .from("futebol_mercado_gols_05")
         .select(
-          "event_id,resultado,captured_at,disponivel_desde_minuto,indisponivel_ate_minuto,had_min_plus2_before,over_05_odd,over_05_line,placar_na_captura,elevated_odds_log,telegram_capture_sent_at,telegram_confirmacao",
+          "event_id,resultado,captured_at,disponivel_desde_minuto,indisponivel_ate_minuto,had_min_plus2_before,over_05_odd,over_05_line,placar_na_captura,elevated_odds_log,telegram_capture_sent_at,telegram_confirmacao,hctg_fetched_at",
         )
         .eq("event_id", eventId)
         .maybeSingle();
@@ -2954,11 +3239,18 @@ Deno.serve(async (req) => {
 
     const reconcile = await reconcileHistoricGoals(supabase, 120);
 
-    const mercadoFinalize = await finalizeMercadoGols05OffLive(supabase, liveIds);
+    const mercadoFinalize = await finalizeMercadoGols05OffLive(
+      supabase,
+      liveIds,
+      jsonById,
+    );
     mercadoWins += mercadoFinalize.wins;
 
-    // jogos que sairam do live: marca is_live=false
+    // Historico: so marca finished apos mesma gracia (partida suspensa nao some do live)
     if (liveIds.length > 0) {
+      const graceCutoff = new Date(
+        Date.now() - OFF_LIVE_GRACE_MIN * 60 * 1000,
+      ).toISOString();
       await supabase
         .from("futebol_historico_jogos")
         .update({
@@ -2967,7 +3259,8 @@ Deno.serve(async (req) => {
           updated_at: new Date().toISOString(),
         })
         .eq("is_live", true)
-        .not("event_id", "in", `(${liveIds.join(",")})`);
+        .not("event_id", "in", `(${liveIds.join(",")})`)
+        .lt("last_seen_at", graceCutoff);
     }
 
     rows.sort((a, b) => (b.minute ?? 0) - (a.minute ?? 0));
@@ -2984,6 +3277,21 @@ Deno.serve(async (req) => {
         `Stats ok em ${statsOk}/${rows.length} jogos.`,
         `Gols gravados nesta rodada: ${goalsSaved}.`,
         `Mercado +0,5: ${mercadoCaptured} captura(s), ${mercadoWins} green(s), ${mercadoFinalize.losses} red(s), ${mercadoFinalize.semLinha} sem linha +0,5 nesta rodada.`,
+        `Live reconcile: JSON=${mercadoFinalize.reconcile.json_live} mercado=${mercadoFinalize.reconcile.mercado_live_open} historico=${mercadoFinalize.reconcile.historico_live}` +
+          ` · confere=${mercadoFinalize.reconcile.confere}` +
+          (mercadoFinalize.reconcile.atencao
+            ? ` atenção=${mercadoFinalize.reconcile.atencao}`
+            : "") +
+          (mercadoFinalize.reconcile.erro
+            ? ` erro=${mercadoFinalize.reconcile.erro}`
+            : "") +
+          (mercadoFinalize.reconcile.held_by_grace.length
+            ? ` gracia=${mercadoFinalize.reconcile.held_by_grace.length}`
+            : "") +
+          (mercadoFinalize.reconcile.finalized.length
+            ? ` encerrados=${mercadoFinalize.reconcile.finalized.length}`
+            : "") +
+          ".",
         `HCTG odds: worker OddsPapi/HTML (${hctgWithLines} com linhas, ${hctgEmpty} sem linha no BD).`,
         `Gols timeline ok: ${goalsTimelineOk}, timeline vazia c/ placar: ${goalsTimelineEmpty}, inferidos: ${goalsInferred}, sem gols c/ placar: ${goalsMissing}.`,
         `Reconciliacao: ${reconcile.scanned} analisados, ${reconcile.fixed} ok, ${reconcile.backfilled} parcial/missing.`,
@@ -3014,6 +3322,11 @@ Deno.serve(async (req) => {
         mercado_wins: mercadoWins,
         mercado_losses: mercadoFinalize.losses,
         mercado_sem_linha: mercadoFinalize.semLinha,
+        live_json: mercadoFinalize.reconcile.json_live,
+        live_mercado_open: mercadoFinalize.reconcile.mercado_live_open,
+        live_historico: mercadoFinalize.reconcile.historico_live,
+        live_held_grace: mercadoFinalize.reconcile.held_by_grace.length,
+        live_finalized: mercadoFinalize.reconcile.finalized.length,
         telegram_reminders_sent: telegramRemindersSent,
         telegram_settlements_sent: telegramSettlementsSent,
         hctg_with_lines: hctgWithLines,

@@ -246,6 +246,17 @@
     }
     .log-detail-line:last-child { border-bottom: none; }
     .log-detail-k { color: var(--muted); }
+    .log-report {
+      margin: 0.35rem 0 0;
+      white-space: pre-wrap;
+      font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+      font-size: 0.76rem;
+      line-height: 1.45;
+      color: var(--text);
+    }
+    .log-report-ok { color: #6bcf7f; }
+    .log-report-err { color: #ff6b6b; }
+    .log-report-warn { color: #ffd166; }
     tr.log-row-error td { background: rgba(255, 107, 107, 0.06); }
     tr.log-row-warn td { background: rgba(255, 209, 102, 0.04); }
     tr.log-row-sistema td { background: rgba(143, 163, 191, 0.04); }
@@ -716,6 +727,7 @@
       hctg_age_gate: 'Modal +18',
       mercado_reaberto: 'Reaberto ao vivo',
       live_count_reconcile: 'Contagem live',
+      live_json_vs_sistema: 'JSON × Sistema',
       worker_mem: 'RAM worker',
       mercado_captura: 'Captura +0,5',
       mercado_green: 'GREEN',
@@ -1625,6 +1637,9 @@
       if (typeof payload !== 'object' || Array.isArray(payload)) {
         return [`Detalhe: ${String(payload)}`];
       }
+      if (typeof payload.report === 'string' && payload.report.trim()) {
+        return [];
+      }
       return Object.entries(payload).map(([k, v]) => {
         let val = v;
         if (v != null && typeof v === 'object') {
@@ -1636,6 +1651,31 @@
         }
         return `${k}: ${val}`;
       });
+    }
+
+    function formatLiveValidationReportHtml(payload) {
+      const report = typeof payload?.report === 'string' ? payload.report : '';
+      if (!report.trim()) return '';
+      const html = report
+        .split('\n')
+        .map((line) => {
+          const esc = String(line)
+            .replace(/&/g, '&amp;')
+            .replace(/</g, '&lt;')
+            .replace(/>/g, '&gt;');
+          if (/\(Confere\)/.test(line)) {
+            return `<span class="log-report-ok">${esc}</span>`;
+          }
+          if (/\(Erro\)/.test(line)) {
+            return `<span class="log-report-err">${esc}</span>`;
+          }
+          if (/\(Atenção\)/.test(line)) {
+            return `<span class="log-report-warn">${esc}</span>`;
+          }
+          return esc;
+        })
+        .join('\n');
+      return `<h4 style="margin:0.65rem 0 0.35rem">Consulta JSON × Sistema</h4><pre class="log-report">${html}</pre>`;
     }
 
     function renderLogDetailHtml(row) {
@@ -1653,19 +1693,21 @@
       if (row.match_label) lines.push(['Jogo', formatMatchLabelHtml(row.match_label)]);
       if (row.id) lines.push(['Log ID', row.id]);
 
-      const payloadLines = formatLogPayloadLines(row.payload);
+      const payload = row.payload;
+      const payloadLines = formatLogPayloadLines(payload);
       const head = lines
         .map(
           ([k, v]) =>
             `<div class="log-detail-line"><span class="log-detail-k">${k}:</span> ${v}</div>`,
         )
         .join('');
+      const reportHtml = formatLiveValidationReportHtml(payload);
       const payloadHtml = payloadLines.length
         ? `<h4 style="margin:0.65rem 0 0.35rem">Detalhes</h4>${payloadLines
             .map((l) => `<div class="log-detail-line">${l}</div>`)
             .join('')}`
         : '';
-      return `<h4>${cat}</h4>${head}${payloadHtml}`;
+      return `<h4>${cat}</h4>${head}${reportHtml}${payloadHtml}`;
     }
 
     function showLogDetailPopover(btn, logId) {
