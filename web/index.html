@@ -1072,16 +1072,33 @@
       return null;
     }
 
-    function mercadoSimProfit(row) {
-      const pair = mercadoSimProfitPair(row);
-      if (!pair) return null;
-      if (pair.kind === 'red') return -1;
+    /** Lucro 1u na odd de abertura e na ultima (pre-GREEN / fim). RED = -1 em ambos. */
+    function mercadoSimProfitParts(row) {
       const abertura = Number(row.over_05_odd);
-      const ultima = Number(row.over_05_odd_ultima ?? row.over_05_odd);
-      // Cards de resumo usam lucro na ultima odd (potencial real da trajetoria).
-      if (Number.isFinite(ultima) && ultima >= 1.01) return ultima - 1;
-      if (Number.isFinite(abertura) && abertura >= 1.01) return abertura - 1;
+      if (!Number.isFinite(abertura) || abertura < 1.01) return null;
+      if (row.resultado === 'loss') return { abertura: -1, ultima: -1 };
+      if (row.resultado === 'win') {
+        const ultimaOdd = Number(row.over_05_odd_ultima ?? row.over_05_odd);
+        const ultima = Number.isFinite(ultimaOdd) && ultimaOdd >= 1.01 ? ultimaOdd : abertura;
+        return { abertura: abertura - 1, ultima: ultima - 1 };
+      }
       return null;
+    }
+
+    function mercadoSimProfit(row) {
+      const parts = mercadoSimProfitParts(row);
+      return parts ? parts.ultima : null;
+    }
+
+    function formatProfitUnits(value) {
+      if (value == null || !Number.isFinite(value)) return '—';
+      const rounded = Math.round(value * 100) / 100;
+      const sign = rounded > 0 ? '+' : '';
+      return `${sign}${formatNumber(rounded)} u`;
+    }
+
+    function formatMercadoProfitPairText(abertura, ultima) {
+      return `${formatProfitUnits(abertura)} / ${formatProfitUnits(ultima)}`;
     }
 
     function formatMercadoProfitCell(row) {
@@ -1298,8 +1315,15 @@
         keys.includes(r.estrategia) && (r.resultado === 'win' || r.resultado === 'loss'),
       );
       const greens = scoped.filter((r) => r.resultado === 'win').length;
-      const profit = scoped.reduce((sum, r) => sum + (mercadoSimProfit(r) ?? 0), 0);
-      return { bets: scoped.length, greens, profit };
+      let profitAbertura = 0;
+      let profitUltima = 0;
+      for (const r of scoped) {
+        const parts = mercadoSimProfitParts(r);
+        if (!parts) continue;
+        profitAbertura += parts.abertura;
+        profitUltima += parts.ultima;
+      }
+      return { bets: scoped.length, greens, profitAbertura, profitUltima, profit: profitUltima };
     }
 
     function renderMercadoSummary(rows) {
@@ -1319,7 +1343,12 @@
       const profitClass = profit >= 0 ? 'positive' : 'negative';
       const sign = profit > 0 ? '+' : '';
       const fmtG = (s) => (s.bets > 0 ? `${s.greens}/${s.bets}` : '—');
-      const fmtStrategyProfit = (s) => (s.bets > 0 ? formatMercadoProfit(s.profit) : '—');
+      const fmtStrategyProfitPair = (s) => {
+        if (s.bets <= 0) return '—';
+        const text = formatMercadoProfitPairText(s.profitAbertura, s.profitUltima);
+        const cls = s.profitUltima >= 0 ? 'positive' : 'negative';
+        return `<span class="mercado-profit ${cls}">${text}</span>`;
+      };
       el.innerHTML = `
         <div class="summary-card">
           <div class="summary-label">Jogos monitorados</div>
@@ -1343,7 +1372,7 @@
         </div>
         <div class="summary-card summary-estrategia-05">
           <div class="summary-label">+0,5 · Lucro 1u</div>
-          <div class="summary-value">${fmtStrategyProfit(estrat05)}</div>
+          <div class="summary-value">${fmtStrategyProfitPair(estrat05)}</div>
         </div>
         <div class="summary-card summary-imediato">
           <div class="summary-label">Imediato · GREEN</div>
@@ -1351,7 +1380,7 @@
         </div>
         <div class="summary-card summary-imediato">
           <div class="summary-label">Imediato · Lucro 1u</div>
-          <div class="summary-value">${fmtStrategyProfit(imedS)}</div>
+          <div class="summary-value">${fmtStrategyProfitPair(imedS)}</div>
         </div>
         <div class="summary-card summary-pendentes">
           <div class="summary-label">Pendentes</div>
