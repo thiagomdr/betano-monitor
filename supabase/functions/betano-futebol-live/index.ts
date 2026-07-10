@@ -2499,7 +2499,7 @@ type ConferenceMatchLine = {
   label: string;
   minute: number | null;
   score: string;
-  statusLabel: "Monitorando" | "Pendente" | "GREEN" | "RED" | "Finalizado";
+  statusLabel: "Monitorando" | "Aposta" | "GREEN" | "RED" | "Finalizado";
 };
 
 type LiveCountReconcile = {
@@ -2843,8 +2843,8 @@ async function finalizeMercadoGols05OffLive(
         label,
         minute: hist?.last_minute ?? toInt(r.last_minute),
         score: hist?.score ?? "—",
-        statusLabel: (r.resultado === "pending" ? "Pendente" : "Monitorando") as
-          | "Pendente"
+        statusLabel: (r.resultado === "pending" ? "Aposta" : "Monitorando") as
+          | "Aposta"
           | "Monitorando",
       };
     })

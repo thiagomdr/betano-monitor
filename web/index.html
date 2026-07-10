@@ -448,7 +448,10 @@
       border-radius: 4px;
       text-transform: uppercase;
     }
-    .resultado-badge.pending { background: rgba(255, 209, 102, 0.2); color: var(--warn); }
+    .resultado-badge.pending {
+      background: #fff;
+      color: var(--warn);
+    }
     .resultado-badge.win { background: rgba(61, 214, 140, 0.2); color: var(--accent); }
     .resultado-badge.loss { background: rgba(220, 53, 69, 0.2); color: #ff6b6b; }
     .resultado-badge.sem-linha { background: rgba(143, 163, 191, 0.2); color: var(--muted); }
@@ -664,7 +667,7 @@
             <th title="Minuto do jogo">Tempo</th>
             <th>Placar</th>
             <th>Total de Gols</th>
-            <th title="Estratégia e resultado (Monitorando / Pendente / GREEN / RED)">Estrategia</th>
+            <th title="Estratégia e resultado (Monitorando / Aposta / GREEN / RED)">Estrategia</th>
             <th>Liga</th>
             <th>Gol GREEN</th>
             <th>Validação</th>
@@ -987,7 +990,7 @@
 
     function mercadoResultadoLabel(resultado) {
       const map = {
-        pending: 'Pendente',
+        pending: 'Aposta',
         win: 'GREEN',
         loss: 'RED',
         sem_linha_05: 'Sem +0,5 no jogo',
@@ -1751,7 +1754,8 @@
 
     function conferenceStatusBadge(status) {
       const map = {
-        Pendente: { text: 'Pendente', cls: 'pending' },
+        Pendente: { text: 'Aposta', cls: 'pending' },
+        Aposta: { text: 'Aposta', cls: 'pending' },
         Monitorando: { text: 'Monitorando', cls: 'watching' },
         GREEN: { text: 'GREEN', cls: 'win' },
         RED: { text: 'RED', cls: 'loss' },
@@ -1770,7 +1774,7 @@
         .split('\n')
         .map((line) => {
           const matchLine = line.match(
-            /^(.+?)\s+-\s+(\d+'|—')\s+-\s+(.+?)\s+\((Pendente|Monitorando|GREEN|RED|Finalizado)\)\s*$/,
+            /^(.+?)\s+-\s+(\d+'|—')\s+-\s+(.+?)\s+\((Pendente|Aposta|Monitorando|GREEN|RED|Finalizado)\)\s*$/,
           );
           if (matchLine) {
             const [, label, minute, score, status] = matchLine;
