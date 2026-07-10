@@ -192,8 +192,22 @@
     .log-level.info { background: rgba(61, 214, 140, 0.15); color: var(--accent); }
     .log-level.warn { background: rgba(255, 209, 102, 0.15); color: var(--warn); }
     .log-level.error { background: rgba(255, 107, 107, 0.15); color: #ff6b6b; }
-    .log-level.cat-info { background: rgba(94, 179, 255, 0.18); color: #5eb3ff; }
-    .log-level.cat-sistema { background: rgba(143, 163, 191, 0.2); color: #c5d0e0; }
+    .log-level.cat-info {
+      background: rgba(61, 214, 140, 0.2);
+      color: var(--accent);
+    }
+    .log-level.cat-sistema.warn {
+      background: rgba(255, 160, 60, 0.22);
+      color: #ffb347;
+    }
+    .log-level.cat-sistema.error {
+      background: rgba(255, 107, 107, 0.22);
+      color: #ff6b6b;
+    }
+    .log-level.cat-sistema {
+      background: rgba(255, 160, 60, 0.22);
+      color: #ffb347;
+    }
     button.log-cat-btn {
       border: none;
       cursor: pointer;
@@ -1638,10 +1652,13 @@
       }
       tbody.innerHTML = logCache.map((row) => {
         const cat = logCategory(row);
-        const catCls = cat === 'INFO' ? 'cat-info' : 'cat-sistema';
-        const rowCls = String(row.level || 'info').toLowerCase() === 'error'
+        const tech = String(row.level || 'info').toLowerCase();
+        const catCls = cat === 'INFO'
+          ? 'cat-info'
+          : `cat-sistema ${tech === 'error' ? 'error' : 'warn'}`;
+        const rowCls = tech === 'error'
           ? 'log-row-error'
-          : (String(row.level || '').toLowerCase() === 'warn' ? 'log-row-warn' : (cat === 'Sistema' ? 'log-row-sistema' : ''));
+          : (tech === 'warn' ? 'log-row-warn' : '');
         const logId = row.id || '';
         return `<tr class="${rowCls}">
           <td data-label="Data/Hora">${formatDate(row.created_at)}</td>
