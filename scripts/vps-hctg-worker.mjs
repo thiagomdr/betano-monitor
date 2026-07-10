@@ -9,7 +9,6 @@
  *   HCTG_MAX_PER_CYCLE=6, HCTG_MAX_PER_CYCLE_BUSY=14, HCTG_BUSY_THRESHOLD=15,
  *   HCTG_FETCH_POOL=64, HCTG_DELAY_MIN_SEC=2, HCTG_DELAY_MAX_SEC=5,
  *   HCTG_BROWSER_RESTART_CYCLES=10, HCTG_BROWSER_RESTART_MIN=45,
- *   HCTG_MEM_LOG_EVERY=5,
  *   HCTG_WORKER_SOURCE=vps-worker|local-worker,
  *   HCTG_HTML_SOURCE=html-dom-vps|html-dom-local,
  *   HCTG_HEADLESS=0|1
@@ -18,7 +17,6 @@
  * Windows PC: .\scripts\run-local-hctg-worker.ps1
  */
 import { readFileSync, existsSync } from "fs";
-import { execSync } from "child_process";
 import { dirname, join } from "path";
 import { fileURLToPath } from "url";
 import { createClient } from "@supabase/supabase-js";
@@ -60,7 +58,6 @@ const delayMinSec = Number(process.env.HCTG_DELAY_MIN_SEC || "2");
 const delayMaxSec = Number(process.env.HCTG_DELAY_MAX_SEC || "5");
 const restartEveryCycles = Number(process.env.HCTG_BROWSER_RESTART_CYCLES || "10");
 const restartEveryMin = Number(process.env.HCTG_BROWSER_RESTART_MIN || "45");
-const memLogEvery = Number(process.env.HCTG_MEM_LOG_EVERY || "5");
 const workerSource = (process.env.HCTG_WORKER_SOURCE || "vps-worker").trim() || "vps-worker";
 const htmlSource = (process.env.HCTG_HTML_SOURCE || "html-dom-vps").trim() || "html-dom-vps";
 const headless = (process.env.HCTG_HEADLESS || "0").trim() === "1";
@@ -118,46 +115,6 @@ let browser = null;
 let context = null;
 let browserStartedAt = 0;
 let cycleCount = 0;
-
-function chromeRssMb() {
-  if (process.platform !== "linux") return null;
-  try {
-    const out = execSync(
-      "ps -o rss= -C chromium 2>/dev/null | awk '{s+=$1} END {print s+0}'",
-      { encoding: "utf8", timeout: 3000 },
-    ).trim();
-    const kb = Number(out);
-    return Number.isFinite(kb) && kb > 0 ? Math.round(kb / 1024) : null;
-  } catch {
-    return null;
-  }
-}
-
-async function logWorkerMemory(reason) {
-  const mem = process.memoryUsage();
-  const chromeMb = chromeRssMb();
-  const uptimeMin = browserStartedAt
-    ? Math.round((Date.now() - browserStartedAt) / 60000)
-    : 0;
-  const msg =
-    `RAM node=${Math.round(mem.rss / 1024 / 1024)}MB` +
-    ` chrome=${chromeMb ?? "?"}MB` +
-    ` ciclo=${cycleCount} uptime=${uptimeMin}min`;
-  console.log(`[worker] mem (${reason}): ${msg}`);
-  await insertSistemaLog(supabase, {
-    source: workerSource,
-    action: "worker_mem",
-    message: msg,
-    payload: {
-      reason,
-      cycle: cycleCount,
-      node_rss_mb: Math.round(mem.rss / 1024 / 1024),
-      node_heap_mb: Math.round(mem.heapUsed / 1024 / 1024),
-      chrome_rss_mb: chromeMb,
-      browser_uptime_min: uptimeMin,
-    },
-  });
-}
 
 async function ensureBrowser() {
   if (!browser) {
@@ -234,7 +191,7 @@ async function resetBrowser(reason = "error") {
 async function restartBrowser(reason) {
   await resetBrowser(null);
   await ensureBrowser();
-  await logWorkerMemory(`restart:${reason}`);
+  console.log(`[worker] Chrome reiniciado (${reason})`);
 }
 
 function eligibleQuery() {
@@ -341,10 +298,6 @@ async function runCycle() {
         ? `ciclo-${cycleCount}`
         : `idade-${restartEveryMin}min`,
     );
-  }
-
-  if (memLogEvery > 0 && cycleCount % memLogEvery === 0) {
-    await logWorkerMemory("periodico");
   }
 
   const targets = await fetchTargets();
@@ -457,7 +410,7 @@ console.log(
   `[worker] mode=${workerSource} html=${htmlSource} headless=${headless} ` +
     `poll=${pollSec}s±${pollJitterSec}s cap=${maxPerCycle}/${maxPerCycleBusy} ` +
     `busy>=${busyThreshold} pool=${fetchPool} delay=${delayMinSec}-${delayMaxSec}s ` +
-    `restart=${restartEveryCycles}ciclo|${restartEveryMin}min memLog=${memLogEvery} ` +
+    `restart=${restartEveryCycles}ciclo|${restartEveryMin}min ` +
     `resultados=${WORKER_RESULTADOS.join(",")} url=${supabaseUrl}`,
 );
 
