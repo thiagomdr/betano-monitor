@@ -2211,23 +2211,7 @@ async function settleMercadoGols05Pending(
       placar_final: scoreText,
       updated_at: nowIso,
     }).eq("event_id", row.event_id).eq("resultado", "pending");
-    const { data: meta } = await supabase
-      .from("futebol_mercado_gols_05")
-      .select("home,away,over_05_odd")
-      .eq("event_id", row.event_id)
-      .maybeSingle();
-    await insertSistemaLog(supabase, {
-      source: "edge-live",
-      action: "mercado_green",
-      message: `GREEN — gol apos captura (${firstMinute ?? "?"}') · placar ${scoreText}`,
-      event_id: row.event_id,
-      match_label: matchLabel(meta?.home, meta?.away),
-      payload: {
-        gol_green_minute: firstMinute,
-        placar_final: scoreText,
-        over_05_odd: meta?.over_05_odd ?? null,
-      },
-    });
+    // GREEN ja aparece em live_json_vs_sistema (secao GREEN Agora)
     await notifyTelegramSettleOnce(supabase, row.event_id);
     return "win";
   }
