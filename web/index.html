@@ -226,6 +226,18 @@
       color: #ffb347;
       font-weight: 700;
     }
+    .team-home {
+      color: #5eb3ff;
+      font-weight: 700;
+    }
+    .team-away {
+      color: #ff6b6b;
+      font-weight: 700;
+    }
+    .match-vs {
+      color: var(--muted);
+      font-weight: 500;
+    }
     .log-detail-line {
       padding: 0.2rem 0;
       border-bottom: 1px solid rgba(255, 255, 255, 0.06);
@@ -737,6 +749,30 @@
       return d.toLocaleString('pt-BR');
     }
 
+    function escapeHtml(text) {
+      return String(text ?? '')
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;');
+    }
+
+    /** Time 1 azul · Time 2 vermelho */
+    function formatMatchHtml(home, away) {
+      const h = escapeHtml(home || '—');
+      const a = escapeHtml(away || '—');
+      return `<span class="team-home">${h}</span> <span class="match-vs">x</span> <span class="team-away">${a}</span>`;
+    }
+
+    function formatMatchLabelHtml(label) {
+      if (!label) return '';
+      const parts = String(label).split(/\s+x\s+/i);
+      if (parts.length >= 2) {
+        return formatMatchHtml(parts[0].trim(), parts.slice(1).join(' x ').trim());
+      }
+      return `<strong>${escapeHtml(label)}</strong>`;
+    }
+
     function formatTimeOnly(iso) {
       if (!iso) return '';
       const d = new Date(iso);
@@ -1071,7 +1107,7 @@
 
     function renderElevatedPopoverHtml(row) {
       const log = buildSuperPopoverLog(row);
-      const match = row ? `${row.home || '—'} x ${row.away || '—'}` : '';
+      const match = row ? formatMatchHtml(row.home, row.away) : '';
       if (!log.length) {
         return `<h4>Histórico odds · ${match}</h4><p class="muted">Nenhum registro ainda.</p>`;
       }
@@ -1292,7 +1328,7 @@
     }
 
     function renderGoalsPopoverHtml(row, goals) {
-      const match = row ? `${row.home || '—'} x ${row.away || '—'}` : '';
+      const match = row ? formatMatchHtml(row.home, row.away) : '';
       const score = row?.is_live && row?.live_score
         ? row.live_score
         : (row?.placar_final || '—');
@@ -1403,14 +1439,15 @@
         return;
       }
       tbody.innerHTML = rows.map((row, i) => {
-        const match = `${row.home || '—'} x ${row.away || '—'}`;
+        const matchHtml = formatMatchHtml(row.home, row.away);
+        const matchPlain = `${row.home || '—'} x ${row.away || '—'}`;
         const league = [row.country, row.league].filter(Boolean).join(' · ') || '—';
         const link = row.betano_url
           ? `<a href="${row.betano_url}" target="_blank" rel="noopener">abrir</a>`
           : '—';
         return `<tr>
           <td data-label="#">${i + 1}</td>
-          <td data-label="Jogo"><strong>${match}</strong></td>
+          <td data-label="Jogo">${matchHtml}</td>
           <td data-label="Tempo">${mercadoTempoLabel(row)}</td>
           <td data-label="Placar">${mercadoPlacarLabel(row)}</td>
           <td data-label="Total de Gols">${formatHctgPills(row.hctg_lines, row.hctg_fetched_at, row.event_id)}</td>
@@ -1421,7 +1458,7 @@
           <td data-label="Lucro 1u">${formatMercadoProfit(mercadoSimProfit(row))}</td>
           <td data-label="Status">${mercadoStatusLabel(row)}</td>
           <td data-label="Link">${link}</td>
-          <td data-label=""><button type="button" class="mercado-delete-btn" data-delete-mercado="${row.event_id}" data-delete-label="${match.replace(/"/g, '&quot;')}" title="Remover da lista">🗑</button></td>
+          <td data-label=""><button type="button" class="mercado-delete-btn" data-delete-mercado="${row.event_id}" data-delete-label="${matchPlain.replace(/"/g, '&quot;')}" title="Remover da lista">🗑</button></td>
         </tr>`;
       }).join('');
     }
@@ -1613,7 +1650,7 @@
       ];
       if (row.duration_ms != null) lines.push(['Duração', `${row.duration_ms} ms`]);
       if (row.event_id) lines.push(['Event ID', row.event_id]);
-      if (row.match_label) lines.push(['Jogo', row.match_label]);
+      if (row.match_label) lines.push(['Jogo', formatMatchLabelHtml(row.match_label)]);
       if (row.id) lines.push(['Log ID', row.id]);
 
       const payloadLines = formatLogPayloadLines(row.payload);
@@ -1677,7 +1714,7 @@
         const logId = row.id || '';
         const msgHtml = formatLogMessageHtml(row.message);
         const detalhes = row.match_label
-          ? `<strong>${row.match_label}</strong> / ${msgHtml}`
+          ? `${formatMatchLabelHtml(row.match_label)} / ${msgHtml}`
           : msgHtml;
         return `<tr class="${rowCls}">
           <td data-label="Data/Hora">${formatDate(row.created_at)}</td>
