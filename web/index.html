@@ -410,6 +410,19 @@
       font: inherit;
     }
     button.estrategia-popover-btn:hover { filter: brightness(1.12); }
+    button.table-tip-btn {
+      background: transparent;
+      border: none;
+      color: inherit;
+      cursor: pointer;
+      font: inherit;
+      padding: 0;
+      text-decoration: underline dotted rgba(255, 255, 255, 0.35);
+      text-underline-offset: 3px;
+    }
+    button.table-tip-btn:hover { color: #fff; }
+    button.table-tip-btn.live { color: #5eb3ff; }
+    button.table-tip-btn.done { color: var(--muted); }
     .mercado-elevated-popover {
       display: none;
       position: fixed;
@@ -576,6 +589,7 @@
           <tr>
             <th>#</th>
             <th>Jogo</th>
+            <th title="Minuto do jogo">Tempo</th>
             <th>Total de Gols</th>
             <th>Placar</th>
             <th>Estrategia</th>
@@ -584,13 +598,13 @@
             <th>Resultado</th>
             <th>Validação</th>
             <th>Lucro 1u</th>
-            <th title="Ao vivo com minuto ou data de encerramento">Status</th>
+            <th title="Ao Vivo ou Finalizado — clique para datas">Status</th>
             <th>Link</th>
             <th title="Ocultar da lista"></th>
           </tr>
         </thead>
         <tbody id="mercado-tbody">
-          <tr><td colspan="13" class="empty">Carregando…</td></tr>
+          <tr><td colspan="14" class="empty">Carregando…</td></tr>
         </tbody>
       </table>
     </div>
@@ -645,6 +659,8 @@
       hctg_odds: 'ODDS HCTG',
       hctg_falha: 'HCTG falhou',
       hctg_bloqueado: 'IP bloqueado Betano',
+      mercado_reaberto: 'Reaberto ao vivo',
+      live_count_reconcile: 'Contagem live',
       worker_mem: 'RAM worker',
       mercado_captura: 'Captura +0,5',
       mercado_green: 'GREEN',
@@ -1023,7 +1039,17 @@
       const el = document.getElementById('mercado-elevated-popover');
       if (!el) return;
       el.classList.remove('open');
+      el.removeAttribute('data-event-id');
+      el.removeAttribute('data-tip-key');
       el.setAttribute('aria-hidden', 'true');
+    }
+
+    function positionMercadoPopover(btn, pop) {
+      const rect = btn.getBoundingClientRect();
+      pop.style.left = `${Math.min(rect.left, window.innerWidth - 380)}px`;
+      pop.style.top = `${rect.bottom + 6}px`;
+      pop.classList.add('open');
+      pop.setAttribute('aria-hidden', 'false');
     }
 
     function showMercadoElevatedPopover(btn, eventId) {
@@ -1031,11 +1057,22 @@
       if (!pop) return;
       const row = mercadoCache.find((r) => String(r.event_id) === String(eventId));
       pop.innerHTML = renderElevatedPopoverHtml(row);
-      const rect = btn.getBoundingClientRect();
-      pop.style.left = `${Math.min(rect.left, window.innerWidth - 380)}px`;
-      pop.style.top = `${rect.bottom + 6}px`;
-      pop.classList.add('open');
-      pop.setAttribute('aria-hidden', 'false');
+      pop.dataset.eventId = String(eventId);
+      delete pop.dataset.tipKey;
+      positionMercadoPopover(btn, pop);
+    }
+
+    function showMercadoTipPopover(btn, tipKey, html) {
+      const pop = document.getElementById('mercado-elevated-popover');
+      if (!pop) return;
+      if (pop.classList.contains('open') && pop.dataset.tipKey === tipKey) {
+        hideMercadoElevatedPopover();
+        return;
+      }
+      pop.innerHTML = html;
+      pop.dataset.tipKey = tipKey;
+      delete pop.dataset.eventId;
+      positionMercadoPopover(btn, pop);
     }
 
     function mercadoEstrategiaLabel(row) {
@@ -1159,14 +1196,31 @@
       return row.updated_at || row.captured_at || row.created_at || '';
     }
 
+    function tipLinesHtml(lines) {
+      return lines
+        .filter(Boolean)
+        .map((line) => `<div>${line}</div>`)
+        .join('');
+    }
+
     function mercadoStatusLabel(row) {
+      const inicio = formatDate(row.created_at);
       if (row.is_live) {
-        const m = row.last_minute;
-        return m != null
-          ? `<span class="muted">Ao Vivo ${m}'</span>`
-          : '<span class="muted">Ao Vivo</span>';
+        const tip = tipLinesHtml([`Início: ${inicio}`]);
+        return `<button type="button" class="table-tip-btn live" data-table-tip="status-${row.event_id}" data-tip-html="${encodeURIComponent(tip)}">Ao Vivo</button>`;
       }
-      return formatDate(row.updated_at || row.created_at);
+      const fim = formatDate(row.settled_at || row.updated_at || row.created_at);
+      const tip = tipLinesHtml([`Início: ${inicio}`, `Finalizado: ${fim}`]);
+      return `<button type="button" class="table-tip-btn done" data-table-tip="status-${row.event_id}" data-tip-html="${encodeURIComponent(tip)}">Finalizado</button>`;
+    }
+
+    function mercadoTempoLabel(row) {
+      if (row.last_minute == null || row.last_minute === '') {
+        return '<span class="muted">—</span>';
+      }
+      const coletado = formatDate(row.updated_at);
+      const tip = tipLinesHtml([`Coletado em: ${coletado}`]);
+      return `<button type="button" class="table-tip-btn" data-table-tip="tempo-${row.event_id}" data-tip-html="${encodeURIComponent(tip)}">${row.last_minute}'</button>`;
     }
 
     function mercadoPlacarLabel(row) {
@@ -1218,8 +1272,8 @@
       renderMercadoSummary(rows);
       if (!rows.length) {
         tbody.innerHTML = mercadoFilterValidadosOnly
-          ? '<tr><td colspan="13" class="empty">Nenhum jogo validado no Telegram ainda.</td></tr>'
-          : '<tr><td colspan="13" class="empty">Nenhum jogo monitorado ainda. Novos jogos serao registrados automaticamente.</td></tr>';
+          ? '<tr><td colspan="14" class="empty">Nenhum jogo validado no Telegram ainda.</td></tr>'
+          : '<tr><td colspan="14" class="empty">Nenhum jogo monitorado ainda. Novos jogos serao registrados automaticamente.</td></tr>';
         return;
       }
       tbody.innerHTML = rows.map((row, i) => {
@@ -1231,6 +1285,7 @@
         return `<tr>
           <td data-label="#">${i + 1}</td>
           <td data-label="Jogo"><strong>${match}</strong></td>
+          <td data-label="Tempo">${mercadoTempoLabel(row)}</td>
           <td data-label="Total de Gols">${formatHctgPills(row.hctg_lines, row.hctg_fetched_at)}</td>
           <td data-label="Placar">${mercadoPlacarLabel(row)}</td>
           <td data-label="Estrategia">${mercadoEstrategiaLabel(row)}</td>
@@ -1287,7 +1342,7 @@
         }
         if (tbody) {
           tbody.innerHTML =
-            `<tr><td colspan="13" class="empty">${err.message || String(err)}</td></tr>`;
+            `<tr><td colspan="14" class="empty">${err.message || String(err)}</td></tr>`;
         }
       } finally {
         mercadoLoading = false;
@@ -1308,6 +1363,21 @@
     }
 
     document.getElementById('mercado-tbody')?.closest('main')?.addEventListener('click', async (e) => {
+      const tipBtn = e.target.closest('[data-table-tip]');
+      if (tipBtn) {
+        e.preventDefault();
+        e.stopPropagation();
+        const tipKey = tipBtn.getAttribute('data-table-tip') || '';
+        const encoded = tipBtn.getAttribute('data-tip-html') || '';
+        let html = '';
+        try {
+          html = decodeURIComponent(encoded);
+        } catch {
+          html = encoded;
+        }
+        showMercadoTipPopover(tipBtn, tipKey, html || '<span class="muted">—</span>');
+        return;
+      }
       const popBtn = e.target.closest('[data-super-popover]');
       if (popBtn) {
         e.preventDefault();
@@ -1317,7 +1387,6 @@
         if (pop?.classList.contains('open') && pop.dataset.eventId === eventId) {
           hideMercadoElevatedPopover();
         } else {
-          if (pop) pop.dataset.eventId = eventId;
           showMercadoElevatedPopover(popBtn, eventId);
         }
         return;
@@ -1336,7 +1405,13 @@
     });
 
     document.addEventListener('click', (e) => {
-      if (e.target.closest('[data-super-popover]') || e.target.closest('#mercado-elevated-popover')) return;
+      if (
+        e.target.closest('[data-super-popover]') ||
+        e.target.closest('[data-table-tip]') ||
+        e.target.closest('#mercado-elevated-popover')
+      ) {
+        return;
+      }
       hideMercadoElevatedPopover();
     }, true);
 
