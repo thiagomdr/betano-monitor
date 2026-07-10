@@ -1747,7 +1747,39 @@
       ) {
         return 'Total de Gols <span class="log-warn-text">NÃO ENCONTRADOS</span>';
       }
-      return raw;
+      return escapeHtml(raw);
+    }
+
+    function conferenceStatusBadge(status) {
+      const map = {
+        Pendente: { text: 'Pendente', cls: 'pending' },
+        Monitorando: { text: 'Monitorando', cls: 'watching' },
+        GREEN: { text: 'GREEN', cls: 'win' },
+        RED: { text: 'RED', cls: 'loss' },
+        Finalizado: { text: 'Finalizado', cls: 'sem-linha' },
+      };
+      const hit = map[status];
+      if (!hit) return escapeHtml(`(${status})`);
+      return `<span class="resultado-badge ${hit.cls}">${hit.text}</span>`;
+    }
+
+    /** Conferência: times coloridos + badges iguais ao Mercado. */
+    function formatLiveConferenceMessageHtml(message) {
+      const raw = String(message ?? '');
+      if (!raw.trim()) return '—';
+      return raw
+        .split('\n')
+        .map((line) => {
+          const matchLine = line.match(
+            /^(.+?)\s+-\s+(\d+'|—')\s+-\s+(.+?)\s+\((Pendente|Monitorando|GREEN|RED|Finalizado)\)\s*$/,
+          );
+          if (matchLine) {
+            const [, label, minute, score, status] = matchLine;
+            return `${formatMatchLabelHtml(label)} - ${escapeHtml(minute)} - ${escapeHtml(score)} ${conferenceStatusBadge(status)}`;
+          }
+          return escapeHtml(line);
+        })
+        .join('\n');
     }
 
     function renderSistemaLog() {
@@ -1765,13 +1797,11 @@
           ? 'log-row-error'
           : (tech === 'warn' ? 'log-row-warn' : '');
         const logId = row.id || '';
-        const msgHtml = formatLogMessageHtml(row.message);
-        // Conferência JSON×Sistema: só o texto curto na célula (detalhe no balão)
         const detalhes = row.action === 'live_json_vs_sistema'
-          ? msgHtml
+          ? formatLiveConferenceMessageHtml(row.message)
           : (row.match_label
-            ? `${formatMatchLabelHtml(row.match_label)} / ${msgHtml}`
-            : msgHtml);
+            ? `${formatMatchLabelHtml(row.match_label)} / ${formatLogMessageHtml(row.message)}`
+            : formatLogMessageHtml(row.message));
         return `<tr class="${rowCls}">
           <td data-label="Data/Hora">${formatDate(row.created_at)}</td>
           <td data-label="Nivel"><button type="button" class="log-level log-cat-btn ${catCls}" data-log-detail="${logId}" title="Detalhes técnicos">${cat}</button></td>
