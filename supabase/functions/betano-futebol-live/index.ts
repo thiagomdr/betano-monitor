@@ -2743,14 +2743,12 @@ async function finalizeMercadoGols05OffLive(
   ];
 
   await insertSistemaLog(supabase, {
-    level: erro > 0 ? "warn" : "info",
+    // error = vermelho no painel; info = Sistema azul (ok). Sempre action live_json_vs_sistema.
+    level: erro > 0 ? "error" : "info",
     source: "edge-live",
     action: "live_json_vs_sistema",
     message:
-      `Consulta JSON x Sistema: JSON=${reconcile.json_live} · Sistema=${reconcile.mercado_live_open}` +
-      ` · ${confere} confere` +
-      (atencao ? ` · ${atencao} atenção` : "") +
-      (erro ? ` · ${erro} erro` : ""),
+      `Conferência Jogos Ao Vivo\nJSON: ${reconcile.json_live}\nSistema: ${reconcile.mercado_live_open}`,
     payload: {
       ...reconcile,
       grace_min: OFF_LIVE_GRACE_MIN,

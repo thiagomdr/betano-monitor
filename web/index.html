@@ -204,6 +204,10 @@
       background: rgba(255, 107, 107, 0.22);
       color: #ff6b6b;
     }
+    .log-level.cat-sistema.ok {
+      background: rgba(94, 179, 255, 0.22);
+      color: #5eb3ff;
+    }
     .log-level.cat-sistema {
       background: rgba(255, 160, 60, 0.22);
       color: #ffb347;
@@ -221,7 +225,7 @@
       color: var(--muted);
       font-family: ui-monospace, monospace;
     }
-    .log-message { font-size: 0.85rem; line-height: 1.35; }
+    .log-message { font-size: 0.85rem; line-height: 1.35; white-space: pre-line; }
     .log-warn-text {
       color: #ffb347;
       font-weight: 700;
@@ -1625,11 +1629,23 @@
       return LOG_SOURCE_LABELS[source] || source || '—';
     }
 
-    /** Sistema = so alertas/erros (warn/error); todo o resto e INFO. */
+    /** Sistema = alertas/erros (warn/error) + conferência JSON×Sistema; resto = INFO. */
     function logCategory(row) {
+      if (row?.action === 'live_json_vs_sistema') return 'Sistema';
       const lvl = String(row?.level || 'info').toLowerCase();
       if (lvl === 'warn' || lvl === 'error') return 'Sistema';
       return 'INFO';
+    }
+
+    function logCategoryClass(row) {
+      const tech = String(row?.level || 'info').toLowerCase();
+      if (row?.action === 'live_json_vs_sistema') {
+        return tech === 'error' || tech === 'warn'
+          ? 'cat-sistema error'
+          : 'cat-sistema ok';
+      }
+      if (logCategory(row) === 'INFO') return 'cat-info';
+      return `cat-sistema ${tech === 'error' ? 'error' : 'warn'}`;
     }
 
     function formatLogPayloadLines(payload) {
@@ -1747,17 +1763,18 @@
       tbody.innerHTML = logCache.map((row) => {
         const cat = logCategory(row);
         const tech = String(row.level || 'info').toLowerCase();
-        const catCls = cat === 'INFO'
-          ? 'cat-info'
-          : `cat-sistema ${tech === 'error' ? 'error' : 'warn'}`;
+        const catCls = logCategoryClass(row);
         const rowCls = tech === 'error'
           ? 'log-row-error'
           : (tech === 'warn' ? 'log-row-warn' : '');
         const logId = row.id || '';
         const msgHtml = formatLogMessageHtml(row.message);
-        const detalhes = row.match_label
-          ? `${formatMatchLabelHtml(row.match_label)} / ${msgHtml}`
-          : msgHtml;
+        // Conferência JSON×Sistema: só o texto curto na célula (detalhe no balão)
+        const detalhes = row.action === 'live_json_vs_sistema'
+          ? msgHtml
+          : (row.match_label
+            ? `${formatMatchLabelHtml(row.match_label)} / ${msgHtml}`
+            : msgHtml);
         return `<tr class="${rowCls}">
           <td data-label="Data/Hora">${formatDate(row.created_at)}</td>
           <td data-label="Nivel"><button type="button" class="log-level log-cat-btn ${catCls}" data-log-detail="${logId}" title="Detalhes técnicos">${cat}</button></td>
