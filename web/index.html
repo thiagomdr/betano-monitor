@@ -698,18 +698,6 @@
       erro: 'Erro',
     };
 
-    const LOG_INFO_ACTIONS = new Set([
-      'mercado_captura',
-      'mercado_green',
-      'mercado_red',
-      'mercado_sem_linha',
-      'mercado_reaberto',
-      'telegram_captura',
-      'telegram_settle',
-      'telegram_validacao',
-      'hctg_odds',
-    ]);
-
     const LOG_SOURCE_LABELS = {
       'edge-live': 'Edge (cron live)',
       'local-worker': 'Worker local (PC)',
@@ -1571,12 +1559,11 @@
       return LOG_SOURCE_LABELS[source] || source || '—';
     }
 
-    /** INFO = negocio do monitor; Sistema = cron/infra/debug. */
+    /** Sistema = so alertas/erros (warn/error); todo o resto e INFO. */
     function logCategory(row) {
       const lvl = String(row?.level || 'info').toLowerCase();
       if (lvl === 'warn' || lvl === 'error') return 'Sistema';
-      if (LOG_INFO_ACTIONS.has(String(row?.action || ''))) return 'INFO';
-      return 'Sistema';
+      return 'INFO';
     }
 
     function formatLogPayloadLines(payload) {
