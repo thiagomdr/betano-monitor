@@ -418,6 +418,12 @@
       font: inherit;
     }
     button.estrategia-popover-btn:hover { filter: brightness(1.12); }
+    .estrategia-com-resultado {
+      display: inline-flex;
+      flex-wrap: wrap;
+      align-items: center;
+      gap: 0.35rem;
+    }
     button.table-tip-btn {
       background: transparent;
       border: none;
@@ -600,10 +606,9 @@
             <th title="Minuto do jogo">Tempo</th>
             <th>Placar</th>
             <th>Total de Gols</th>
-            <th>Estrategia</th>
+            <th title="Estratégia e resultado (Monitorando / Pendente / GREEN / RED)">Estrategia</th>
             <th>Liga</th>
             <th>Gol GREEN</th>
-            <th>Resultado</th>
             <th>Validação</th>
             <th>Lucro 1u</th>
             <th title="Ao Vivo ou Finalizado — clique para datas">Status</th>
@@ -612,7 +617,7 @@
           </tr>
         </thead>
         <tbody id="mercado-tbody">
-          <tr><td colspan="14" class="empty">Carregando…</td></tr>
+          <tr><td colspan="13" class="empty">Carregando…</td></tr>
         </tbody>
       </table>
     </div>
@@ -1085,20 +1090,18 @@
 
     function mercadoEstrategiaLabel(row) {
       const { estrategia, resultado, had_min_plus2_before: hadPhase, event_id: eventId } = row;
-      if (estrategia === 'super_05') return superEstrategiaBadge(eventId);
-      if (estrategia === 'imediato_05') {
-        return estrategiaPopoverBtn(eventId, 'Imediato', 'imediato');
+      if (resultado === 'excluido') return '<span class="muted">—</span>';
+
+      let strat = '';
+      if (estrategia === 'super_05' || (resultado === 'watching' && hadPhase && !estrategia)) {
+        strat = superEstrategiaBadge(eventId);
+      } else if (estrategia === 'imediato_05') {
+        strat = estrategiaPopoverBtn(eventId, 'Imediato', 'imediato');
       }
-      if (resultado === 'sem_linha_05' || resultado === 'skipped') {
-        return '<span class="muted">—</span>';
-      }
-      if (resultado === 'watching') {
-        if (hadPhase) {
-          return `${superEstrategiaBadge(eventId)} <span class="muted">(aguardando +0,5)</span>`;
-        }
-        return '<span class="muted">aguardando +0,5</span>';
-      }
-      return '<span class="muted">—</span>';
+
+      const resultBadge = mercadoResultadoLabel(resultado);
+      if (!strat) return resultBadge;
+      return `<span class="estrategia-com-resultado">${strat} ${resultBadge}</span>`;
     }
 
     function mercadoStrategyStats(rows, estrategia) {
@@ -1285,8 +1288,8 @@
       renderMercadoSummary(rows);
       if (!rows.length) {
         tbody.innerHTML = mercadoFilterValidadosOnly
-          ? '<tr><td colspan="14" class="empty">Nenhum jogo validado no Telegram ainda.</td></tr>'
-          : '<tr><td colspan="14" class="empty">Nenhum jogo monitorado ainda. Novos jogos serao registrados automaticamente.</td></tr>';
+          ? '<tr><td colspan="13" class="empty">Nenhum jogo validado no Telegram ainda.</td></tr>'
+          : '<tr><td colspan="13" class="empty">Nenhum jogo monitorado ainda. Novos jogos serao registrados automaticamente.</td></tr>';
         return;
       }
       tbody.innerHTML = rows.map((row, i) => {
@@ -1304,7 +1307,6 @@
           <td data-label="Estrategia">${mercadoEstrategiaLabel(row)}</td>
           <td data-label="Liga">${league}</td>
           <td data-label="Gol GREEN">${formatMercadoGolGreen(row)}</td>
-          <td data-label="Resultado">${mercadoResultadoLabel(row.resultado)}</td>
           <td data-label="Validação">${mercadoValidacaoLabel(row)}</td>
           <td data-label="Lucro 1u">${formatMercadoProfit(mercadoSimProfit(row))}</td>
           <td data-label="Status">${mercadoStatusLabel(row)}</td>
@@ -1355,7 +1357,7 @@
         }
         if (tbody) {
           tbody.innerHTML =
-            `<tr><td colspan="14" class="empty">${err.message || String(err)}</td></tr>`;
+            `<tr><td colspan="13" class="empty">${err.message || String(err)}</td></tr>`;
         }
       } finally {
         mercadoLoading = false;
