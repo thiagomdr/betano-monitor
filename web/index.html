@@ -222,6 +222,10 @@
       font-family: ui-monospace, monospace;
     }
     .log-message { font-size: 0.85rem; line-height: 1.35; }
+    .log-warn-text {
+      color: #ffb347;
+      font-weight: 700;
+    }
     .log-detail-line {
       padding: 0.2rem 0;
       border-bottom: 1px solid rgba(255, 255, 255, 0.06);
@@ -1642,6 +1646,18 @@
       positionMercadoPopover(btn, pop);
     }
 
+    function formatLogMessageHtml(message) {
+      const raw = String(message ?? '—');
+      // Novo texto + legado "HCTG sem linhas..."
+      if (
+        /Total de Gols NÃO ENCONTRADOS/i.test(raw) ||
+        /HCTG sem linhas/i.test(raw)
+      ) {
+        return 'Total de Gols <span class="log-warn-text">NÃO ENCONTRADOS</span>';
+      }
+      return raw;
+    }
+
     function renderSistemaLog() {
       const tbody = document.getElementById('log-tbody');
       if (!tbody) return;
@@ -1659,10 +1675,10 @@
           ? 'log-row-error'
           : (tech === 'warn' ? 'log-row-warn' : '');
         const logId = row.id || '';
-        const msg = row.message ?? '—';
+        const msgHtml = formatLogMessageHtml(row.message);
         const detalhes = row.match_label
-          ? `<strong>${row.match_label}</strong> / ${msg}`
-          : msg;
+          ? `<strong>${row.match_label}</strong> / ${msgHtml}`
+          : msgHtml;
         return `<tr class="${rowCls}">
           <td data-label="Data/Hora">${formatDate(row.created_at)}</td>
           <td data-label="Nivel"><button type="button" class="log-level log-cat-btn ${catCls}" data-log-detail="${logId}" title="Detalhes técnicos">${cat}</button></td>

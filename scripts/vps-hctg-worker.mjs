@@ -396,7 +396,7 @@ async function runCycle() {
             ? "Betano bloqueou IP (splash screen) — use IP residencial (PC local) ou VPS BR"
             : ageGated
             ? "Modal +18 nao fechou (SIM)"
-            : `HCTG sem linhas (golsTab=${snap.golsTab}, markets=${snap.marketsReady})`,
+            : "Total de Gols NÃO ENCONTRADOS",
           event_id: eventId,
           match_label: label,
           duration_ms: Date.now() - t0,
