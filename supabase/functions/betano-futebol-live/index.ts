@@ -2494,6 +2494,14 @@ type LiveValidationLine = {
   reason?: string;
 };
 
+type ConferenceMatchLine = {
+  event_id: string;
+  label: string;
+  minute: number | null;
+  score: string;
+  statusLabel: "Monitorando" | "Pendente" | "GREEN" | "Finalizado";
+};
+
 type LiveCountReconcile = {
   json_live: number;
   mercado_live_open: number;
@@ -2506,6 +2514,57 @@ type LiveCountReconcile = {
   atencao: number;
   lines: LiveValidationLine[];
 };
+
+type LiveConferenceCycle = {
+  reconcile: LiveCountReconcile;
+  aoVivo: ConferenceMatchLine[];
+  greensAgora: ConferenceMatchLine[];
+  finalizadosAgora: ConferenceMatchLine[];
+};
+
+const CONFERENCE_SEP =
+  "_______________________________________________________";
+
+function formatScoreDisplay(score: string | null | undefined): string {
+  const raw = String(score ?? "—").trim();
+  if (!raw || raw === "—") return "—";
+  const m = raw.match(/^(\d+)\s*[-:xX]\s*(\d+)$/);
+  if (m) return `${m[1]} x ${m[2]}`;
+  return raw.replace(/-/g, " x ");
+}
+
+function formatConferenceMatchLine(line: ConferenceMatchLine): string {
+  const min = line.minute != null ? `${line.minute}'` : "—'";
+  return `${line.label} - ${min} - ${formatScoreDisplay(line.score)} (${line.statusLabel})`;
+}
+
+function buildLiveConferenceMessage(cycle: LiveConferenceCycle): string {
+  const parts = [
+    "Conferência Jogos Ao Vivo",
+    `JSON: ${cycle.reconcile.json_live}`,
+    `Sistema: ${cycle.reconcile.mercado_live_open}`,
+    CONFERENCE_SEP,
+    "Jogos Ao Vivo:",
+    ...(cycle.aoVivo.length
+      ? cycle.aoVivo.map(formatConferenceMatchLine)
+      : ["(nenhum)"]),
+  ];
+  if (cycle.greensAgora.length) {
+    parts.push(
+      CONFERENCE_SEP,
+      "GREEN Agora:",
+      ...cycle.greensAgora.map(formatConferenceMatchLine),
+    );
+  }
+  if (cycle.finalizadosAgora.length) {
+    parts.push(
+      CONFERENCE_SEP,
+      "Finalizados Agora:",
+      ...cycle.finalizadosAgora.map(formatConferenceMatchLine),
+    );
+  }
+  return parts.join("\n");
+}
 
 function minutesSinceIso(iso: string | null | undefined, nowMs: number): number | null {
   if (!iso) return null;
@@ -2599,17 +2658,29 @@ async function finalizeMercadoGols05OffLive(
   supabase: ReturnType<typeof createClient>,
   liveIds: string[],
   jsonById: Map<string, { home: string | null; away: string | null }>,
-): Promise<{ wins: number; losses: number; semLinha: number; reconcile: LiveCountReconcile }> {
+): Promise<{
+  wins: number;
+  losses: number;
+  semLinha: number;
+  reconcile: LiveCountReconcile;
+  greensAgora: ConferenceMatchLine[];
+  finalizadosAgora: ConferenceMatchLine[];
+  aoVivo: ConferenceMatchLine[];
+}> {
   let wins = 0;
   let losses = 0;
   let semLinha = 0;
   const nowMs = Date.now();
   const nowIso = new Date(nowMs).toISOString();
   const liveSet = new Set(liveIds.map(String));
+  const greensAgora: ConferenceMatchLine[] = [];
+  const finalizadosAgora: ConferenceMatchLine[] = [];
 
   const { data: openRows } = await supabase
     .from("futebol_mercado_gols_05")
-    .select("event_id,home,away,resultado,disponivel_desde_minuto,over_05_odd,captured_at,indisponivel_ate_minuto,had_min_plus2_before")
+    .select(
+      "event_id,home,away,resultado,disponivel_desde_minuto,over_05_odd,captured_at,indisponivel_ate_minuto,had_min_plus2_before,last_minute",
+    )
     .eq("is_live", true)
     .in("resultado", ["watching", "pending"]);
 
@@ -2647,6 +2718,8 @@ async function finalizeMercadoGols05OffLive(
       (game?.home_score != null && game?.away_score != null
         ? `${game.home_score}-${game.away_score}`
         : "—");
+    const minute = toInt(game?.last_minute) ?? toInt(row.last_minute);
+    const label = matchLabel(row.home as string, row.away as string) ?? eventId;
 
     if (row.resultado === "watching") {
       await supabase.from("futebol_mercado_gols_05").update({
@@ -2660,7 +2733,7 @@ async function finalizeMercadoGols05OffLive(
         action: "mercado_sem_linha",
         message: `Encerrado sem linha +0,5 · placar ${scoreText} (fora do live ≥${OFF_LIVE_GRACE_MIN}min)`,
         event_id: eventId,
-        match_label: matchLabel(row.home as string, row.away as string),
+        match_label: label,
         payload: {
           placar_final: scoreText,
           last_seen_min: lastSeenMin,
@@ -2669,6 +2742,13 @@ async function finalizeMercadoGols05OffLive(
       });
       semLinha += 1;
       finalized.push(eventId);
+      finalizadosAgora.push({
+        event_id: eventId,
+        label,
+        minute,
+        score: scoreText,
+        statusLabel: "Finalizado",
+      });
       continue;
     }
 
@@ -2682,9 +2762,26 @@ async function finalizeMercadoGols05OffLive(
       is_live: false,
       updated_at: nowIso,
     }).eq("event_id", eventId);
-    if (outcome === "win") wins += 1;
-    else if (outcome === "loss") losses += 1;
+    if (outcome === "win") {
+      wins += 1;
+      greensAgora.push({
+        event_id: eventId,
+        label,
+        minute,
+        score: scoreText,
+        statusLabel: "GREEN",
+      });
+    } else if (outcome === "loss") {
+      losses += 1;
+    }
     finalized.push(eventId);
+    finalizadosAgora.push({
+      event_id: eventId,
+      label,
+      minute,
+      score: scoreText,
+      statusLabel: "Finalizado",
+    });
   }
 
   const { data: settledStillLive } = await supabase
@@ -2701,6 +2798,57 @@ async function finalizeMercadoGols05OffLive(
       updated_at: nowIso,
     }).eq("event_id", eventId);
   }
+
+  // Ao vivo restantes (ainda watching/pending apos finalize)
+  const { data: stillOpen } = await supabase
+    .from("futebol_mercado_gols_05")
+    .select("event_id,home,away,resultado,last_minute")
+    .eq("is_live", true)
+    .in("resultado", ["watching", "pending"]);
+
+  const aoVivoIds = (stillOpen ?? []).map((r) => String(r.event_id));
+  const histById = new Map<
+    string,
+    { score: string | null; last_minute: number | null }
+  >();
+  if (aoVivoIds.length) {
+    const { data: histRows } = await supabase
+      .from("futebol_historico_jogos")
+      .select("event_id,score,home_score,away_score,last_minute")
+      .in("event_id", aoVivoIds);
+    for (const h of histRows ?? []) {
+      const id = String(h.event_id);
+      const score = (h.score as string | null) ??
+        (h.home_score != null && h.away_score != null
+          ? `${h.home_score}-${h.away_score}`
+          : null);
+      histById.set(id, {
+        score,
+        last_minute: toInt(h.last_minute),
+      });
+    }
+  }
+
+  const aoVivo: ConferenceMatchLine[] = (stillOpen ?? [])
+    .map((r) => {
+      const eventId = String(r.event_id);
+      const jsonMeta = jsonById.get(eventId);
+      const hist = histById.get(eventId);
+      const label = matchLabel(
+        (jsonMeta?.home ?? r.home) as string | null,
+        (jsonMeta?.away ?? r.away) as string | null,
+      ) ?? eventId;
+      return {
+        event_id: eventId,
+        label,
+        minute: hist?.last_minute ?? toInt(r.last_minute),
+        score: hist?.score ?? "—",
+        statusLabel: (r.resultado === "pending" ? "Pendente" : "Monitorando") as
+          | "Pendente"
+          | "Monitorando",
+      };
+    })
+    .sort((a, b) => (b.minute ?? 0) - (a.minute ?? 0));
 
   const graceSet = new Set(heldByGrace);
   const lines = buildLiveValidationLines(
@@ -2719,7 +2867,7 @@ async function finalizeMercadoGols05OffLive(
 
   const reconcile: LiveCountReconcile = {
     json_live: liveIds.length,
-    mercado_live_open: (openRows ?? []).length,
+    mercado_live_open: (stillOpen ?? []).length,
     historico_live: historicoLiveCount ?? 0,
     missing_from_json: missingFromJson,
     held_by_grace: heldByGrace,
@@ -2730,33 +2878,15 @@ async function finalizeMercadoGols05OffLive(
     lines,
   };
 
-  const reportLines = [
-    `Jogos Ao Vivo no JSON: ${reconcile.json_live}`,
-    `Jogos Ao Vivo no Sistema: ${reconcile.mercado_live_open}`,
-    "",
-    "Consulta de Jogos JSON x Sistema:",
-    ...lines.map((l) => {
-      if (l.status === "confere") return `${l.label} (Confere) ✓`;
-      if (l.status === "atencao") return `${l.label} (Atenção) ${l.reason ?? ""}`.trim();
-      return `${l.label} (Erro) ${l.reason ?? ""}`.trim();
-    }),
-  ];
-
-  await insertSistemaLog(supabase, {
-    // error = vermelho no painel; info = Sistema azul (ok). Sempre action live_json_vs_sistema.
-    level: erro > 0 ? "error" : "info",
-    source: "edge-live",
-    action: "live_json_vs_sistema",
-    message:
-      `Conferência Jogos Ao Vivo\nJSON: ${reconcile.json_live}\nSistema: ${reconcile.mercado_live_open}`,
-    payload: {
-      ...reconcile,
-      grace_min: OFF_LIVE_GRACE_MIN,
-      report: reportLines.join("\n"),
-    },
-  });
-
-  return { wins, losses, semLinha, reconcile };
+  return {
+    wins,
+    losses,
+    semLinha,
+    reconcile,
+    greensAgora,
+    finalizadosAgora,
+    aoVivo,
+  };
 }
 
 function buildSignal(row: {
@@ -2886,6 +3016,7 @@ Deno.serve(async (req) => {
     let hctgEmpty = 0;
     const liveIds: string[] = [];
     const jsonById = new Map<string, { home: string | null; away: string | null }>();
+    const greensAgora: ConferenceMatchLine[] = [];
 
     const anchorOverForSort = (ev: Json): number => {
       const markets = asRecord(overview.markets) ?? {};
@@ -3203,7 +3334,16 @@ Deno.serve(async (req) => {
             score.text,
             false,
           );
-          if (out === "win") mercadoWins += 1;
+          if (out === "win") {
+            mercadoWins += 1;
+            greensAgora.push({
+              event_id: eventId,
+              label: matchLabel(teams.home, teams.away) ?? eventId,
+              minute,
+              score: score.text,
+              statusLabel: "GREEN",
+            });
+          }
         }
       }
 
@@ -3243,6 +3383,51 @@ Deno.serve(async (req) => {
       jsonById,
     );
     mercadoWins += mercadoFinalize.wins;
+
+    const greenIds = new Set(greensAgora.map((g) => g.event_id));
+    for (const g of mercadoFinalize.greensAgora) {
+      if (!greenIds.has(g.event_id)) {
+        greensAgora.push(g);
+        greenIds.add(g.event_id);
+      }
+    }
+
+    const reportLines = [
+      `Jogos Ao Vivo no JSON: ${mercadoFinalize.reconcile.json_live}`,
+      `Jogos Ao Vivo no Sistema: ${mercadoFinalize.reconcile.mercado_live_open}`,
+      "",
+      "Consulta de Jogos JSON x Sistema:",
+      ...mercadoFinalize.reconcile.lines.map((l) => {
+        if (l.status === "confere") return `${l.label} (Confere) ✓`;
+        if (l.status === "atencao") {
+          return `${l.label} (Atenção) ${l.reason ?? ""}`.trim();
+        }
+        return `${l.label} (Erro) ${l.reason ?? ""}`.trim();
+      }),
+    ];
+
+    const conferenceCycle: LiveConferenceCycle = {
+      reconcile: mercadoFinalize.reconcile,
+      aoVivo: mercadoFinalize.aoVivo,
+      greensAgora,
+      finalizadosAgora: mercadoFinalize.finalizadosAgora,
+    };
+
+    await insertSistemaLog(supabase, {
+      // error = vermelho no painel; info = Sistema azul (ok)
+      level: mercadoFinalize.reconcile.erro > 0 ? "error" : "info",
+      source: "edge-live",
+      action: "live_json_vs_sistema",
+      message: buildLiveConferenceMessage(conferenceCycle),
+      payload: {
+        ...mercadoFinalize.reconcile,
+        grace_min: OFF_LIVE_GRACE_MIN,
+        report: reportLines.join("\n"),
+        ao_vivo: mercadoFinalize.aoVivo,
+        greens_agora: greensAgora,
+        finalizados_agora: mercadoFinalize.finalizadosAgora,
+      },
+    });
 
     // Historico: so marca finished apos mesma gracia (partida suspensa nao some do live)
     if (liveIds.length > 0) {
