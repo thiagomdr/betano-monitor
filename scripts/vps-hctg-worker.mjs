@@ -2,7 +2,8 @@
 /**
  * Worker HCTG HTML (VPS legado ou PC local / IP residencial).
  *
- * So scrape jogos watching | sem_linha_05. Nunca pending (captura +0,5 feita na Edge).
+ * So scrape jogos watching | pending | sem_linha_05.
+ * pending: continua HCTG para monitorar a odd +0,5 ate GREEN/RED.
  *
  * Env: SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY
  * Opcional: HCTG_POLL_SEC=90, HCTG_POLL_JITTER_SEC=25,
@@ -33,7 +34,7 @@ import { insertSistemaLog, matchLabel } from "./lib/sistema-log.mjs";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 
-const WORKER_RESULTADOS = ["watching", "sem_linha_05"];
+const WORKER_RESULTADOS = ["watching", "pending", "sem_linha_05"];
 
 function loadDotEnv() {
   const envPath = join(__dirname, "..", ".env");
@@ -285,7 +286,7 @@ async function persistHctg(row, snap) {
 
   if (error) throw error;
   if (!data?.length) {
-    console.log(`[worker] ${row.event_id} ignorado pos-scrape (ja pending/win/loss)`);
+    console.log(`[worker] ${row.event_id} ignorado pos-scrape (ja win/loss/excluido)`);
   }
 }
 

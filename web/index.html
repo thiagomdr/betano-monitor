@@ -1053,12 +1053,42 @@
       return cls ? `<span class="resultado-badge ${cls}">${text}</span>` : text;
     }
 
-    function mercadoSimProfit(row) {
-      const odd = Number(row.over_05_odd);
-      if (!Number.isFinite(odd) || odd < 1.01) return null;
-      if (row.resultado === 'win') return odd - 1;
-      if (row.resultado === 'loss') return -1;
+    function mercadoSimProfitPair(row) {
+      const abertura = Number(row.over_05_odd);
+      const ultima = Number(row.over_05_odd_ultima ?? row.over_05_odd);
+      if (!Number.isFinite(abertura) || abertura < 1.01) return null;
+      if (row.resultado === 'loss') {
+        return { kind: 'red', text: '-1 u' };
+      }
+      if (row.resultado === 'win') {
+        const uAbertura = abertura - 1;
+        const uUltima = (Number.isFinite(ultima) && ultima >= 1.01 ? ultima : abertura) - 1;
+        const fmt = (u) => {
+          const sign = u > 0 ? '+' : '';
+          return `${sign}${formatNumber(u)} u`;
+        };
+        return { kind: 'green', text: `${fmt(uAbertura)} / ${fmt(uUltima)}` };
+      }
       return null;
+    }
+
+    function mercadoSimProfit(row) {
+      const pair = mercadoSimProfitPair(row);
+      if (!pair) return null;
+      if (pair.kind === 'red') return -1;
+      const abertura = Number(row.over_05_odd);
+      const ultima = Number(row.over_05_odd_ultima ?? row.over_05_odd);
+      // Cards de resumo usam lucro na ultima odd (potencial real da trajetoria).
+      if (Number.isFinite(ultima) && ultima >= 1.01) return ultima - 1;
+      if (Number.isFinite(abertura) && abertura >= 1.01) return abertura - 1;
+      return null;
+    }
+
+    function formatMercadoProfitCell(row) {
+      const pair = mercadoSimProfitPair(row);
+      if (!pair) return '<span class="muted">—</span>';
+      const cls = pair.kind === 'red' ? 'negative' : (pair.text.startsWith('+') ? 'positive' : '');
+      return `<span class="mercado-profit ${cls}">${pair.text}</span>`;
     }
 
     function parseElevatedOddsLog(raw) {
@@ -1126,38 +1156,57 @@
       const log = dedupeConsecutiveElevatedLines(parseElevatedOddsLog(row?.elevated_odds_log));
       if (!row) return log;
 
-      if (row.over_05_odd != null) {
-        const entry = {
-          at: row.captured_at,
-          minute: row.disponivel_desde_minuto ?? row.last_minute,
-          score: row.placar_na_captura,
-          line: row.over_05_line,
-          odd: row.over_05_odd,
-          capture: true,
-        };
-        const last = log[log.length - 1];
-        if (last &&
-          Math.abs((last.line ?? 0) - (entry.line ?? 0)) < 0.01 &&
-          Math.abs(last.odd - entry.odd) < 0.01) {
-          log[log.length - 1] = { ...last, capture: true };
-        } else {
-          log.push(entry);
+      // Serie ja no BD (fase elevada + ticks +0,5). Marca abertura se bater com over_05_odd.
+      if (row.over_05_odd != null && row.over_05_line != null) {
+        const abertura = Number(row.over_05_odd);
+        const line = Number(row.over_05_line);
+        let marked = false;
+        for (const e of log) {
+          if (
+            Math.abs((e.line ?? 0) - line) < 0.01 &&
+            Math.abs((e.odd ?? 0) - abertura) < 0.01
+          ) {
+            e.capture = true;
+            marked = true;
+            break;
+          }
         }
-        return log;
+        if (!marked) {
+          log.unshift({
+            at: row.captured_at,
+            minute: row.disponivel_desde_minuto ?? row.last_minute,
+            score: row.placar_na_captura,
+            line,
+            odd: abertura,
+            capture: true,
+          });
+        }
       }
 
-      if (row.resultado === 'watching' && row.is_live) {
+      if (
+        (row.resultado === 'watching' || row.resultado === 'pending') &&
+        row.is_live
+      ) {
         const liveOver = mercadoLiveTrueOver05(row);
-        if (liveOver) {
-          const live = mercadoLiveOddsFromRow(row);
-          log.push({
-            at: new Date().toISOString(),
-            minute: live?.minute ?? row.last_minute,
-            score: live?.score ?? '—',
-            line: liveOver.line,
-            odd: liveOver.odd,
-            live: true,
-          });
+        const ultima = row.over_05_odd_ultima != null
+          ? { odd: row.over_05_odd_ultima, line: row.over_05_line }
+          : null;
+        const tip = liveOver || ultima;
+        if (tip?.odd != null) {
+          const last = log[log.length - 1];
+          if (!(last &&
+            Math.abs((last.line ?? 0) - (tip.line ?? 0)) < 0.01 &&
+            Math.abs(last.odd - tip.odd) < 0.01)) {
+            const live = mercadoLiveOddsFromRow(row);
+            log.push({
+              at: new Date().toISOString(),
+              minute: live?.minute ?? row.last_minute,
+              score: live?.score ?? row.live_score ?? '—',
+              line: tip.line,
+              odd: tip.odd,
+              live: true,
+            });
+          }
         }
       }
       return log;
@@ -1330,6 +1379,25 @@
         minimumFractionDigits: 2,
         maximumFractionDigits: 2,
       });
+    }
+
+    /** Coluna Total de Gols: odd abertura / ultima (+0,5), ou Sem +0,5. */
+    function formatMercadoTotalGolsCell(row) {
+      if (row.resultado === 'sem_linha_05' || row.resultado === 'skipped') {
+        return '<span class="resultado-badge sem-linha">Sem +0,5 no jogo</span>';
+      }
+      const abertura = Number(row.over_05_odd);
+      if (!Number.isFinite(abertura) || abertura < 1.01) {
+        if (row.resultado === 'watching') {
+          return '<span class="muted">Aguardando +0,5</span>';
+        }
+        return '<span class="muted">—</span>';
+      }
+      const ultimaRaw = row.over_05_odd_ultima != null
+        ? Number(row.over_05_odd_ultima)
+        : abertura;
+      const ultima = Number.isFinite(ultimaRaw) && ultimaRaw >= 1.01 ? ultimaRaw : abertura;
+      return `<span class="mercado-odds-pair">${formatOddFixed2(abertura)} / ${formatOddFixed2(ultima)}</span>`;
     }
 
     /** Menor linha Over (mais perto do +0,5); odd com 2 casas; coleta so no balao. */
@@ -1514,12 +1582,12 @@
           <td data-label="Jogo">${matchHtml}</td>
           <td data-label="Tempo">${mercadoTempoLabel(row)}</td>
           <td data-label="Placar">${mercadoPlacarLabel(row)}</td>
-          <td data-label="Total de Gols">${formatHctgPills(row.hctg_lines, row.hctg_fetched_at, row.event_id)}</td>
+          <td data-label="Total de Gols">${formatMercadoTotalGolsCell(row)}</td>
           <td data-label="Estrategia">${mercadoEstrategiaLabel(row)}</td>
           <td data-label="Liga">${league}</td>
           <td data-label="Gol GREEN">${formatMercadoGolGreen(row)}</td>
           <td data-label="Validação">${mercadoValidacaoLabel(row)}</td>
-          <td data-label="Lucro 1u">${formatMercadoProfit(mercadoSimProfit(row))}</td>
+          <td data-label="Lucro 1u">${formatMercadoProfitCell(row)}</td>
           <td data-label="Status">${mercadoStatusLabel(row)}</td>
           <td data-label="Link">${link}</td>
           <td data-label=""><button type="button" class="mercado-delete-btn" data-delete-mercado="${row.event_id}" data-delete-label="${matchPlain.replace(/"/g, '&quot;')}" title="Remover da lista">🗑</button></td>

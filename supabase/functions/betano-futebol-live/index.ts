@@ -642,7 +642,9 @@ async function appendMercadoElevatedOddsLog(
   const log = parseElevatedOddsLog(existingLog);
   const lastEntry = log.length > 0 ? log[log.length - 1] : null;
   if (lastEntry && Math.abs(lastEntry.line - snapshot.line) < 0.01) {
-    return;
+    // Linha elevada: so registra troca de linha. +0,5: registra se a odd mudou.
+    if (snapshot.remaining > 0.51) return;
+    if (Math.abs(lastEntry.odd - snapshot.odd) < 0.01) return;
   }
 
   const nowIso = new Date().toISOString();
@@ -660,6 +662,57 @@ async function appendMercadoElevatedOddsLog(
     elevated_odds_log: trimmed,
     updated_at: nowIso,
   }).eq("event_id", eventId);
+}
+
+/** Apos captura: monitora a odd da linha +0,5 (over_05_line) ate o gol ou o fim. */
+async function trackMercadoPendingOver05Odd(
+  supabase: ReturnType<typeof createClient>,
+  eventId: string,
+  ctx: MercadoGols05Context,
+  hctgSnap: HctgSnapshot,
+  row: MercadoGols05Row,
+): Promise<void> {
+  if (row.resultado !== "pending" || row.over_05_line == null) return;
+  const goalsNow = goalsTotalFromScoreText(ctx.score_text);
+  const goalsAtCapture = row.placar_na_captura
+    ? goalsTotalFromScoreText(row.placar_na_captura)
+    : null;
+  // Ja houve gol apos a abertura: nao atualiza odd (mantem ultima pre-gol).
+  if (goalsAtCapture != null && goalsNow > goalsAtCapture) return;
+
+  const hit = hctgSnap.lines.find((l) =>
+    l.over != null && Math.abs(l.line - row.over_05_line!) < 0.01
+  );
+  const odd = hit?.over ?? null;
+  if (odd == null || !Number.isFinite(odd) || odd < 1.01) return;
+
+  const prevUltima = row.over_05_odd_ultima ?? row.over_05_odd;
+  const log = parseElevatedOddsLog(row.elevated_odds_log);
+  const lastEntry = log.length > 0 ? log[log.length - 1] : null;
+  const sameTick = lastEntry &&
+    Math.abs(lastEntry.line - row.over_05_line) < 0.01 &&
+    Math.abs(lastEntry.odd - odd) < 0.01;
+  const oddUnchanged = prevUltima != null && Math.abs(prevUltima - odd) < 0.01;
+  if (sameTick && oddUnchanged) return;
+
+  const nowIso = new Date().toISOString();
+  if (!sameTick) {
+    log.push({
+      at: nowIso,
+      minute: ctx.minute,
+      score: ctx.score_text,
+      line: row.over_05_line,
+      odd,
+      remaining: 0.5,
+    });
+  }
+  const trimmed = log.length > 300 ? log.slice(-300) : log;
+  await supabase.from("futebol_mercado_gols_05").update({
+    over_05_odd_ultima: odd,
+    elevated_odds_log: trimmed,
+    last_minute: ctx.minute,
+    updated_at: nowIso,
+  }).eq("event_id", eventId).eq("resultado", "pending");
 }
 
 async function syncMercadoLiveSnapshot(
@@ -2069,6 +2122,7 @@ type MercadoGols05Row = {
   indisponivel_ate_minuto: number | null;
   had_min_plus2_before: boolean;
   over_05_odd: number | null;
+  over_05_odd_ultima?: number | null;
   over_05_line?: number | null;
   placar_na_captura?: string | null;
   elevated_odds_log?: unknown;
@@ -2135,6 +2189,7 @@ async function applyMercadoGols05Capture(
     disponivel_desde_minuto: minute,
     placar_na_captura: ctx.score_text,
     over_05_odd: over0,
+    over_05_odd_ultima: over0,
     over_05_line: totals.over_0_line,
     captured_at: nowIso,
     resultado: "pending",
@@ -2146,6 +2201,34 @@ async function applyMercadoGols05Capture(
   }).eq("event_id", eventId);
   if (onlyResultado) q = q.eq("resultado", onlyResultado);
   await q;
+
+  // Abertura +0,5 no historico do balao (primeira tick da serie monitorada).
+  const { data: afterCap } = await supabase
+    .from("futebol_mercado_gols_05")
+    .select("elevated_odds_log")
+    .eq("event_id", eventId)
+    .maybeSingle();
+  const log = parseElevatedOddsLog(afterCap?.elevated_odds_log);
+  const last = log.length > 0 ? log[log.length - 1] : null;
+  const line = totals.over_0_line;
+  if (
+    line != null &&
+    !(last && Math.abs(last.line - line) < 0.01 && Math.abs(last.odd - over0) < 0.01)
+  ) {
+    log.push({
+      at: nowIso,
+      minute,
+      score: ctx.score_text,
+      line,
+      odd: over0,
+      remaining: 0.5,
+    });
+    const trimmed = log.length > 300 ? log.slice(-300) : log;
+    await supabase.from("futebol_mercado_gols_05").update({
+      elevated_odds_log: trimmed,
+      updated_at: nowIso,
+    }).eq("event_id", eventId);
+  }
 }
 
 async function touchMercadoWatching(
@@ -2282,6 +2365,7 @@ async function processMercadoGols05Live(
         disponivel_desde_minuto: minute,
         placar_na_captura: ctx.score_text,
         over_05_odd: over0,
+        over_05_odd_ultima: over0,
         over_05_line: over0Line,
         captured_at: nowIso,
         resultado: "pending",
@@ -2290,6 +2374,14 @@ async function processMercadoGols05Live(
         hctg_lines: hctgSnap.lines,
         hctg_source: hctgSnap.source,
         hctg_fetched_at: nowIso,
+        elevated_odds_log: [{
+          at: nowIso,
+          minute,
+          score: ctx.score_text,
+          line: over0Line,
+          odd: over0,
+          remaining: 0.5,
+        }],
         updated_at: nowIso,
       });
       return "captured";
@@ -2437,6 +2529,12 @@ async function processMercadoGols05Live(
     return null;
   }
 
+  // Apos abertura +0,5: continua monitorando a odd ate GREEN/RED
+  if (existing.resultado === "pending") {
+    await trackMercadoPendingOver05Odd(supabase, eventId, ctx, hctgSnap, existing);
+    return null;
+  }
+
   return null;
 }
 
@@ -2456,6 +2554,7 @@ async function revertMercadoInvalidPending(
     estrategia: null,
     captured_at: null,
     over_05_odd: null,
+    over_05_odd_ultima: null,
     over_05_line: null,
     disponivel_desde_minuto: null,
     placar_na_captura: null,
@@ -3256,7 +3355,7 @@ Deno.serve(async (req) => {
       const { data: mercadoRow } = await supabase
         .from("futebol_mercado_gols_05")
         .select(
-          "event_id,resultado,captured_at,disponivel_desde_minuto,indisponivel_ate_minuto,had_min_plus2_before,over_05_odd,over_05_line,placar_na_captura,elevated_odds_log,telegram_capture_sent_at,telegram_confirmacao,hctg_fetched_at",
+          "event_id,resultado,captured_at,disponivel_desde_minuto,indisponivel_ate_minuto,had_min_plus2_before,over_05_odd,over_05_odd_ultima,over_05_line,placar_na_captura,elevated_odds_log,telegram_capture_sent_at,telegram_confirmacao,hctg_fetched_at",
         )
         .eq("event_id", eventId)
         .maybeSingle();
