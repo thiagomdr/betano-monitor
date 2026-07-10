@@ -127,10 +127,43 @@
       border: 1px solid var(--border);
       background: transparent;
       color: var(--muted);
-      font-size: 0.8rem;
       cursor: pointer;
+      font-size: 0.85rem;
     }
     .btn-logout:hover { color: var(--text); border-color: var(--muted); }
+    .header-actions {
+      display: flex;
+      flex-wrap: wrap;
+      align-items: center;
+      gap: 0.5rem;
+    }
+    .btn-sistema {
+      padding: 0.4rem 0.85rem;
+      border-radius: 6px;
+      border: none;
+      font-size: 0.85rem;
+      font-weight: 700;
+      cursor: pointer;
+      letter-spacing: 0.02em;
+    }
+    .btn-sistema.running {
+      background: var(--accent);
+      color: #0b0f14;
+    }
+    .btn-sistema.paused {
+      background: var(--betano-orange);
+      color: #fff;
+    }
+    .btn-sistema:disabled {
+      opacity: 0.55;
+      cursor: wait;
+    }
+    .sistema-state {
+      font-size: 0.78rem;
+      color: var(--muted);
+    }
+    .sistema-state.on { color: var(--accent); }
+    .sistema-state.off { color: var(--betano-orange); }
     .app-tabs {
       display: flex;
       gap: 0.35rem;
@@ -637,7 +670,13 @@
     <p class="page-subtitle">Mercado de Gols +0,5</p>
     <p class="subtitle">Betano via Supabase · coleta na nuvem</p>
       </div>
-      <button type="button" class="btn-logout" id="btn-logout">Sair</button>
+      <div class="header-actions">
+        <span class="sistema-state" id="sistema-state" aria-live="polite">Sistema: …</span>
+        <button type="button" class="btn-sistema running" id="btn-sistema" title="Pausar ou iniciar coleta Edge e worker">
+          Pausar sistema
+        </button>
+        <button type="button" class="btn-logout" id="btn-logout">Sair</button>
+      </div>
     </div>
     <nav class="app-tabs" role="tablist" aria-label="Navegacao principal">
       <button type="button" class="app-tab active" id="tab-mercado" data-tab="mercado" role="tab" aria-selected="true">Mercado</button>
@@ -723,6 +762,8 @@
     let logLoading = false;
     let logCache = [];
     let activeTab = 'mercado';
+    let sistemaAtivo = true;
+    let sistemaToggleBusy = false;
 
     const LOG_ACTION_LABELS = {
       hctg_odds: 'ODDS HCTG',
@@ -732,6 +773,8 @@
       mercado_reaberto: 'Reaberto ao vivo',
       live_count_reconcile: 'Contagem live',
       live_json_vs_sistema: 'JSON × Sistema',
+      sistema_pausado: 'Sistema pausado',
+      sistema_iniciado: 'Sistema iniciado',
       mercado_captura: 'Captura +0,5',
       mercado_green: 'GREEN',
       mercado_red: 'RED',
@@ -744,6 +787,7 @@
 
     const LOG_SOURCE_LABELS = {
       'edge-live': 'Edge (cron live)',
+      'painel': 'Painel',
       'local-worker': 'Worker local (PC)',
       'vps-worker': 'Worker VPS',
       'telegram-capture': 'Telegram captura',
@@ -1891,6 +1935,64 @@
       }
     }
 
+    function renderSistemaToggle() {
+      const btn = document.getElementById('btn-sistema');
+      const stateEl = document.getElementById('sistema-state');
+      if (!btn || !stateEl) return;
+      btn.disabled = sistemaToggleBusy;
+      if (sistemaAtivo) {
+        btn.textContent = 'Pausar sistema';
+        btn.classList.remove('paused');
+        btn.classList.add('running');
+        btn.title = 'Pausar coleta Edge, worker HCTG e lembretes Telegram';
+        stateEl.textContent = 'Sistema: ATIVO';
+        stateEl.classList.add('on');
+        stateEl.classList.remove('off');
+      } else {
+        btn.textContent = 'Iniciar sistema';
+        btn.classList.remove('running');
+        btn.classList.add('paused');
+        btn.title = 'Iniciar coleta Edge, worker HCTG e lembretes Telegram';
+        stateEl.textContent = 'Sistema: PAUSADO';
+        stateEl.classList.add('off');
+        stateEl.classList.remove('on');
+      }
+    }
+
+    async function loadSistemaAtivo() {
+      try {
+        const rows = await supabaseGet(
+          'futebol_live_coleta_config?select=ativo&id=eq.default&limit=1',
+        );
+        sistemaAtivo = rows?.[0]?.ativo !== false;
+      } catch (err) {
+        console.warn('loadSistemaAtivo', err);
+        sistemaAtivo = true;
+      }
+      renderSistemaToggle();
+    }
+
+    async function toggleSistemaAtivo() {
+      if (sistemaToggleBusy) return;
+      const next = !sistemaAtivo;
+      const confirmMsg = next
+        ? 'Iniciar o sistema?\n\nA coleta Edge (cron), o worker HCTG e os lembretes Telegram voltam a rodar.'
+        : 'Pausar o sistema?\n\nA coleta Edge (cron), o worker HCTG e os lembretes Telegram param até você iniciar de novo.';
+      if (!window.confirm(confirmMsg)) return;
+      sistemaToggleBusy = true;
+      renderSistemaToggle();
+      try {
+        const ativo = await supabaseRpc('set_futebol_sistema_ativo', { p_ativo: next });
+        sistemaAtivo = ativo === true || ativo === 'true';
+        if (activeTab === 'log') loadSistemaLog();
+      } catch (err) {
+        window.alert(err.message || String(err));
+      } finally {
+        sistemaToggleBusy = false;
+        renderSistemaToggle();
+      }
+    }
+
     async function handleLoginSubmit(e) {
       e.preventDefault();
       const errEl = document.getElementById('login-error');
@@ -1911,6 +2013,7 @@
           return;
         }
         showApp();
+        await loadSistemaAtivo();
         await startMercadoPolling();
       } catch (err) {
         if (errEl) errEl.textContent = err.message || String(err);
@@ -1949,6 +2052,7 @@
         });
         if (session) {
           showApp();
+          await loadSistemaAtivo();
           await startMercadoPolling();
         } else {
           showLogin();
@@ -1963,6 +2067,7 @@
 
     document.getElementById('login-form')?.addEventListener('submit', handleLoginSubmit);
     document.getElementById('btn-logout')?.addEventListener('click', handleLogout);
+    document.getElementById('btn-sistema')?.addEventListener('click', () => toggleSistemaAtivo());
     document.getElementById('tab-mercado')?.addEventListener('click', () => switchTab('mercado'));
     document.getElementById('tab-log')?.addEventListener('click', () => switchTab('log'));
     document.getElementById('btn-log-refresh')?.addEventListener('click', () => loadSistemaLog());

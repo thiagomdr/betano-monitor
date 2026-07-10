@@ -2968,6 +2968,20 @@ Deno.serve(async (req) => {
   }
 
   const supabase = createClient(supabaseUrl, serviceKey);
+
+  const { data: coletaCfg } = await supabase
+    .from("futebol_live_coleta_config")
+    .select("ativo")
+    .eq("id", "default")
+    .maybeSingle();
+  if (coletaCfg?.ativo === false) {
+    return jsonResponse({
+      ok: true,
+      paused: true,
+      message: "Sistema pausado (futebol_live_coleta_config.ativo=false)",
+    });
+  }
+
   const notes: string[] = [
     "Coleta via Edge Function (IP nuvem Supabase), sem cookie de conta.",
     "Lista todos os jogos live da Betano (futebol real).",

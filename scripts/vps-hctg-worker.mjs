@@ -289,8 +289,28 @@ async function persistHctg(row, snap) {
   }
 }
 
+async function isSistemaAtivo() {
+  const { data, error } = await supabase
+    .from("futebol_live_coleta_config")
+    .select("ativo")
+    .eq("id", "default")
+    .maybeSingle();
+  if (error) {
+    console.warn("[worker] leitura ativo:", error.message);
+    return true;
+  }
+  return data?.ativo !== false;
+}
+
 async function runCycle() {
   cycleCount += 1;
+
+  if (!(await isSistemaAtivo())) {
+    console.log(
+      `[worker] ${new Date().toISOString()} sistema pausado (ativo=false) — ciclo ${cycleCount} ignorado`,
+    );
+    return;
+  }
 
   if (shouldRestartBrowser()) {
     await restartBrowser(
