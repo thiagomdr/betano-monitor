@@ -2076,7 +2076,7 @@
         btn.textContent = 'Pausar Sistema';
         btn.classList.remove('paused');
         btn.classList.add('running');
-        btn.title = 'Pausar coleta Edge, worker HCTG e lembretes Telegram';
+        btn.title = 'Pausar coleta Edge na nuvem (worker local continua se estiver aberto)';
         stateEl.textContent = 'Sistema: ATIVO';
         stateEl.classList.add('on');
         stateEl.classList.remove('off');
@@ -2084,7 +2084,7 @@
         btn.textContent = 'Iniciar Sistema';
         btn.classList.remove('running');
         btn.classList.add('paused');
-        btn.title = 'Iniciar coleta Edge, worker HCTG e lembretes Telegram';
+        btn.title = 'Iniciar coleta Edge na nuvem — rode .\\scripts\\start-monitor.ps1 no PC para abrir o Chrome';
         stateEl.textContent = 'Sistema: PAUSADO';
         stateEl.classList.add('off');
         stateEl.classList.remove('on');
@@ -2108,8 +2108,8 @@
       if (sistemaToggleBusy) return;
       const next = !sistemaAtivo;
       const confirmMsg = next
-        ? 'Iniciar o sistema?\n\nA coleta Edge (cron), o worker HCTG e os lembretes Telegram voltam a rodar.'
-        : 'Pausar o sistema?\n\nA coleta Edge (cron), o worker HCTG e os lembretes Telegram param até você iniciar de novo.';
+        ? 'Iniciar a coleta Edge (cron Supabase)?\n\nO Chrome no seu PC so abre se o worker local estiver rodando:\n  .\\scripts\\start-monitor.ps1'
+        : 'Pausar a coleta Edge (cron Supabase)?\n\nO worker local no PC para de scrapear enquanto estiver pausado.';
       if (!window.confirm(confirmMsg)) return;
       sistemaToggleBusy = true;
       renderSistemaToggle();
