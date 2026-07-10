@@ -192,24 +192,33 @@
     .log-level.info { background: rgba(61, 214, 140, 0.15); color: var(--accent); }
     .log-level.warn { background: rgba(255, 209, 102, 0.15); color: var(--warn); }
     .log-level.error { background: rgba(255, 107, 107, 0.15); color: #ff6b6b; }
+    .log-level.cat-info { background: rgba(94, 179, 255, 0.18); color: #5eb3ff; }
+    .log-level.cat-sistema { background: rgba(143, 163, 191, 0.2); color: #c5d0e0; }
+    button.log-cat-btn {
+      border: none;
+      cursor: pointer;
+      font: inherit;
+      text-transform: none;
+      letter-spacing: 0.02em;
+    }
+    button.log-cat-btn:hover { filter: brightness(1.12); }
     .log-source {
       font-size: 0.75rem;
       color: var(--muted);
       font-family: ui-monospace, monospace;
     }
     .log-message { font-size: 0.85rem; line-height: 1.35; }
-    .log-payload {
-      margin-top: 0.35rem;
-      font-size: 0.72rem;
-      color: var(--muted);
-      font-family: ui-monospace, monospace;
-      white-space: pre-wrap;
-      word-break: break-word;
-      max-height: 8rem;
-      overflow: auto;
+    .log-detail-line {
+      padding: 0.2rem 0;
+      border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+      font-size: 0.78rem;
+      line-height: 1.4;
     }
+    .log-detail-line:last-child { border-bottom: none; }
+    .log-detail-k { color: var(--muted); }
     tr.log-row-error td { background: rgba(255, 107, 107, 0.06); }
     tr.log-row-warn td { background: rgba(255, 209, 102, 0.04); }
+    tr.log-row-sistema td { background: rgba(143, 163, 191, 0.04); }
     #panel-log[hidden] { display: none; }
     #panel-mercado[hidden] { display: none; }
     main { padding: 1rem 1.25rem 2rem; }
@@ -625,11 +634,10 @@
         </tbody>
       </table>
     </div>
-    <div id="mercado-elevated-popover" class="mercado-elevated-popover" role="dialog" aria-hidden="true"></div>
   </main>
   <main id="panel-log" hidden>
     <div class="log-toolbar">
-      <p class="hint" style="margin:0">Registro de coletas, capturas, GREEN/RED, Telegram e erros. Retencao automatica: 30 dias.</p>
+      <p class="hint" style="margin:0">Logs informativos (INFO) e técnicos (Sistema). Clique no nível para detalhes. Retencao: 30 dias.</p>
       <div class="log-toolbar-actions">
         <button type="button" class="btn-secondary" id="btn-log-refresh">Atualizar</button>
         <button type="button" class="btn-secondary btn-danger" id="btn-log-clear">Limpar log</button>
@@ -641,19 +649,18 @@
         <thead>
           <tr>
             <th>Data/Hora</th>
-            <th>Nivel</th>
-            <th>Origem</th>
-            <th>Acao</th>
+            <th title="Clique para detalhes técnicos">Nivel</th>
             <th>Mensagem</th>
             <th>Jogo</th>
           </tr>
         </thead>
         <tbody id="log-tbody">
-          <tr><td colspan="6" class="empty">Carregando…</td></tr>
+          <tr><td colspan="4" class="empty">Carregando…</td></tr>
         </tbody>
       </table>
     </div>
   </main>
+  <div id="mercado-elevated-popover" class="mercado-elevated-popover" role="dialog" aria-hidden="true"></div>
   </div>
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
   <script>
@@ -677,6 +684,7 @@
       hctg_odds: 'ODDS HCTG',
       hctg_falha: 'HCTG falhou',
       hctg_bloqueado: 'IP bloqueado Betano',
+      hctg_age_gate: 'Modal +18',
       mercado_reaberto: 'Reaberto ao vivo',
       live_count_reconcile: 'Contagem live',
       worker_mem: 'RAM worker',
@@ -688,6 +696,28 @@
       telegram_settle: 'Telegram liquidacao',
       telegram_validacao: 'Telegram validacao',
       erro: 'Erro',
+    };
+
+    const LOG_INFO_ACTIONS = new Set([
+      'mercado_captura',
+      'mercado_green',
+      'mercado_red',
+      'mercado_sem_linha',
+      'mercado_reaberto',
+      'telegram_captura',
+      'telegram_settle',
+      'telegram_validacao',
+      'hctg_odds',
+    ]);
+
+    const LOG_SOURCE_LABELS = {
+      'edge-live': 'Edge (cron live)',
+      'local-worker': 'Worker local (PC)',
+      'vps-worker': 'Worker VPS',
+      'telegram-capture': 'Telegram captura',
+      'telegram-settle': 'Telegram liquidacao',
+      'telegram-webhook': 'Telegram webhook',
+      'telegram-reminder': 'Telegram lembrete',
     };
 
     function formatNumber(n) {
@@ -1508,12 +1538,22 @@
         e.target.closest('[data-super-popover]') ||
         e.target.closest('[data-table-tip]') ||
         e.target.closest('[data-placar-goals]') ||
+        e.target.closest('[data-log-detail]') ||
         e.target.closest('#mercado-elevated-popover')
       ) {
         return;
       }
       hideMercadoElevatedPopover();
     }, true);
+
+    document.getElementById('panel-log')?.addEventListener('click', (e) => {
+      const btn = e.target.closest('[data-log-detail]');
+      if (!btn) return;
+      e.preventDefault();
+      e.stopPropagation();
+      const logId = btn.getAttribute('data-log-detail');
+      if (logId) showLogDetailPopover(btn, logId);
+    });
 
     async function startMercadoPolling() {
       await loadMercado();
@@ -1527,20 +1567,98 @@
       return LOG_ACTION_LABELS[action] || action || '—';
     }
 
+    function logSourceLabel(source) {
+      return LOG_SOURCE_LABELS[source] || source || '—';
+    }
+
+    /** INFO = negocio do monitor; Sistema = cron/infra/debug. */
+    function logCategory(row) {
+      const lvl = String(row?.level || 'info').toLowerCase();
+      if (lvl === 'warn' || lvl === 'error') return 'Sistema';
+      if (LOG_INFO_ACTIONS.has(String(row?.action || ''))) return 'INFO';
+      return 'Sistema';
+    }
+
+    function formatLogPayloadLines(payload) {
+      if (payload == null) return [];
+      if (typeof payload !== 'object' || Array.isArray(payload)) {
+        return [`Detalhe: ${String(payload)}`];
+      }
+      return Object.entries(payload).map(([k, v]) => {
+        let val = v;
+        if (v != null && typeof v === 'object') {
+          try {
+            val = JSON.stringify(v);
+          } catch {
+            val = String(v);
+          }
+        }
+        return `${k}: ${val}`;
+      });
+    }
+
+    function renderLogDetailHtml(row) {
+      if (!row) return '<p class="muted">Registro nao encontrado.</p>';
+      const cat = logCategory(row);
+      const lines = [
+        ['Categoria', cat],
+        ['Origem', `${logSourceLabel(row.source)} (${row.source || '—'})`],
+        ['Ação', `${logActionLabel(row.action)} (${row.action || '—'})`],
+        ['Nível técnico', row.level || 'info'],
+        ['Quando', formatDate(row.created_at)],
+      ];
+      if (row.duration_ms != null) lines.push(['Duração', `${row.duration_ms} ms`]);
+      if (row.event_id) lines.push(['Event ID', row.event_id]);
+      if (row.match_label) lines.push(['Jogo', row.match_label]);
+      if (row.id) lines.push(['Log ID', row.id]);
+
+      const payloadLines = formatLogPayloadLines(row.payload);
+      const head = lines
+        .map(
+          ([k, v]) =>
+            `<div class="log-detail-line"><span class="log-detail-k">${k}:</span> ${v}</div>`,
+        )
+        .join('');
+      const payloadHtml = payloadLines.length
+        ? `<h4 style="margin:0.65rem 0 0.35rem">Detalhes</h4>${payloadLines
+            .map((l) => `<div class="log-detail-line">${l}</div>`)
+            .join('')}`
+        : '';
+      return `<h4>${cat}</h4>${head}${payloadHtml}`;
+    }
+
+    function showLogDetailPopover(btn, logId) {
+      const pop = document.getElementById('mercado-elevated-popover');
+      if (!pop) return;
+      const tipKey = `log-${logId}`;
+      if (pop.classList.contains('open') && pop.dataset.tipKey === tipKey) {
+        hideMercadoElevatedPopover();
+        return;
+      }
+      const row = logCache.find((r) => String(r.id) === String(logId));
+      pop.innerHTML = renderLogDetailHtml(row);
+      pop.dataset.tipKey = tipKey;
+      delete pop.dataset.eventId;
+      positionMercadoPopover(btn, pop);
+    }
+
     function renderSistemaLog() {
       const tbody = document.getElementById('log-tbody');
       if (!tbody) return;
       if (!logCache.length) {
-        tbody.innerHTML = '<tr><td colspan="6" class="empty">Nenhum registro no log.</td></tr>';
+        tbody.innerHTML = '<tr><td colspan="4" class="empty">Nenhum registro no log.</td></tr>';
         return;
       }
       tbody.innerHTML = logCache.map((row) => {
-        const lvl = row.level || 'info';
-        return `<tr class="log-row-${lvl}">
+        const cat = logCategory(row);
+        const catCls = cat === 'INFO' ? 'cat-info' : 'cat-sistema';
+        const rowCls = String(row.level || 'info').toLowerCase() === 'error'
+          ? 'log-row-error'
+          : (String(row.level || '').toLowerCase() === 'warn' ? 'log-row-warn' : (cat === 'Sistema' ? 'log-row-sistema' : ''));
+        const logId = row.id || '';
+        return `<tr class="${rowCls}">
           <td data-label="Data/Hora">${formatDate(row.created_at)}</td>
-          <td data-label="Nivel"><span class="log-level ${lvl}">${lvl}</span></td>
-          <td data-label="Origem"><span class="log-source">${row.source ?? '—'}</span></td>
-          <td data-label="Acao">${logActionLabel(row.action)}</td>
+          <td data-label="Nivel"><button type="button" class="log-level log-cat-btn ${catCls}" data-log-detail="${logId}" title="Detalhes técnicos">${cat}</button></td>
           <td data-label="Mensagem"><div class="log-message">${row.message ?? '—'}</div></td>
           <td data-label="Jogo">${row.match_label ? `<strong>${row.match_label}</strong>` : '<span class="muted">—</span>'}</td>
         </tr>`;
@@ -1568,7 +1686,7 @@
         updateLogStatus();
       } catch (err) {
         if (tbody) {
-          tbody.innerHTML = `<tr><td colspan="6" class="empty">${err.message || String(err)}</td></tr>`;
+          tbody.innerHTML = `<tr><td colspan="4" class="empty">${err.message || String(err)}</td></tr>`;
         }
         const el = document.getElementById('log-status');
         if (el) {
