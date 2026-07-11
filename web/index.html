@@ -795,10 +795,14 @@
     let mercadoFilterValidadosOnly = localStorage.getItem('mercadoFilterValidados') === '1';
     let mercadoMetaCache = null;
     let logPollTimer = null;
+    let workerQueuePollTimer = null;
+    const WORKER_QUEUE_POLL_MS = 5000;
     let logLoading = false;
     let logLoadSeq = 0;
     const LOG_LIST_COLUMNS =
       'id,created_at,level,source,action,message,event_id,match_label,duration_ms';
+    const LOG_QUEUE_COLUMNS =
+      'id,created_at,level,source,action,message,event_id,match_label,duration_ms,payload';
     const LOG_LIST_LIMIT = 200;
     let logCache = [];
     let liveConferenceCache = null;
@@ -2217,6 +2221,53 @@
         .join('\n');
     }
 
+    function formatWorkerQueueGameHtml(g) {
+      const label = formatMatchLabelHtml(g.label || '—');
+      const maxAtt = g.max_attempts ?? 3;
+      if (g.checking) {
+        const n = Math.min((g.attempts ?? 0) + 1, maxAtt);
+        return `${label} - <span class="log-report-warn">Coletando... (${n}/${maxAtt})</span>`;
+      }
+      if (g.status === 'ok' && g.line != null && g.odd != null) {
+        const lineStr = formatNumber(g.line);
+        const oddStr = Number(g.odd).toLocaleString('pt-BR', {
+          minimumFractionDigits: 2,
+          maximumFractionDigits: 2,
+        });
+        const dateHtml = g.checked_at
+          ? ` <span class="muted">${escapeHtml(formatDate(g.checked_at))}</span>`
+          : '';
+        return `${label} - <span class="log-report-ok">V +${escapeHtml(lineStr)} (${escapeHtml(oddStr)})</span>${dateHtml}`;
+      }
+      if (g.status === 'error' || (g.attempts >= maxAtt && g.attempts > 0)) {
+        return `${label} - <span class="log-report-err">X ${escapeHtml(g.error || 'Erro HCTG')}</span>`;
+      }
+      if ((g.status === 'retry' || g.attempts > 0) && g.error) {
+        return `${label} - <span class="log-report-warn">Erro: ${escapeHtml(g.error)} · tentativa ${g.attempts}/${maxAtt}</span>`;
+      }
+      if (g.added_this_cycle) {
+        return `${label} - <span class="muted">Adicionado neste ciclo</span>`;
+      }
+      return `${label} - <span class="muted">Na fila</span>`;
+    }
+
+    function renderWorkerQueueFromPayload(row) {
+      const payload = row?.payload ?? {};
+      const games = payload.games;
+      if (!Array.isArray(games) || !games.length) {
+        return formatWorkerQueueBlockHtml(row?.message ?? '');
+      }
+      const actionLabel = payload.action_label || '—';
+      const lines = [
+        '<div class="log-conference-title">Worker HCTG — fila ao vivo</div>',
+        `<div class="log-conference-counts">Jogos: ${payload.total ?? games.length} · Ciclo ${payload.cycle ?? '—'}</div>`,
+        `<div class="log-conference-counts">${escapeHtml(actionLabel)}</div>`,
+        '<hr class="log-conference-sep">',
+        ...games.map((g) => formatWorkerQueueGameHtml(g)),
+      ];
+      return lines.join('\n');
+    }
+
     function formatWorkerQueueLineHtml(line) {
       const ok = line.match(/^(.+?) - V \+(.*?)\s+\((.*?)\)(?: · (.+))?$/);
       if (ok) {
@@ -2224,6 +2275,22 @@
           ? ` <span class="muted">${escapeHtml(ok[4])}</span>`
           : '';
         return `${formatMatchLabelHtml(ok[1])} - <span class="log-report-ok">V +${escapeHtml(ok[2])} (${escapeHtml(ok[3])})</span>${dateHtml}`;
+      }
+      const collecting = line.match(/^(.+?) - Coletando\.\.\. \((\d+\/\d+)\)$/);
+      if (collecting) {
+        return `${formatMatchLabelHtml(collecting[1])} - <span class="log-report-warn">Coletando... (${escapeHtml(collecting[2])})</span>`;
+      }
+      const retry = line.match(/^(.+?) - Erro: (.+?) · tentativa (\d+\/\d+)$/);
+      if (retry) {
+        return `${formatMatchLabelHtml(retry[1])} - <span class="log-report-warn">Erro: ${escapeHtml(retry[2])} · tentativa ${escapeHtml(retry[3])}</span>`;
+      }
+      const added = line.match(/^(.+?) - Adicionado neste ciclo$/);
+      if (added) {
+        return `${formatMatchLabelHtml(added[1])} - <span class="muted">Adicionado neste ciclo</span>`;
+      }
+      const naFila = line.match(/^(.+?) - Na fila$/);
+      if (naFila) {
+        return `${formatMatchLabelHtml(naFila[1])} - <span class="muted">Na fila</span>`;
       }
       const checking = line.match(/^(.+?) - Verificando\.\.\.(.*)$/);
       if (checking) {
@@ -2279,20 +2346,22 @@
       }
       const payload = row.payload ?? {};
       const total = payload.total ?? payload.games?.length;
-      const checking = payload.checking_event_id;
-      const paused = payload.paused === true;
-      const checkingGame = (payload.games ?? []).find(
-        (g) => String(g.event_id) === String(checking),
-      );
+      const actionLabel = payload.action_label;
+      const checkingGame = (payload.games ?? []).find((g) => g.checking);
       const when = row.created_at ? formatDate(row.created_at) : '—';
+      const ageSec = row.created_at
+        ? Math.max(0, Math.round((Date.now() - new Date(row.created_at).getTime()) / 1000))
+        : null;
       if (metaEl) {
-        const checkingLabel = checkingGame?.label || (checking ? `#${checking}` : null);
+        const liveAction =
+          actionLabel ||
+          (checkingGame?.label ? `Coletando: ${checkingGame.label}` : null);
         metaEl.textContent =
-          `Jogos: ${total ?? '—'}` +
-          (paused ? ' · Pausado' : checkingLabel ? ` · Verificando: ${checkingLabel}` : '') +
-          ` · ${when}`;
+          (liveAction ? `${liveAction} · ` : '') +
+          `${total ?? '—'} jogos` +
+          (ageSec != null ? ` · atualizado há ${ageSec}s` : ` · ${when}`);
       }
-      bodyEl.innerHTML = `<div class="log-message">${formatWorkerQueueBlockHtml(row.message)}</div>`;
+      bodyEl.innerHTML = `<div class="log-message">${renderWorkerQueueFromPayload(row)}</div>`;
       if (btnEl) {
         btnEl.hidden = !row.id;
         btnEl.dataset.logDetail = row.id || '';
@@ -2378,6 +2447,19 @@
       return /Encerrado sem linha \+0,5/i.test(msg) && /fora do live/i.test(msg);
     }
 
+    async function loadWorkerQueueOnly() {
+      try {
+        await initAppCfg();
+        const rows = await supabaseGet(
+          `futebol_sistema_log?select=${LOG_QUEUE_COLUMNS}&action=eq.hctg_worker_fila&order=created_at.desc&limit=1`,
+        );
+        workerQueueCache = rows?.[0] ?? workerQueueCache;
+        renderWorkerQueuePinned();
+      } catch {
+        /* mantem cache anterior */
+      }
+    }
+
     async function loadSistemaLog() {
       const seq = ++logLoadSeq;
       const tbody = document.getElementById('log-tbody');
@@ -2401,7 +2483,7 @@
             `futebol_sistema_log?select=${LOG_LIST_COLUMNS}&action=eq.live_json_vs_sistema&order=created_at.desc&limit=1`,
           ),
           supabaseGet(
-            `futebol_sistema_log?select=${LOG_LIST_COLUMNS}&action=eq.hctg_worker_fila&order=created_at.desc&limit=1`,
+            `futebol_sistema_log?select=${LOG_QUEUE_COLUMNS}&action=eq.hctg_worker_fila&order=created_at.desc&limit=1`,
           ),
         ]);
         if (seq !== logLoadSeq) return;
@@ -2526,11 +2608,16 @@
         clearInterval(logPollTimer);
         logPollTimer = null;
       }
+      if (workerQueuePollTimer) {
+        clearInterval(workerQueuePollTimer);
+        workerQueuePollTimer = null;
+      }
       if (isMercado) {
         loadMercado();
       } else {
         loadSistemaLog();
         logPollTimer = setInterval(loadSistemaLog, 30000);
+        workerQueuePollTimer = setInterval(loadWorkerQueueOnly, WORKER_QUEUE_POLL_MS);
       }
     }
 

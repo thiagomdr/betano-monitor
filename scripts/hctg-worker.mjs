@@ -161,8 +161,10 @@ let cycleCount = 0;
 let lastCycleHadError = false;
 /** Round-robin: indice do proximo jogo na fila ao vivo. */
 let roundRobinIndex = 0;
-/** event_id -> { attempts, status, error, line, odd, checkedAt } */
+/** event_id -> estado por jogo na fila */
 const workerGameState = new Map();
+/** IDs da fila no ciclo anterior (detectar jogos novos). */
+let previousQueueIds = new Set();
 /** true enquanto coleta pausada; usado para ciclo imediato ao religar. */
 let coletaWasPaused = true;
 
@@ -363,9 +365,29 @@ function getWorkerGameState(eventId) {
       line: null,
       odd: null,
       checkedAt: null,
+      addedThisCycle: false,
     });
   }
   return workerGameState.get(id);
+}
+
+function markNewGamesInQueue(queue) {
+  for (const row of queue) {
+    const id = String(row.event_id);
+    if (!previousQueueIds.has(id)) {
+      const st = getWorkerGameState(id);
+      if (st.status !== "ok" && st.status !== "error") {
+        st.addedThisCycle = true;
+      }
+    }
+  }
+  previousQueueIds = new Set(queue.map((r) => String(r.event_id)));
+}
+
+function bumpWorkerFailure(st, errorMsg) {
+  st.attempts += 1;
+  st.error = errorMsg;
+  st.status = st.attempts >= maxHctgAttempts ? "error" : "retry";
 }
 
 function formatHctgLineLabel(n) {
@@ -397,94 +419,103 @@ function hydrateWorkerStateFromDb(queue) {
   }
 }
 
-function workerAttemptLabel(st, checking) {
-  if (checking) {
+function formatGameQueueLine(label, st, { checking = false, paused = false } = {}) {
+  if (checking && !paused) {
     const n = Math.min(st.attempts + 1, maxHctgAttempts);
-    return ` (${n}/${maxHctgAttempts})`;
+    return `${label} - Coletando... (${n}/${maxHctgAttempts})`;
   }
-  if (st.attempts > 0) {
-    return ` (${st.attempts}/${maxHctgAttempts})`;
+  if (st.status === "ok" && st.line != null && st.odd != null) {
+    return `${label} - V +${formatHctgLineLabel(st.line)} (${formatOddFixed2(st.odd)})${formatWorkerCheckedAt(st.checkedAt)}`;
   }
-  return "";
+  if (st.status === "error" || st.attempts >= maxHctgAttempts) {
+    return `${label} - X ${st.error || "Erro HCTG"}`;
+  }
+  if ((st.status === "retry" || st.attempts > 0) && st.error) {
+    return `${label} - Erro: ${st.error} · tentativa ${st.attempts}/${maxHctgAttempts}`;
+  }
+  if (st.addedThisCycle) {
+    return `${label} - Adicionado neste ciclo`;
+  }
+  return `${label} - Na fila`;
 }
 
-function buildWorkerQueueMessage(queue, checkingEventId, { paused = false } = {}) {
+function buildWorkerQueueMessage(queue, checkingEventId, ctx = {}) {
+  const { paused = false, actionLabel = "—" } = ctx;
   const gameLines = queue.map((row) => {
     const label = matchLabel(row.home, row.away);
     const id = String(row.event_id);
-    const st = workerGameState.get(id) || { status: "waiting", attempts: 0 };
+    const st = workerGameState.get(id) || getWorkerGameState(id);
     const checking = checkingEventId != null && id === String(checkingEventId);
-    if (checking && !paused) {
-      return `${label} - Verificando...${workerAttemptLabel(st, true)}`;
-    }
-    if (st.status === "ok" && st.line != null && st.odd != null) {
-      return `${label} - V +${formatHctgLineLabel(st.line)} (${formatOddFixed2(st.odd)})${formatWorkerCheckedAt(st.checkedAt)}`;
-    }
-    if (st.status === "error" || st.attempts >= maxHctgAttempts) {
-      return `${label} - X ${st.error || "Erro HCTG"}`;
-    }
-    if (st.attempts > 0) {
-      return `${label} - Verificando...${workerAttemptLabel(st, false)}`;
-    }
-    return label;
+    return formatGameQueueLine(label, st, { checking, paused });
   });
 
+  return [
+    "Worker HCTG — fila ao vivo",
+    `Jogos: ${queue.length} · Ciclo ${cycleCount}`,
+    actionLabel,
+    "_______________________________________________________",
+    ...(gameLines.length ? gameLines : ["(nenhum jogo ao vivo na fila)"]),
+  ].join("\n");
+}
+
+function workerActionLabel(queue, checkingEventId, paused) {
   const checkingRow = checkingEventId
     ? queue.find((r) => String(r.event_id) === String(checkingEventId))
     : null;
   const checkingLabel = checkingRow
     ? matchLabel(checkingRow.home, checkingRow.away)
     : null;
-
-  return [
-    "Worker HCTG — fila ao vivo",
-    `Jogos: ${queue.length}${paused ? " · Sistema pausado" : ""}`,
-    paused
-      ? "Scrape pausado — fila atualizada"
-      : checkingLabel
-        ? `Verificando: ${checkingLabel}`
-        : queue.length
-          ? `Proximo: ${roundRobinIndex + 1}/${queue.length}`
-          : "—",
-    "_______________________________________________________",
-    ...(gameLines.length ? gameLines : ["(nenhum jogo ao vivo na fila)"]),
-  ].join("\n");
+  if (checkingLabel && !paused) {
+    return `Coletando: ${checkingLabel}`;
+  }
+  if (queue.length) {
+    return `Proximo: ${roundRobinIndex + 1}/${queue.length}`;
+  }
+  return "—";
 }
 
 async function publishWorkerQueue(epoch, queue, checkingEventId = null, extra = {}) {
+  const paused = extra.paused === true;
+  const actionLabel = workerActionLabel(queue, checkingEventId, paused);
   const games = queue.map((row) => {
     const id = String(row.event_id);
     const st = workerGameState.get(id) || getWorkerGameState(id);
+    const checking = checkingEventId != null && id === String(checkingEventId);
+    const label = matchLabel(row.home, row.away);
     return {
       event_id: id,
-      label: matchLabel(row.home, row.away),
+      label,
       resultado: row.resultado,
       last_minute: row.last_minute,
-      checking: checkingEventId != null && id === String(checkingEventId),
+      checking: checking && !paused,
       attempts: st.attempts,
+      max_attempts: maxHctgAttempts,
       status: st.status,
       error: st.error,
       line: st.line,
       odd: st.odd,
       checked_at: st.checkedAt,
+      added_this_cycle: st.addedThisCycle === true,
+      display_line: formatGameQueueLine(label, st, { checking, paused }),
     };
   });
-
-  const paused = extra.paused === true;
 
   await insertSistemaLog(supabase, {
     level: "info",
     source: workerSource,
     action: "hctg_worker_fila",
-    message: buildWorkerQueueMessage(queue, checkingEventId, { paused }),
+    message: buildWorkerQueueMessage(queue, checkingEventId, { paused, actionLabel }),
     payload: {
       cycle: cycleCount,
       epoch,
       total: queue.length,
       round_robin_index: roundRobinIndex,
-      checking_event_id: checkingEventId,
+      checking_event_id:
+        checkingEventId != null && !paused ? checkingEventId : null,
       max_attempts: maxHctgAttempts,
       paused,
+      action_label: actionLabel,
+      published_at: new Date().toISOString(),
       games,
       ...extra,
     },
@@ -630,6 +661,7 @@ async function runCycle() {
   }
 
   syncWorkerStateWithQueue(queue);
+  markNewGamesInQueue(queue);
   hydrateWorkerStateFromDb(queue);
 
   const coletaSt = await readColetaState(supabase);
@@ -685,6 +717,7 @@ async function runCycle() {
     `[worker] ciclo ${cycleCount}: jogo ${idx + 1}/${queue.length} — ${row.home} x ${row.away}`,
   );
 
+  st.status = "checking";
   await publishWorkerQueue(epoch, queue, eventId);
 
   let scrapeOk = false;
@@ -713,9 +746,7 @@ async function runCycle() {
     const t0 = Date.now();
 
     if (!slug) {
-      st.attempts += 1;
-      st.error = "sem slug em betano_url";
-      if (st.attempts >= maxHctgAttempts) st.status = "error";
+      bumpWorkerFailure(st, "sem slug em betano_url");
       console.warn(`[worker] ${eventId} sem slug em betano_url`);
     } else {
       try {
@@ -733,9 +764,7 @@ async function runCycle() {
             : ageGated
               ? "Modal +18 nao fechou"
               : "Total de Gols NÃO ENCONTRADOS";
-          st.attempts += 1;
-          st.error = failMsg;
-          if (st.attempts >= maxHctgAttempts) st.status = "error";
+          bumpWorkerFailure(st, failMsg);
           console.warn(
             `[worker] ${eventId} ${row.home} x ${row.away} — 0 linhas ` +
               (blocked ? "(splash/verificacao Betano) " : "") +
@@ -775,9 +804,7 @@ async function runCycle() {
               : snap.lines;
           const best = minOverHctgLine(lines, goalsTotal);
           if (!best) {
-            st.attempts += 1;
-            st.error = "sem linha Over HCTG";
-            if (st.attempts >= maxHctgAttempts) st.status = "error";
+            bumpWorkerFailure(st, "sem linha Over HCTG");
             await insertWorkerLog(epoch, {
               level: "warn",
               source: workerSource,
@@ -847,7 +874,7 @@ async function runCycle() {
         }
         st.attempts += 1;
         st.error = errMsg.slice(0, 120);
-        if (st.attempts >= maxHctgAttempts) st.status = "error";
+        st.status = st.attempts >= maxHctgAttempts ? "error" : "retry";
         console.error(`[worker] ERRO ${eventId}:`, errMsg);
         await insertWorkerLog(epoch, {
           level: "error",
