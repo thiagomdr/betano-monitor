@@ -1732,7 +1732,8 @@
         if (row.resultado === 'watching') {
           const label = formatMercadoMinOverLabel(mercadoMinOverSnapshot(row));
           if (label) {
-            return `<span class="hctg-pill">${label}</span>`;
+            const minute = formatMinuteGray(row.last_minute);
+            return `${minute ? `${minute} ` : ''}<span class="hctg-pill">${label}</span>`;
           }
           return '<span class="muted">Sem linha</span>';
         }
