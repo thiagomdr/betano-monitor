@@ -10,10 +10,9 @@ Projeto vigente: **betano-monitor**. Toda documentação, regras Cursor, scripts
 ## Legado e nomenclatura
 
 - **Não** usar nomes de projetos anteriores (ex.: CasinoScores, Sic Bo, Lightning Storm) em código novo, regras, scripts ou UI.
-- Pastas legadas **removidas**: `scripts/oracle/`, ScrapingBee em produção.
+- Pastas legadas **removidas**: `scripts/oracle/`, ScrapingBee em produção, deploy VPS HostGator/Lightsail.
 - Migrations `20260710`–`20260716` = histórico; reset futebol: `20260719000000_futebol_reset_vps_hctg.sql`.
-- Worker VPS HTML (`vps-hctg-worker.mjs` em HostGator/Lightsail) = **legado** se IP for bloqueado.
-- **HCTG produção preferido:** worker HTML no **PC local** (IP residencial) via `scripts/run-local-hctg-worker.ps1`.
+- **HCTG produção:** worker HTML no **PC local** (IP residencial) via `scripts/run-local-hctg-worker.ps1`.
 - **Não** usar JSON Betano (`overview` / `markets-offers`) para gravar `hctg_lines` — gerou odds erradas.
 - OddsPapi = opcional (REST limitado; WS exige B2B).
 
@@ -31,6 +30,7 @@ Projeto vigente: **betano-monitor**. Toda documentação, regras Cursor, scripts
 - Extrair/gravar HCTG a partir de `overview/latest`, `overview?eventId=`, `markets-offers` da Betano (mistura mercados).
 - `extractMatchTotalGoalsLines` / harvest loose / monotonicidade como fonte primária.
 - ScrapingBee / heurísticas não validadas.
+- Worker HCTG em VPS (removido).
 
 **Permitido (não é odds HCTG):** overview JSON Betano na Edge para lista live, minuto, placar, `betradarMatchId`, ML 1X2.
 
@@ -40,7 +40,6 @@ Projeto vigente: **betano-monitor**. Toda documentação, regras Cursor, scripts
 |------------|--------|
 | `betano-futebol-live` (cron */2) | Jogos live, placar, gols, mercado +0,5; lê `hctg_lines` do BD |
 | `run-local-hctg-worker.ps1` | PC casa → DOM HCTG → grava `hctg_lines` |
-| `vps-hctg-worker` (opcional) | Mesmo código; VPS se IP BR funcionar |
 | Painel `web/index.html` | Login Supabase Auth; leitura só com JWT |
 
 ## Mercado +0,5
@@ -65,5 +64,5 @@ Projeto vigente: **betano-monitor**. Toda documentação, regras Cursor, scripts
 ## Código
 
 - Edge: `supabase/functions/betano-futebol-live/`
-- HCTG HTML: `scripts/vps-hctg-worker.mjs`, `scripts/lib/betano-hctg-playwright.mjs`
+- HCTG HTML: `scripts/hctg-worker.mjs`, `scripts/lib/betano-hctg-playwright.mjs`
 - Launcher local: `scripts/run-local-hctg-worker.ps1`, `scripts/test-local-betano-ip.mjs`

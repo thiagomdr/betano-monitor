@@ -6,7 +6,8 @@
 #   .\scripts\run-local-hctg-worker.ps1 -Once     # um ciclo e sai
 #   .\scripts\run-local-hctg-worker.ps1 -Headless # Chrome sem janela
 #
-# Requisitos: Node 20+, .env com SUPABASE_URL + SUPABASE_SERVICE_ROLE_KEY
+#   Pagina Betano carrega sem bloqueio de rede (routes=none)
+#
 #   cd scripts; npm install   (instala Chromium do Playwright)
 
 param(
@@ -57,11 +58,16 @@ try {
     }
     & node (Join-Path $Scripts "ensure-playwright-chromium.mjs")
     if ($LASTEXITCODE -ne 0) {
-      Write-Host "Chromium do Playwright nao encontrado - baixando (1a vez, ~200 MB)..." -ForegroundColor Yellow
+      Write-Host "Chromium do Playwright nao encontrado - baixando (~200 MB, 1a vez)..." -ForegroundColor Yellow
       npx playwright install chromium
       if ($LASTEXITCODE -ne 0) {
-        Write-Error "Falha ao instalar Chromium. Rode: cd scripts; npx playwright install chromium"
+        Write-Error "Falha ao instalar Chromium. Rode manualmente: cd scripts; npx playwright install chromium"
       }
+      & node (Join-Path $Scripts "ensure-playwright-chromium.mjs")
+      if ($LASTEXITCODE -ne 0) {
+        Write-Error "Chromium instalado mas ainda falha no teste. Rode: cd scripts; npx playwright install chromium"
+      }
+      Write-Host "Chromium OK." -ForegroundColor Green
     }
   }
 
@@ -87,7 +93,7 @@ try {
   Write-Host "Ctrl+C para parar."
   Write-Host ""
 
-  $argsList = @("vps-hctg-worker.mjs")
+  $argsList = @("hctg-worker.mjs")
   if ($Once) { $argsList += "--once" }
 
   & node @argsList

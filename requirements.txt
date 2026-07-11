@@ -1,2 +1,2 @@
-# Projeto usa apenas biblioteca padrão do Python (urllib, json).
-# Nenhuma dependencia obrigatoria.
+# Projeto usa apenas biblioteca padrao do Python em scripts auxiliares (se houver).
+# Coleta principal: Edge Functions (Deno/TypeScript) + Node (scripts/).

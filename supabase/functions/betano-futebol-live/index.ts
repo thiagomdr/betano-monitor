@@ -22,6 +22,12 @@ import {
   trimHctgLinesForMatch,
   type HctgSnapshot,
 } from "../_shared/hctg-match-totals.ts";
+import {
+  assertColetaAtiva,
+  beginColetaEpoch,
+  ColetaPausadaError,
+  isColetaAtiva,
+} from "../_shared/coleta-ativa.ts";
 import { insertSistemaLog, matchLabel } from "../_shared/sistema-log.ts";
 
 const BETANO_BASE = "https://www.betano.bet.br";
@@ -55,7 +61,13 @@ function toNum(value: unknown): number | null {
   return Number.isFinite(n) ? n : null;
 }
 
-async function betanoGet(url: string, referer = `${BETANO_BASE}/live/`): Promise<unknown> {
+async function betanoGet(
+  supabase: ReturnType<typeof createClient>,
+  url: string,
+  epoch: string,
+  referer = `${BETANO_BASE}/live/`,
+): Promise<unknown> {
+  await assertColetaAtiva(supabase, "betano-json", epoch);
   const res = await fetch(url, {
     headers: {
       Accept: "application/json, text/plain, */*",
@@ -1321,10 +1333,12 @@ function totalsFromLooseGoals(
 
 /** Mercados de gols do evento: overview?eventId= + selecoes soltas + fallbacks. */
 async function fetchEventGoalMarkets(
+  supabase: ReturnType<typeof createClient>,
   eventId: string,
   event: Json,
   goalsTotal: number,
   globalOverview: Json,
+  epoch: string,
 ): Promise<TotalsOdds> {
   const base = `${OVERVIEW_URL}&eventId=${encodeURIComponent(eventId)}`;
   const version = event.version;
@@ -1339,7 +1353,7 @@ async function fetchEventGoalMarkets(
 
   for (const url of scopedUrls) {
     try {
-      const scoped = asRecord(await betanoGet(url));
+      const scoped = asRecord(await betanoGet(supabase, url, epoch));
       if (!scoped?.selections) continue;
       const selections = asRecord(scoped.selections) ?? {};
       const anchorOver = mainHctgAnchorOver(event, scoped) ??
@@ -1371,7 +1385,7 @@ async function fetchEventGoalMarkets(
       // tenta proxima URL
     }
   }
-  return fetchEventTotalsOdds(eventId, goalsTotal);
+  return fetchEventTotalsOdds(supabase, eventId, goalsTotal, epoch);
 }
 
 /** Extrai mercados/selecoes aninhados em marketOffers (inclui HCTG alternativos). */
@@ -1525,8 +1539,10 @@ function supplementOverviewHctgOrphans(
 
 /** Busca mercados extras do evento (totais Under/Over) quando o overview nao traz. */
 async function fetchEventTotalsOdds(
+  supabase: ReturnType<typeof createClient>,
   eventId: string,
   goalsTotal: number,
+  epoch: string,
 ): Promise<TotalsOdds> {
   const urls = [
     `${BETANO_BASE}/api/event/markets-offers/${eventId}`,
@@ -1535,7 +1551,7 @@ async function fetchEventTotalsOdds(
 
   for (const url of urls) {
     try {
-      const data = await betanoGet(url);
+      const data = await betanoGet(supabase, url, epoch);
 
       const fromOffers = flattenOffersMarkets(data);
       if (Object.keys(fromOffers.markets).length > 0) {
@@ -1570,13 +1586,15 @@ async function fetchEventTotalsOdds(
 }
 
 async function fetchEventUnderOdds(
+  supabase: ReturnType<typeof createClient>,
   eventId: string,
   goalsTotal: number,
+  epoch: string,
 ): Promise<Pick<
   TotalsOdds,
   "under_0_line" | "under_0_odd" | "under_1_line" | "under_1_odd" | "under_2_line" | "under_2_odd"
 >> {
-  const t = await fetchEventTotalsOdds(eventId, goalsTotal);
+  const t = await fetchEventTotalsOdds(supabase, eventId, goalsTotal, epoch);
   return {
     under_0_line: t.under_0_line,
     under_0_odd: t.under_0_odd,
@@ -1634,10 +1652,16 @@ function pairFromValues(
 }
 
 /** Stats via Sportradar (betradarMatchId da Betano). */
-async function tryFetchStats(betradarMatchId: string | number | null): Promise<TeamStats> {
+async function tryFetchStats(
+  supabase: ReturnType<typeof createClient>,
+  betradarMatchId: string | number | null,
+  epoch: string,
+): Promise<TeamStats> {
   if (betradarMatchId == null || betradarMatchId === "") {
     return { ...emptyStats(), raw: { error: "sem betradarMatchId" } };
   }
+
+  await assertColetaAtiva(supabase, "sportradar-stats", epoch);
 
   const urls = [
     `${SPORTRADAR_STATS}/${betradarMatchId}`,
@@ -2248,8 +2272,10 @@ async function settleMercadoGols05Pending(
   row: MercadoGols05Row,
   scoreText: string,
   forceFinal: boolean,
+  epoch: string,
 ): Promise<"win" | "loss" | null> {
   if (row.resultado !== "pending" || row.disponivel_desde_minuto == null) return null;
+  await assertColetaAtiva(supabase, `settle-${row.event_id}`, epoch);
   const { count, firstMinute } = await countGoalsAfterMinute(
     supabase,
     row.event_id,
@@ -2306,7 +2332,9 @@ async function processMercadoGols05Live(
   hctgSnap: HctgSnapshot,
   ctx: MercadoGols05Context,
   existing: MercadoGols05Row | null,
+  epoch: string,
 ): Promise<"captured" | "win" | "loss" | null> {
+  await assertColetaAtiva(supabase, `mercado-${eventId}`, epoch);
   const nowIso = new Date().toISOString();
   const minute = ctx.minute;
   const goalsTotal = goalsTotalFromScoreText(ctx.score_text);
@@ -2415,31 +2443,6 @@ async function processMercadoGols05Live(
 
   // Partida saiu do overview (ex. suspensa) e voltou: reabre monitoramento
   if (existing.resultado === "sem_linha_05" || existing.resultado === "skipped") {
-    // #region agent log
-    fetch("http://127.0.0.1:7904/ingest/86615625-6ae5-4e98-a1da-0a5f0f15fc42", {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        "X-Debug-Session-Id": "8438b2",
-      },
-      body: JSON.stringify({
-        sessionId: "8438b2",
-        runId: "reopen-live",
-        hypothesisId: "H2",
-        location: "betano-futebol-live/index.ts:processMercadoGols05Live",
-        message: "reopening sem_linha_05 while event back in overview",
-        data: {
-          eventId,
-          prev: existing.resultado,
-          minute,
-          score: ctx.score_text,
-          trueOver05,
-          over0,
-        },
-        timestamp: Date.now(),
-      }),
-    }).catch(() => {});
-    // #endregion
 
     if (over0 != null && trueOver05) {
       await applyMercadoGols05Capture(
@@ -2700,6 +2703,7 @@ async function finalizeMercadoGols05OffLive(
   supabase: ReturnType<typeof createClient>,
   liveIds: string[],
   jsonById: Map<string, { home: string | null; away: string | null }>,
+  epoch: string,
 ): Promise<{
   wins: number;
   losses: number;
@@ -2770,18 +2774,7 @@ async function finalizeMercadoGols05OffLive(
         placar_final: scoreText,
         updated_at: nowIso,
       }).eq("event_id", eventId);
-      await insertSistemaLog(supabase, {
-        source: "edge-live",
-        action: "mercado_sem_linha",
-        message: `Encerrado sem linha +0,5 · placar ${scoreText} (fora do live ≥${OFF_LIVE_GRACE_MIN}min)`,
-        event_id: eventId,
-        match_label: label,
-        payload: {
-          placar_final: scoreText,
-          last_seen_min: lastSeenMin,
-          grace_min: OFF_LIVE_GRACE_MIN,
-        },
-      });
+      // Finalizado sem linha ja aparece em live_json_vs_sistema (secao Finalizados Agora)
       semLinha += 1;
       finalized.push(eventId);
       finalizadosAgora.push({
@@ -2799,6 +2792,7 @@ async function finalizeMercadoGols05OffLive(
       row as MercadoGols05Row,
       scoreText,
       true,
+      epoch,
     );
     await supabase.from("futebol_mercado_gols_05").update({
       is_live: false,
@@ -3011,12 +3005,7 @@ Deno.serve(async (req) => {
 
   const supabase = createClient(supabaseUrl, serviceKey);
 
-  const { data: coletaCfg } = await supabase
-    .from("futebol_live_coleta_config")
-    .select("ativo")
-    .eq("id", "default")
-    .maybeSingle();
-  if (coletaCfg?.ativo === false) {
+  if (!(await isColetaAtiva(supabase))) {
     return jsonResponse({
       ok: true,
       paused: true,
@@ -3035,7 +3024,8 @@ Deno.serve(async (req) => {
   ];
 
   try {
-    const overview = asRecord(await betanoGet(OVERVIEW_URL));
+    const coletaEpoch = await beginColetaEpoch(supabase);
+    const overview = asRecord(await betanoGet(supabase, OVERVIEW_URL, coletaEpoch));
     if (!overview) throw new Error("overview invalido");
 
     const events = eventsMap(overview);
@@ -3103,8 +3093,10 @@ Deno.serve(async (req) => {
       candidates.map((c) => String(c.event_id)),
     );
 
-    for (const event of candidates) {
+    for (let eventIdx = 0; eventIdx < candidates.length; eventIdx++) {
+      const event = candidates[eventIdx];
       const eventId = String(event.event_id);
+      await assertColetaAtiva(supabase, `jogo-${eventId}`, coletaEpoch);
       const teams = extractTeams(event);
       const score = extractScore(event);
       const league = extractLeague(event, leagues);
@@ -3123,7 +3115,9 @@ Deno.serve(async (req) => {
 
       const betradarId = extractBetradarMatchId(event);
       const stats = await tryFetchStats(
+        supabase,
         betradarId != null ? String(betradarId) : null,
+        coletaEpoch,
       );
       if (stats.available) statsOk += 1;
 
@@ -3251,7 +3245,7 @@ Deno.serve(async (req) => {
       ) {
         let snap = totals;
         if (!hasAnyTotalsOdds(snap)) {
-          snap = await fetchEventTotalsOdds(eventId, goalsTotal);
+          snap = await fetchEventTotalsOdds(supabase, eventId, goalsTotal, coletaEpoch);
         }
         await supabase
           .from("futebol_historico_jogos")
@@ -3334,6 +3328,7 @@ Deno.serve(async (req) => {
           score_text: score.text,
         },
         mercadoRow as MercadoGols05Row | null,
+        coletaEpoch,
       );
       if (mercadoRow?.resultado === "pending") {
         await revertMercadoInvalidPending(
@@ -3382,6 +3377,7 @@ Deno.serve(async (req) => {
             mercadoNow as MercadoGols05Row,
             score.text,
             false,
+            coletaEpoch,
           );
           if (out === "win") {
             mercadoWins += 1;
@@ -3426,10 +3422,13 @@ Deno.serve(async (req) => {
 
     const reconcile = await reconcileHistoricGoals(supabase, 120);
 
+    await assertColetaAtiva(supabase, "finalize", coletaEpoch);
+
     const mercadoFinalize = await finalizeMercadoGols05OffLive(
       supabase,
       liveIds,
       jsonById,
+      coletaEpoch,
     );
     mercadoWins += mercadoFinalize.wins;
 
@@ -3461,6 +3460,8 @@ Deno.serve(async (req) => {
       greensAgora,
       finalizadosAgora: mercadoFinalize.finalizadosAgora,
     };
+
+    await assertColetaAtiva(supabase, "log-conferencia", coletaEpoch);
 
     await insertSistemaLog(supabase, {
       // error = vermelho no painel; info = Sistema azul (ok)
@@ -3536,7 +3537,6 @@ Deno.serve(async (req) => {
       last_run_at: new Date().toISOString(),
       last_saved_count: rows.length,
       last_error: null,
-      data_atualizacao: new Date().toISOString(),
     }).eq("id", "default");
 
     await processPendingTelegramReminders(supabase);
@@ -3566,6 +3566,13 @@ Deno.serve(async (req) => {
       })),
     });
   } catch (err) {
+    if (err instanceof ColetaPausadaError) {
+      return jsonResponse({
+        ok: true,
+        paused: true,
+        message: err.message,
+      });
+    }
     const message = err instanceof Error ? err.message : String(err);
     await insertSistemaLog(supabase, {
       level: "error",
@@ -3582,7 +3589,6 @@ Deno.serve(async (req) => {
     });
     await supabase.from("futebol_live_coleta_config").update({
       last_error: message,
-      data_atualizacao: new Date().toISOString(),
     }).eq("id", "default");
     return jsonResponse({ ok: false, error: message }, 500);
   }

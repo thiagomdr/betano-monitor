@@ -6,7 +6,8 @@
 export const ODDSPAPI_REST = "https://api.oddspapi.io/v4";
 export const ODDSPAPI_WS_V4 = "wss://api.oddspapi.io/v4/ws";
 export const ODDSPAPI_WS_V5 = "wss://v5.oddspapi.io/ws";
-export const BOOKMAKER_SLUG = "betano.bet.br";
+/** Plano free/comum: `betano`. `betano.bet.br` costuma vir RESTRICTED_ACCESS. */
+export const BOOKMAKER_SLUG = process.env.ODDSPAPI_BOOKMAKER?.trim() || "betano";
 export const SOCCER_SPORT_ID = 10;
 
 /**
@@ -202,22 +203,98 @@ export function trimLinesNearScore(lines, goalsTotal, max = 3) {
   return picked.sort((a, b) => a.line - b.line);
 }
 
+function sleep(ms) {
+  return new Promise((r) => setTimeout(r, ms));
+}
+
+async function fetchJson(url) {
+  const res = await fetch(url);
+  const text = await res.text();
+  let data = null;
+  try {
+    data = text ? JSON.parse(text) : null;
+  } catch {
+    data = null;
+  }
+  return { ok: res.ok, status: res.status, data, text };
+}
+
+/** Lista torneios de futebol com jogos ao vivo. */
+export async function listLiveSoccerTournaments(apiKey) {
+  const url =
+    `${ODDSPAPI_REST}/tournaments?sportId=${SOCCER_SPORT_ID}` +
+    `&apiKey=${encodeURIComponent(apiKey)}`;
+  const { ok, status, data, text } = await fetchJson(url);
+  if (!ok) throw new Error(`tournaments HTTP ${status}: ${String(text).slice(0, 200)}`);
+  const list = Array.isArray(data) ? data : data?.data ?? [];
+  return list.filter((t) => Number(t.liveFixtures ?? 0) > 0);
+}
+
+/**
+ * Busca odds Betano por torneios (chunks para nao estourar URL/rate limit).
+ * @returns {Promise<Array<object>>}
+ */
+export async function fetchBetanoOddsByTournaments(apiKey, tournamentIds, opts = {}) {
+  const bookmaker = opts.bookmaker || BOOKMAKER_SLUG;
+  const chunkSize = Math.min(opts.chunkSize ?? 5, 5);
+  const gapMs = opts.gapMs ?? 1100;
+  const out = [];
+  for (let i = 0; i < tournamentIds.length; i += chunkSize) {
+    const chunk = tournamentIds.slice(i, i + chunkSize);
+    const url =
+      `${ODDSPAPI_REST}/odds-by-tournaments` +
+      `?bookmaker=${encodeURIComponent(bookmaker)}` +
+      `&tournamentIds=${chunk.join(",")}` +
+      `&language=en&verbosity=3` +
+      `&apiKey=${encodeURIComponent(apiKey)}`;
+    const { ok, status, data, text } = await fetchJson(url);
+    if (status === 429) {
+      await sleep(2000);
+      i -= chunkSize;
+      continue;
+    }
+    if (status === 404) {
+      // chunk sem fixtures para este bookmaker
+      if (i + chunkSize < tournamentIds.length) await sleep(gapMs);
+      continue;
+    }
+    if (!ok) {
+      throw new Error(`odds-by-tournaments HTTP ${status}: ${String(text).slice(0, 220)}`);
+    }
+    const list = Array.isArray(data) ? data : data?.data ?? [];
+    out.push(...list);
+    if (i + chunkSize < tournamentIds.length) await sleep(gapMs);
+  }
+  return out;
+}
+
+/** Indexa fixtures OddsPapi por betradarId. */
+export function indexFixturesByBetradar(fixtures, bookmaker = BOOKMAKER_SLUG) {
+  /** @type {Map<string, object>} */
+  const map = new Map();
+  for (const f of fixtures ?? []) {
+    const br = f?.externalProviders?.betradarId ?? f?.betradarId;
+    if (br == null) continue;
+    const odds = f.bookmakerOdds?.[bookmaker] ?? f.bookmakerOdds?.betano;
+    if (!odds?.markets) continue;
+    map.set(String(br), f);
+  }
+  return map;
+}
+
 /**
  * Resolve fixture OddsPapi por betradarId (REST v4 fixtures/live ou odds).
- * Fallback: busca em odds-by-tournaments é pesado — usa /v4/fixtures se existir.
  */
 export async function findFixtureByBetradarId(apiKey, betradarId) {
   const id = String(betradarId);
-  // Tentativa: endpoint de fixture com filtro externo (nem todos os planos tem)
   const urls = [
     `${ODDSPAPI_REST}/fixtures?betradarId=${encodeURIComponent(id)}&apiKey=${encodeURIComponent(apiKey)}`,
     `${ODDSPAPI_REST}/fixture?betradarId=${encodeURIComponent(id)}&apiKey=${encodeURIComponent(apiKey)}`,
   ];
   for (const url of urls) {
     try {
-      const res = await fetch(url);
-      if (!res.ok) continue;
-      const data = await res.json();
+      const { ok, data } = await fetchJson(url);
+      if (!ok) continue;
       const list = Array.isArray(data) ? data : data?.data ?? (data?.fixtureId ? [data] : []);
       const hit = list.find((f) =>
         String(f.betradarId ?? f.externalProviders?.betradarId ?? "") === id

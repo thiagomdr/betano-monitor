@@ -2,3 +2,12 @@
 
 [functions.betano-futebol-live]
 verify_jwt = false
+
+[functions.telegram-webhook]
+verify_jwt = false
+
+[functions.telegram-reminder]
+verify_jwt = false
+
+[functions.telegram-test]
+verify_jwt = false

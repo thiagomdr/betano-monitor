@@ -22,14 +22,14 @@ $ServeScript = Join-Path $Root "scripts\serve-monitor.ps1"
 function Test-WorkerRunning {
   $procs = Get-CimInstance Win32_Process -Filter "Name = 'node.exe'" -ErrorAction SilentlyContinue
   foreach ($p in $procs) {
-    if ($p.CommandLine -match "vps-hctg-worker\.mjs") { return $true }
+    if ($p.CommandLine -match "hctg-worker\.mjs") { return $true }
   }
   return $false
 }
 
 if (-not $PanelOnly) {
   if (Test-WorkerRunning) {
-    Write-Host "Worker HCTG ja em execucao (node vps-hctg-worker.mjs)." -ForegroundColor Yellow
+    Write-Host "Worker HCTG ja em execucao (node hctg-worker.mjs)." -ForegroundColor Yellow
   } else {
     Write-Host "Iniciando worker HCTG em nova janela (Chrome)..." -ForegroundColor Cyan
     $workerArgs = @("-NoExit", "-File", $WorkerScript)

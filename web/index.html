@@ -298,7 +298,8 @@
     tr.log-row-error td { background: rgba(255, 107, 107, 0.06); }
     tr.log-row-warn td { background: rgba(255, 209, 102, 0.04); }
     tr.log-row-sistema td { background: rgba(143, 163, 191, 0.04); }
-    .log-live-conference {
+    .log-live-conference,
+    .log-worker-queue {
       margin: 0 0 0.85rem;
       padding: 0.85rem 1rem;
       border: 1px solid var(--border);
@@ -754,6 +755,18 @@
         <p class="muted" style="margin:0">Carregando…</p>
       </div>
     </section>
+    <section id="log-worker-queue" class="log-worker-queue" aria-live="polite">
+      <div class="log-live-conference-head">
+        <strong>Fila Worker HCTG</strong>
+        <span id="log-worker-queue-meta" class="log-live-conference-meta muted">Carregando…</span>
+        <button type="button" class="btn-secondary" id="btn-log-worker-detail" hidden>
+          Detalhes fila
+        </button>
+      </div>
+      <div id="log-worker-queue-body" class="log-live-conference-body">
+        <p class="muted" style="margin:0">Carregando…</p>
+      </div>
+    </section>
     <div class="table-wrap">
       <table>
         <thead>
@@ -789,6 +802,7 @@
     const LOG_LIST_LIMIT = 200;
     let logCache = [];
     let liveConferenceCache = null;
+    let workerQueueCache = null;
     let activeTab = 'mercado';
     let sistemaAtivo = true;
     let sistemaToggleBusy = false;
@@ -801,6 +815,7 @@
       mercado_reaberto: 'Reaberto ao vivo',
       live_count_reconcile: 'Contagem live',
       live_json_vs_sistema: 'JSON × Sistema',
+      hctg_worker_fila: 'Fila Worker HCTG',
       sistema_pausado: 'Sistema pausado',
       sistema_iniciado: 'Sistema iniciado',
       coleta_abortada: 'Scrape abortado',
@@ -2099,6 +2114,9 @@
         logCache.find((r) => String(r.id) === String(logId)) ??
         (liveConferenceCache && String(liveConferenceCache.id) === String(logId)
           ? liveConferenceCache
+          : null) ??
+        (workerQueueCache && String(workerQueueCache.id) === String(logId)
+          ? workerQueueCache
           : null);
       pop.dataset.tipKey = tipKey;
       delete pop.dataset.eventId;
@@ -2118,6 +2136,9 @@
           } else if (liveConferenceCache && String(liveConferenceCache.id) === String(logId)) {
             liveConferenceCache = { ...liveConferenceCache, payload };
             row = liveConferenceCache;
+          } else if (workerQueueCache && String(workerQueueCache.id) === String(logId)) {
+            workerQueueCache = { ...workerQueueCache, payload };
+            row = workerQueueCache;
           }
         } catch (err) {
           pop.innerHTML = `<p class="muted">${escapeHtml(err.message || String(err))}</p>`;
@@ -2196,6 +2217,81 @@
         .join('\n');
     }
 
+    function formatWorkerQueueLineHtml(line) {
+      const ok = line.match(/^(.+?) - V \+(.*?)\s+\((.*?)\)$/);
+      if (ok) {
+        return `${formatMatchLabelHtml(ok[1])} - <span class="log-report-ok">V +${escapeHtml(ok[2])} (${escapeHtml(ok[3])})</span>`;
+      }
+      const checking = line.match(/^(.+?) - Verificando\.\.\.(.*)$/);
+      if (checking) {
+        return `${formatMatchLabelHtml(checking[1])} - <span class="log-report-warn">Verificando...${escapeHtml(checking[2])}</span>`;
+      }
+      const err = line.match(/^(.+?) - X (.*)$/);
+      if (err) {
+        return `${formatMatchLabelHtml(err[1])} - <span class="log-report-err">X ${escapeHtml(err[2])}</span>`;
+      }
+      const wait = line.match(/^(.+?) - — aguardando$/);
+      if (wait) {
+        return `${formatMatchLabelHtml(wait[1])} - <span class="muted">— aguardando</span>`;
+      }
+      return escapeHtml(line);
+    }
+
+    function formatWorkerQueueBlockHtml(message) {
+      const raw = String(message ?? '');
+      if (!raw.trim()) return '<p class="muted" style="margin:0">Nenhuma fila registrada.</p>';
+      return raw
+        .split('\n')
+        .map((line) => {
+          const t = line.trim();
+          if (/^_{10,}$/.test(t)) return '<hr class="log-conference-sep">';
+          if (/^Worker HCTG — fila ao vivo$/i.test(t)) {
+            return `<div class="log-conference-title">${escapeHtml(line)}</div>`;
+          }
+          if (/^Jogos:|^Verificando:|^Proximo:/i.test(t)) {
+            return `<div class="log-conference-counts">${escapeHtml(line)}</div>`;
+          }
+          if (/^\(nenhum jogo ao vivo na fila\)$/i.test(t)) {
+            return `<p class="muted" style="margin:0">${escapeHtml(line)}</p>`;
+          }
+          return formatWorkerQueueLineHtml(line);
+        })
+        .join('\n');
+    }
+
+    function renderWorkerQueuePinned() {
+      const bodyEl = document.getElementById('log-worker-queue-body');
+      const metaEl = document.getElementById('log-worker-queue-meta');
+      const btnEl = document.getElementById('btn-log-worker-detail');
+      const row = workerQueueCache;
+      if (!bodyEl) return;
+      if (!row) {
+        if (metaEl) metaEl.textContent = 'Aguardando worker…';
+        bodyEl.innerHTML = '<p class="muted" style="margin:0">Nenhuma fila registrada.</p>';
+        if (btnEl) btnEl.hidden = true;
+        return;
+      }
+      const payload = row.payload ?? {};
+      const total = payload.total ?? payload.games?.length;
+      const checking = payload.checking_event_id;
+      const checkingGame = (payload.games ?? []).find(
+        (g) => String(g.event_id) === String(checking),
+      );
+      const when = row.created_at ? formatDate(row.created_at) : '—';
+      if (metaEl) {
+        const checkingLabel = checkingGame?.label || (checking ? `#${checking}` : null);
+        metaEl.textContent =
+          `Jogos: ${total ?? '—'}` +
+          (checkingLabel ? ` · Verificando: ${checkingLabel}` : '') +
+          ` · ${when}`;
+      }
+      bodyEl.innerHTML = `<div class="log-message">${formatWorkerQueueBlockHtml(row.message)}</div>`;
+      if (btnEl) {
+        btnEl.hidden = !row.id;
+        btnEl.dataset.logDetail = row.id || '';
+      }
+    }
+
     function renderLiveConferencePinned() {
       const bodyEl = document.getElementById('log-live-conference-body');
       const metaEl = document.getElementById('log-live-conference-meta');
@@ -2269,6 +2365,7 @@
 
     function isRedundantSistemaLogRow(row) {
       if (row?.action === 'live_json_vs_sistema') return true;
+      if (row?.action === 'hctg_worker_fila') return true;
       if (row?.action === 'mercado_sem_linha') return true;
       const msg = String(row?.message ?? '');
       return /Encerrado sem linha \+0,5/i.test(msg) && /fora do live/i.test(msg);
@@ -2279,6 +2376,7 @@
       const tbody = document.getElementById('log-tbody');
       if (logCache.length) {
         renderLiveConferencePinned();
+        renderWorkerQueuePinned();
         renderSistemaLog();
         updateLogStatus();
       } else if (tbody) {
@@ -2288,12 +2386,15 @@
       try {
         await initAppCfg();
         const t0 = performance.now();
-        const [rows, conferenceRows] = await Promise.all([
+        const [rows, conferenceRows, workerQueueRows] = await Promise.all([
           supabaseGet(
             `futebol_sistema_log?select=${LOG_LIST_COLUMNS}&order=created_at.desc&limit=${LOG_LIST_LIMIT}`,
           ),
           supabaseGet(
             `futebol_sistema_log?select=${LOG_LIST_COLUMNS}&action=eq.live_json_vs_sistema&order=created_at.desc&limit=1`,
+          ),
+          supabaseGet(
+            `futebol_sistema_log?select=${LOG_LIST_COLUMNS}&action=eq.hctg_worker_fila&order=created_at.desc&limit=1`,
           ),
         ]);
         if (seq !== logLoadSeq) return;
@@ -2304,8 +2405,10 @@
         });
         // #endregion
         liveConferenceCache = conferenceRows?.[0] ?? null;
+        workerQueueCache = workerQueueRows?.[0] ?? null;
         logCache = (rows ?? []).filter((row) => !isRedundantSistemaLogRow(row));
         renderLiveConferencePinned();
+        renderWorkerQueuePinned();
         renderSistemaLog();
         updateLogStatus();
         const el = document.getElementById('log-status');
@@ -2321,6 +2424,7 @@
         // #endregion
         if (logCache.length) {
           renderLiveConferencePinned();
+          renderWorkerQueuePinned();
           renderSistemaLog();
           updateLogStatus();
           const el = document.getElementById('log-status');
@@ -2372,7 +2476,9 @@
         }
         logCache = [];
         liveConferenceCache = null;
+        workerQueueCache = null;
         renderLiveConferencePinned();
+        renderWorkerQueuePinned();
         renderSistemaLog();
         updateLogStatus();
       } catch (err) {
@@ -2561,6 +2667,11 @@
     document.getElementById('tab-log')?.addEventListener('click', () => switchTab('log'));
     document.getElementById('btn-log-refresh')?.addEventListener('click', () => loadSistemaLog());
     document.getElementById('btn-log-conference-detail')?.addEventListener('click', (e) => {
+      const btn = e.currentTarget;
+      const logId = btn?.dataset?.logDetail;
+      if (logId) showLogDetailPopover(btn, logId);
+    });
+    document.getElementById('btn-log-worker-detail')?.addEventListener('click', (e) => {
       const btn = e.currentTarget;
       const logId = btn?.dataset?.logDetail;
       if (logId) showLogDetailPopover(btn, logId);

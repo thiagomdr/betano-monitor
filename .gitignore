@@ -1,6 +1,7 @@
 .env
 betano_session.json
 *.session.json
+.chrome-hctg-profile/
 
 .venv/
 venv/
@@ -29,5 +30,6 @@ supabase/.temp/
 scripts/node_modules/
 .cursor/hctg-test-*.json
 out/betano-screenshot/
-scripts/oracle/oci.local.env
+out/betano-screenshot-run*/
+.cursor/debug-*.log
 .oci/
