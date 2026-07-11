@@ -1646,6 +1646,26 @@
       });
     }
 
+    function formatMinuteGray(minute) {
+      if (minute == null || minute === '') return '';
+      return `<span class="muted">${minute}'</span>`;
+    }
+
+    /** Minuto em que a odd ultima foi registrada (log HCTG / last_minute). */
+    function minuteForUltimaOdd(row, ultima) {
+      const log = parseElevatedOddsLog(row.elevated_odds_log);
+      const line = Number(row.over_05_line);
+      for (let i = log.length - 1; i >= 0; i--) {
+        const e = log[i];
+        if (Math.abs(e.odd - ultima) < 0.01 &&
+            (row.over_05_line == null || !Number.isFinite(line) || Math.abs((e.line ?? 0) - line) < 0.01)) {
+          if (e.minute != null && e.minute !== '') return e.minute;
+          break;
+        }
+      }
+      return row.last_minute;
+    }
+
     /** Coluna Total de Gols: Monitorando = menor linha Over; capturado = abertura/ultima. */
     function formatMercadoTotalGolsCell(row) {
       if (row.resultado === 'sem_linha_05' || row.resultado === 'skipped') {
@@ -1666,7 +1686,9 @@
         ? Number(row.over_05_odd_ultima)
         : abertura;
       const ultima = Number.isFinite(ultimaRaw) && ultimaRaw >= 1.01 ? ultimaRaw : abertura;
-      return `<span class="mercado-odds-pair">${formatOddFixed2(abertura)} / ${formatOddFixed2(ultima)}</span>`;
+      const left = formatMinuteGray(row.disponivel_desde_minuto);
+      const right = formatMinuteGray(minuteForUltimaOdd(row, ultima));
+      return `<span class="mercado-odds-pair">${left ? `${left} ` : ''}${formatOddFixed2(abertura)} / ${formatOddFixed2(ultima)}${right ? ` ${right}` : ''}</span>`;
     }
 
     /** Menor linha Over (mais perto do +0,5); odd com 2 casas; coleta so no balao. */
