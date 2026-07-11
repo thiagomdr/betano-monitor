@@ -298,6 +298,36 @@
     tr.log-row-error td { background: rgba(255, 107, 107, 0.06); }
     tr.log-row-warn td { background: rgba(255, 209, 102, 0.04); }
     tr.log-row-sistema td { background: rgba(143, 163, 191, 0.04); }
+    .log-live-conference {
+      position: sticky;
+      top: 0;
+      z-index: 3;
+      margin: 0 0 0.85rem;
+      padding: 0.85rem 1rem;
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      background: var(--panel);
+      box-shadow: 0 4px 16px rgba(0, 0, 0, 0.35);
+    }
+    .log-live-conference-head {
+      display: flex;
+      flex-wrap: wrap;
+      align-items: center;
+      gap: 0.5rem 0.75rem;
+      margin-bottom: 0.5rem;
+    }
+    .log-live-conference-head strong { font-size: 0.95rem; }
+    .log-live-conference-meta { font-size: 0.78rem; flex: 1; min-width: 8rem; }
+    .log-live-conference-body { font-size: 0.85rem; line-height: 1.45; }
+    .log-live-conference-body .log-message { white-space: pre-line; }
+    .log-conference-title { font-weight: 700; font-size: 0.92rem; margin-bottom: 0.15rem; }
+    .log-conference-counts { color: var(--muted); font-size: 0.82rem; }
+    .log-conference-section { font-weight: 600; margin-top: 0.35rem; }
+    .log-conference-sep {
+      border: none;
+      border-top: 1px solid var(--border);
+      margin: 0.45rem 0;
+    }
     #panel-log[hidden] { display: none; }
     #panel-mercado[hidden] { display: none; }
     main { padding: 1rem 1.25rem 2rem; }
@@ -716,6 +746,18 @@
       </div>
     </div>
     <p class="status" id="log-status" aria-live="polite"></p>
+    <section id="log-live-conference" class="log-live-conference" aria-live="polite">
+      <div class="log-live-conference-head">
+        <strong>Conferência ao vivo</strong>
+        <span id="log-live-conference-meta" class="log-live-conference-meta muted">Carregando…</span>
+        <button type="button" class="btn-secondary" id="btn-log-conference-detail" hidden>
+          Detalhes JSON×Sistema
+        </button>
+      </div>
+      <div id="log-live-conference-body" class="log-live-conference-body">
+        <p class="muted" style="margin:0">Carregando…</p>
+      </div>
+    </section>
     <div class="table-wrap">
       <table>
         <thead>
@@ -750,6 +792,7 @@
       'id,created_at,level,source,action,message,event_id,match_label,duration_ms';
     const LOG_LIST_LIMIT = 200;
     let logCache = [];
+    let liveConferenceCache = null;
     let activeTab = 'mercado';
     let sistemaAtivo = true;
     let sistemaToggleBusy = false;
@@ -2056,7 +2099,11 @@
         hideMercadoElevatedPopover();
         return;
       }
-      let row = logCache.find((r) => String(r.id) === String(logId));
+      let row =
+        logCache.find((r) => String(r.id) === String(logId)) ??
+        (liveConferenceCache && String(liveConferenceCache.id) === String(logId)
+          ? liveConferenceCache
+          : null);
       pop.dataset.tipKey = tipKey;
       delete pop.dataset.eventId;
       positionMercadoPopover(btn, pop);
@@ -2072,6 +2119,9 @@
           if (idx >= 0) {
             logCache[idx] = { ...logCache[idx], payload };
             row = logCache[idx];
+          } else if (liveConferenceCache && String(liveConferenceCache.id) === String(logId)) {
+            liveConferenceCache = { ...liveConferenceCache, payload };
+            row = liveConferenceCache;
           }
         } catch (err) {
           pop.innerHTML = `<p class="muted">${escapeHtml(err.message || String(err))}</p>`;
@@ -2108,22 +2158,81 @@
     }
 
     /** Conferência: times coloridos + badges iguais ao Mercado. */
+    function formatLiveConferenceLineHtml(line) {
+      const matchLine = line.match(
+        /^(.+?)\s+-\s+(\d+'|—')\s+-\s+(.+?)\s+\((Pendente|Aposta|Monitorando|GREEN|RED|Finalizado)\)\s*$/,
+      );
+      if (matchLine) {
+        const [, label, minute, score, status] = matchLine;
+        return `${formatMatchLabelHtml(label)} - ${escapeHtml(minute)} - ${escapeHtml(score)} ${conferenceStatusBadge(status)}`;
+      }
+      return escapeHtml(line);
+    }
+
+    function formatLiveConferenceBlockHtml(message) {
+      const raw = String(message ?? '');
+      if (!raw.trim()) return '<p class="muted" style="margin:0">Nenhuma conferência ainda.</p>';
+      return raw
+        .split('\n')
+        .map((line) => {
+          const t = line.trim();
+          if (/^_{10,}$/.test(t)) return '<hr class="log-conference-sep">';
+          if (/^Conferência Jogos Ao Vivo$/i.test(t)) {
+            return `<div class="log-conference-title">${escapeHtml(line)}</div>`;
+          }
+          if (/^JSON:|^Sistema:/i.test(t)) {
+            return `<div class="log-conference-counts">${escapeHtml(line)}</div>`;
+          }
+          if (/^Jogos Ao Vivo:|^GREEN Agora:|^Finalizados Agora:/i.test(t)) {
+            return `<div class="log-conference-section">${escapeHtml(line)}</div>`;
+          }
+          return formatLiveConferenceLineHtml(line);
+        })
+        .join('\n');
+    }
+
     function formatLiveConferenceMessageHtml(message) {
       const raw = String(message ?? '');
       if (!raw.trim()) return '—';
       return raw
         .split('\n')
-        .map((line) => {
-          const matchLine = line.match(
-            /^(.+?)\s+-\s+(\d+'|—')\s+-\s+(.+?)\s+\((Pendente|Aposta|Monitorando|GREEN|RED|Finalizado)\)\s*$/,
-          );
-          if (matchLine) {
-            const [, label, minute, score, status] = matchLine;
-            return `${formatMatchLabelHtml(label)} - ${escapeHtml(minute)} - ${escapeHtml(score)} ${conferenceStatusBadge(status)}`;
-          }
-          return escapeHtml(line);
-        })
+        .map((line) => formatLiveConferenceLineHtml(line))
         .join('\n');
+    }
+
+    function renderLiveConferencePinned() {
+      const bodyEl = document.getElementById('log-live-conference-body');
+      const metaEl = document.getElementById('log-live-conference-meta');
+      const btnEl = document.getElementById('btn-log-conference-detail');
+      const row = liveConferenceCache;
+      if (!bodyEl) return;
+      if (!row) {
+        if (metaEl) metaEl.textContent = 'Aguardando primeira coleta…';
+        bodyEl.innerHTML = '<p class="muted" style="margin:0">Nenhuma conferência registrada.</p>';
+        if (btnEl) btnEl.hidden = true;
+        return;
+      }
+      const msg = String(row.message ?? '');
+      let jsonCount = row.payload?.json_live;
+      let sistemaCount = row.payload?.mercado_live_open;
+      if (jsonCount == null) {
+        const jm = msg.match(/^JSON:\s*(\d+)/m);
+        if (jm) jsonCount = jm[1];
+      }
+      if (sistemaCount == null) {
+        const sm = msg.match(/^Sistema:\s*(\d+)/m);
+        if (sm) sistemaCount = sm[1];
+      }
+      const when = row.created_at ? formatDate(row.created_at) : '—';
+      if (metaEl) {
+        metaEl.textContent =
+          `JSON: ${jsonCount ?? '—'} · Sistema: ${sistemaCount ?? '—'} · ${when}`;
+      }
+      bodyEl.innerHTML = `<div class="log-message">${formatLiveConferenceBlockHtml(msg)}</div>`;
+      if (btnEl) {
+        btnEl.hidden = !row.id;
+        btnEl.dataset.logDetail = row.id || '';
+      }
     }
 
     function renderSistemaLog() {
@@ -2141,14 +2250,12 @@
           ? 'log-row-error'
           : (tech === 'warn' ? 'log-row-warn' : '');
         const logId = row.id || '';
-        const detalhes = row.action === 'live_json_vs_sistema'
-          ? formatLiveConferenceMessageHtml(row.message)
-          : (row.match_label
-            ? `${formatMatchLabelHtml(row.match_label)} / ${formatLogMessageHtml(row.message)}` +
-              (row.source && row.source !== 'edge-live' && row.source !== 'painel'
-                ? ` <span class="muted">[${escapeHtml(row.source)}]</span>`
-                : '')
-            : formatLogMessageHtml(row.message));
+        const detalhes = row.match_label
+          ? `${formatMatchLabelHtml(row.match_label)} / ${formatLogMessageHtml(row.message)}` +
+            (row.source && row.source !== 'edge-live' && row.source !== 'painel'
+              ? ` <span class="muted">[${escapeHtml(row.source)}]</span>`
+              : '')
+          : formatLogMessageHtml(row.message);
         return `<tr class="${rowCls}">
           <td data-label="Data/Hora">${formatDate(row.created_at)}</td>
           <td data-label="Nivel"><button type="button" class="log-level log-cat-btn ${catCls}" data-log-detail="${logId}" title="Detalhes técnicos">${cat}</button></td>
@@ -2165,6 +2272,7 @@
     }
 
     function isRedundantSistemaLogRow(row) {
+      if (row?.action === 'live_json_vs_sistema') return true;
       if (row?.action === 'mercado_sem_linha') return true;
       const msg = String(row?.message ?? '');
       return /Encerrado sem linha \+0,5/i.test(msg) && /fora do live/i.test(msg);
@@ -2174,6 +2282,7 @@
       const seq = ++logLoadSeq;
       const tbody = document.getElementById('log-tbody');
       if (logCache.length) {
+        renderLiveConferencePinned();
         renderSistemaLog();
         updateLogStatus();
       } else if (tbody) {
@@ -2183,9 +2292,14 @@
       try {
         await initAppCfg();
         const t0 = performance.now();
-        const rows = await supabaseGet(
-          `futebol_sistema_log?select=${LOG_LIST_COLUMNS}&order=created_at.desc&limit=${LOG_LIST_LIMIT}`,
-        );
+        const [rows, conferenceRows] = await Promise.all([
+          supabaseGet(
+            `futebol_sistema_log?select=${LOG_LIST_COLUMNS}&order=created_at.desc&limit=${LOG_LIST_LIMIT}`,
+          ),
+          supabaseGet(
+            `futebol_sistema_log?select=${LOG_LIST_COLUMNS}&action=eq.live_json_vs_sistema&order=created_at.desc&limit=1`,
+          ),
+        ]);
         if (seq !== logLoadSeq) return;
         // #region agent log
         panelDbgLog('L1', 'index.html:loadSistemaLog', 'ok', {
@@ -2193,7 +2307,9 @@
           count: (rows ?? []).length,
         });
         // #endregion
+        liveConferenceCache = conferenceRows?.[0] ?? null;
         logCache = (rows ?? []).filter((row) => !isRedundantSistemaLogRow(row));
+        renderLiveConferencePinned();
         renderSistemaLog();
         updateLogStatus();
         const el = document.getElementById('log-status');
@@ -2208,6 +2324,7 @@
         });
         // #endregion
         if (logCache.length) {
+          renderLiveConferencePinned();
           renderSistemaLog();
           updateLogStatus();
           const el = document.getElementById('log-status');
@@ -2258,6 +2375,8 @@
           // #endregion
         }
         logCache = [];
+        liveConferenceCache = null;
+        renderLiveConferencePinned();
         renderSistemaLog();
         updateLogStatus();
       } catch (err) {
@@ -2445,6 +2564,11 @@
     document.getElementById('tab-mercado')?.addEventListener('click', () => switchTab('mercado'));
     document.getElementById('tab-log')?.addEventListener('click', () => switchTab('log'));
     document.getElementById('btn-log-refresh')?.addEventListener('click', () => loadSistemaLog());
+    document.getElementById('btn-log-conference-detail')?.addEventListener('click', (e) => {
+      const btn = e.currentTarget;
+      const logId = btn?.dataset?.logDetail;
+      if (logId) showLogDetailPopover(btn, logId);
+    });
     document.getElementById('btn-log-clear')?.addEventListener('click', () => clearSistemaLog());
     bootstrapApp();
   </script>
