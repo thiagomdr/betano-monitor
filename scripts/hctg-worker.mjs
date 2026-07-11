@@ -419,6 +419,53 @@ function hydrateWorkerStateFromDb(queue) {
   }
 }
 
+function isGameVerified(st) {
+  return st.status === "ok" && st.line != null && st.odd != null;
+}
+
+/** Sequencia round-robin a partir do indice informado. */
+function roundRobinSequence(queue, startIndex) {
+  const n = queue.length;
+  if (!n) return [];
+  const start = ((startIndex % n) + n) % n;
+  const out = [];
+  for (let i = 0; i < n; i++) {
+    out.push(queue[(start + i) % n]);
+  }
+  return out;
+}
+
+/**
+ * Ordem da lista no painel:
+ * 1) Verificados (V) no topo — ordem cronologica de coleta (primeiro verificado em cima)
+ * 2) Em coleta / proximos — sequencia exata do round-robin a partir do indice atual
+ */
+function sortQueueForDisplay(queue, startIndex = roundRobinIndex, checkingEventId = null) {
+  if (!queue.length) return [];
+  const checkingId =
+    checkingEventId != null ? String(checkingEventId) : null;
+
+  const verified = queue.filter((row) => {
+    const id = String(row.event_id);
+    if (checkingId && id === checkingId) return false;
+    return isGameVerified(getWorkerGameState(id));
+  });
+  verified.sort((a, b) => {
+    const ta = getWorkerGameState(a.event_id).checkedAt;
+    const tb = getWorkerGameState(b.event_id).checkedAt;
+    const da = ta ? new Date(ta).getTime() : 0;
+    const db = tb ? new Date(tb).getTime() : 0;
+    if (da !== db) return da - db;
+    return String(a.event_id).localeCompare(String(b.event_id));
+  });
+
+  const verifiedIds = new Set(verified.map((r) => String(r.event_id)));
+  const pending = roundRobinSequence(queue, startIndex).filter(
+    (r) => !verifiedIds.has(String(r.event_id)),
+  );
+  return [...verified, ...pending];
+}
+
 function formatGameQueueLine(label, st, { checking = false, paused = false } = {}) {
   if (checking && !paused) {
     const n = Math.min(st.attempts + 1, maxHctgAttempts);
@@ -476,8 +523,13 @@ function workerActionLabel(queue, checkingEventId, paused) {
 
 async function publishWorkerQueue(epoch, queue, checkingEventId = null, extra = {}) {
   const paused = extra.paused === true;
+  const displayQueue = sortQueueForDisplay(
+    queue,
+    roundRobinIndex,
+    paused ? null : checkingEventId,
+  );
   const actionLabel = workerActionLabel(queue, checkingEventId, paused);
-  const games = queue.map((row) => {
+  const games = displayQueue.map((row) => {
     const id = String(row.event_id);
     const st = workerGameState.get(id) || getWorkerGameState(id);
     const checking = checkingEventId != null && id === String(checkingEventId);
@@ -504,7 +556,7 @@ async function publishWorkerQueue(epoch, queue, checkingEventId = null, extra = 
     level: "info",
     source: workerSource,
     action: "hctg_worker_fila",
-    message: buildWorkerQueueMessage(queue, checkingEventId, { paused, actionLabel }),
+    message: buildWorkerQueueMessage(displayQueue, checkingEventId, { paused, actionLabel }),
     payload: {
       cycle: cycleCount,
       epoch,

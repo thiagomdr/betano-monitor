@@ -2251,20 +2251,46 @@
       return `${label} - <span class="muted">Na fila</span>`;
     }
 
+    function sortWorkerQueueGamesForDisplay(games) {
+      if (!Array.isArray(games) || !games.length) return [];
+      const isVerified = (g) =>
+        !g.checking && g.status === 'ok' && g.line != null && g.odd != null;
+      const verified = games.filter(isVerified).slice().sort((a, b) => {
+        const da = a.checked_at ? new Date(a.checked_at).getTime() : 0;
+        const db = b.checked_at ? new Date(b.checked_at).getTime() : 0;
+        if (da !== db) return da - db;
+        return String(a.event_id || '').localeCompare(String(b.event_id || ''));
+      });
+      const verifiedIds = new Set(verified.map((g) => String(g.event_id)));
+      // Mantem a ordem ja publicada pelo worker (round-robin) para os nao verificados
+      const pending = games.filter((g) => !verifiedIds.has(String(g.event_id)));
+      return [...verified, ...pending];
+    }
+
     function renderWorkerQueueFromPayload(row) {
       const payload = row?.payload ?? {};
-      const games = payload.games;
-      if (!Array.isArray(games) || !games.length) {
+      const rawGames = payload.games;
+      if (!Array.isArray(rawGames) || !rawGames.length) {
         return formatWorkerQueueBlockHtml(row?.message ?? '');
       }
+      const games = sortWorkerQueueGamesForDisplay(rawGames);
       const actionLabel = payload.action_label || '—';
       const lines = [
         '<div class="log-conference-title">Worker HCTG — fila ao vivo</div>',
         `<div class="log-conference-counts">Jogos: ${payload.total ?? games.length} · Ciclo ${payload.cycle ?? '—'}</div>`,
         `<div class="log-conference-counts">${escapeHtml(actionLabel)}</div>`,
         '<hr class="log-conference-sep">',
-        ...games.map((g) => formatWorkerQueueGameHtml(g)),
       ];
+      let prevVerified = false;
+      for (const g of games) {
+        const isVerified =
+          !g.checking && g.status === 'ok' && g.line != null && g.odd != null;
+        if (lines.length > 4 && prevVerified && !isVerified) {
+          lines.push('<hr class="log-conference-sep">');
+        }
+        lines.push(formatWorkerQueueGameHtml(g));
+        prevVerified = isVerified;
+      }
       return lines.join('\n');
     }
 
