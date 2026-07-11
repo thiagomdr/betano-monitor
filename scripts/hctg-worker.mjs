@@ -330,7 +330,7 @@ async function fetchWorkerQueue() {
   const { data, error } = await supabase
     .from("futebol_mercado_gols_05")
     .select(
-      "event_id,betano_url,home,away,resultado,last_minute,live_score,hctg_fetched_at",
+      "event_id,betano_url,home,away,resultado,last_minute,live_score,hctg_fetched_at,hctg_lines",
     )
     .eq("is_live", true)
     .in("resultado", WORKER_QUEUE_RESULTADOS)
@@ -372,16 +372,43 @@ function formatHctgLineLabel(n) {
   return Number(n).toLocaleString("pt-BR", { maximumFractionDigits: 2 });
 }
 
-function buildWorkerQueueMessage(queue, checkingEventId) {
+function hydrateWorkerStateFromDb(queue) {
+  for (const row of queue) {
+    const id = String(row.event_id);
+    const st = getWorkerGameState(id);
+    if (st.status === "ok" || st.status === "error") continue;
+    if (!Array.isArray(row.hctg_lines) || !row.hctg_lines.length) continue;
+    const goalsTotal = goalsTotalFromScoreText(row.live_score);
+    const best = minOverHctgLine(row.hctg_lines, goalsTotal);
+    if (!best) continue;
+    st.status = "ok";
+    st.line = best.line;
+    st.odd = best.over;
+    st.checkedAt = row.hctg_fetched_at ?? null;
+    st.attempts = 0;
+    st.error = null;
+  }
+}
+
+function workerAttemptLabel(st, checking) {
+  if (checking) {
+    const n = Math.min(st.attempts + 1, maxHctgAttempts);
+    return ` (${n}/${maxHctgAttempts})`;
+  }
+  if (st.attempts > 0) {
+    return ` (${st.attempts}/${maxHctgAttempts})`;
+  }
+  return "";
+}
+
+function buildWorkerQueueMessage(queue, checkingEventId, { paused = false } = {}) {
   const gameLines = queue.map((row) => {
     const label = matchLabel(row.home, row.away);
     const id = String(row.event_id);
     const st = workerGameState.get(id) || { status: "waiting", attempts: 0 };
     const checking = checkingEventId != null && id === String(checkingEventId);
-    if (checking) {
-      const att =
-        st.attempts > 0 ? ` (${st.attempts}/${maxHctgAttempts})` : "";
-      return `${label} - Verificando...${att}`;
+    if (checking && !paused) {
+      return `${label} - Verificando...${workerAttemptLabel(st, true)}`;
     }
     if (st.status === "ok" && st.line != null && st.odd != null) {
       return `${label} - V +${formatHctgLineLabel(st.line)} (${formatOddFixed2(st.odd)})`;
@@ -390,9 +417,9 @@ function buildWorkerQueueMessage(queue, checkingEventId) {
       return `${label} - X ${st.error || "Erro HCTG"}`;
     }
     if (st.attempts > 0) {
-      return `${label} - Verificando... (${st.attempts}/${maxHctgAttempts})`;
+      return `${label} - Verificando...${workerAttemptLabel(st, false)}`;
     }
-    return `${label} - — aguardando`;
+    return label;
   });
 
   const checkingRow = checkingEventId
@@ -404,18 +431,20 @@ function buildWorkerQueueMessage(queue, checkingEventId) {
 
   return [
     "Worker HCTG — fila ao vivo",
-    `Jogos: ${queue.length}`,
-    checkingLabel
-      ? `Verificando: ${checkingLabel}`
-      : queue.length
-        ? `Proximo: ${roundRobinIndex + 1}/${queue.length}`
-        : "—",
+    `Jogos: ${queue.length}${paused ? " · Sistema pausado" : ""}`,
+    paused
+      ? "Scrape pausado — fila atualizada"
+      : checkingLabel
+        ? `Verificando: ${checkingLabel}`
+        : queue.length
+          ? `Proximo: ${roundRobinIndex + 1}/${queue.length}`
+          : "—",
     "_______________________________________________________",
     ...(gameLines.length ? gameLines : ["(nenhum jogo ao vivo na fila)"]),
   ].join("\n");
 }
 
-async function publishWorkerQueue(epoch, queue, checkingEventId = null) {
+async function publishWorkerQueue(epoch, queue, checkingEventId = null, extra = {}) {
   const games = queue.map((row) => {
     const id = String(row.event_id);
     const st = workerGameState.get(id) || getWorkerGameState(id);
@@ -434,11 +463,13 @@ async function publishWorkerQueue(epoch, queue, checkingEventId = null) {
     };
   });
 
+  const paused = extra.paused === true;
+
   await insertSistemaLog(supabase, {
     level: "info",
     source: workerSource,
     action: "hctg_worker_fila",
-    message: buildWorkerQueueMessage(queue, checkingEventId),
+    message: buildWorkerQueueMessage(queue, checkingEventId, { paused }),
     payload: {
       cycle: cycleCount,
       epoch,
@@ -446,7 +477,9 @@ async function publishWorkerQueue(epoch, queue, checkingEventId = null) {
       round_robin_index: roundRobinIndex,
       checking_event_id: checkingEventId,
       max_attempts: maxHctgAttempts,
+      paused,
       games,
+      ...extra,
     },
   });
 }
@@ -580,11 +613,41 @@ async function closeChromeIfPausado() {
 async function runCycle() {
   cycleCount += 1;
 
+  let queue;
+  try {
+    queue = await fetchWorkerQueue();
+  } catch (err) {
+    console.error("[worker] fila:", err?.message ?? err);
+    lastCycleHadError = true;
+    return;
+  }
+
+  syncWorkerStateWithQueue(queue);
+  hydrateWorkerStateFromDb(queue);
+
+  const coletaSt = await readColetaState(supabase);
+  const ativo = coletaSt?.ativo === true;
+
+  if (!ativo) {
+    await closeChromeIfPausado();
+    console.log(
+      `[worker] ciclo ${cycleCount} pausado — fila ${queue.length} jogo(s) publicada`,
+    );
+    await publishWorkerQueue(coletaSt?.data_atualizacao ?? null, queue, null, {
+      paused: true,
+    });
+    lastCycleHadError = false;
+    return;
+  }
+
   let epoch;
   try {
     epoch = await beginColetaEpoch(supabase);
   } catch {
     await closeChromeIfPausado();
+    await publishWorkerQueue(coletaSt?.data_atualizacao ?? null, queue, null, {
+      paused: true,
+    });
     console.log(
       `[worker] ${new Date().toISOString()} sistema pausado — ciclo ${cycleCount} ignorado`,
     );
@@ -598,17 +661,6 @@ async function runCycle() {
         : `idade-${restartEveryMin}min`,
     );
   }
-
-  let queue;
-  try {
-    queue = await fetchWorkerQueue();
-  } catch (err) {
-    console.error("[worker] fila:", err?.message ?? err);
-    lastCycleHadError = true;
-    return;
-  }
-
-  syncWorkerStateWithQueue(queue);
 
   if (!queue.length) {
     console.log(`[worker] ciclo ${cycleCount} — fila vazia (sem jogos ao vivo)`);
@@ -628,184 +680,187 @@ async function runCycle() {
 
   await publishWorkerQueue(epoch, queue, eventId);
 
+  let scrapeOk = false;
   try {
-    await ensureBrowser(epoch);
-  } catch (err) {
-    if (err instanceof ColetaPausadaError) {
-      await closeChromeIfPausado();
-      await logScrapeAbort(err.message, epoch);
+    try {
+      await ensureBrowser(epoch);
+    } catch (err) {
+      if (err instanceof ColetaPausadaError) {
+        await closeChromeIfPausado();
+        await logScrapeAbort(err.message, epoch);
+        return;
+      }
+      const msg = String(err?.message ?? err);
+      lastCycleHadError = true;
+      if (isPlaywrightBrowserMissing(err)) {
+        console.error(`[worker] ${PLAYWRIGHT_INSTALL_HINT}`);
+        await logWorkerError(PLAYWRIGHT_INSTALL_HINT, epoch);
+      } else {
+        console.error(`[worker] FALHA ao abrir Chrome: ${msg}`);
+        await logWorkerError(`FALHA ao abrir Chrome: ${msg}`, epoch);
+      }
       return;
     }
-    const msg = String(err?.message ?? err);
-    lastCycleHadError = true;
-    if (isPlaywrightBrowserMissing(err)) {
-      console.error(`[worker] ${PLAYWRIGHT_INSTALL_HINT}`);
-      await logWorkerError(PLAYWRIGHT_INSTALL_HINT, epoch);
+
+    const slug = slugFromBetanoUrl(row.betano_url);
+    const t0 = Date.now();
+
+    if (!slug) {
+      st.attempts += 1;
+      st.error = "sem slug em betano_url";
+      if (st.attempts >= maxHctgAttempts) st.status = "error";
+      console.warn(`[worker] ${eventId} sem slug em betano_url`);
     } else {
-      console.error(`[worker] FALHA ao abrir Chrome: ${msg}`);
-      await logWorkerError(`FALHA ao abrir Chrome: ${msg}`, epoch);
-    }
-    return;
-  }
+      try {
+        await assertNaoPausado(supabase, `chrome-${eventId}`);
+        const p = await ensureScrapePage(epoch);
+        const snap = await scrapeWithTimeout(p, eventId, slug, epoch);
+        await assertNaoPausado(supabase, `pos-chrome-${eventId}`);
+        const label = matchLabel(row.home, row.away);
 
-  const slug = slugFromBetanoUrl(row.betano_url);
-  const t0 = Date.now();
-  let scrapeOk = false;
-
-  if (!slug) {
-    st.attempts += 1;
-    st.error = "sem slug em betano_url";
-    if (st.attempts >= maxHctgAttempts) st.status = "error";
-    console.warn(`[worker] ${eventId} sem slug em betano_url`);
-  } else {
-    try {
-      await assertNaoPausado(supabase, `chrome-${eventId}`);
-      const p = await ensureScrapePage(epoch);
-      const snap = await scrapeWithTimeout(p, eventId, slug, epoch);
-      await assertNaoPausado(supabase, `pos-chrome-${eventId}`);
-      const label = matchLabel(row.home, row.away);
-
-      if (!snap.lines.length) {
-        const blocked = snap.betanoBlocked === true;
-        const ageGated = snap.ageGated === true;
-        const failMsg = blocked
-          ? "Splash Screen Betano"
-          : ageGated
-            ? "Modal +18 nao fechou"
-            : "Total de Gols NÃO ENCONTRADOS";
-        st.attempts += 1;
-        st.error = failMsg;
-        if (st.attempts >= maxHctgAttempts) st.status = "error";
-        console.warn(
-          `[worker] ${eventId} ${row.home} x ${row.away} — 0 linhas ` +
-            (blocked ? "(splash/verificacao Betano) " : "") +
-            (ageGated ? "(modal +18 nao fechou) " : "") +
-            `(golsTab=${snap.golsTab} markets=${snap.marketsReady} ` +
-            `${((Date.now() - t0) / 1000).toFixed(1)}s)`,
-        );
-        await insertWorkerLog(epoch, {
-          level: blocked || ageGated ? "error" : "warn",
-          source: workerSource,
-          action: blocked ? "hctg_bloqueado" : ageGated ? "hctg_age_gate" : "hctg_falha",
-          message: blocked
-            ? "Playwright preso na Splash Screen — clique SIM (+18) na janela do worker e aguarde carregar"
+        if (!snap.lines.length) {
+          const blocked = snap.betanoBlocked === true;
+          const ageGated = snap.ageGated === true;
+          const failMsg = blocked
+            ? "Splash Screen Betano"
             : ageGated
-              ? "Modal +18 nao fechou (SIM)"
-              : "Total de Gols NÃO ENCONTRADOS",
-          event_id: eventId,
-          match_label: label,
-          duration_ms: Date.now() - t0,
-          payload: {
-            golsTab: snap.golsTab,
-            marketsReady: snap.marketsReady,
-            betanoBlocked: blocked,
-            ageGated,
-            attempt: st.attempts,
-            max_attempts: maxHctgAttempts,
-          },
-        });
-      } else {
-        const goalsTotal =
-          snap.goalsTotal ??
-          goalsTotalFromScoreText(snap.scoreText) ??
-          goalsTotalFromScoreText(row.live_score);
-        const lines =
-          goalsTotal != null
-            ? trimHctgLinesForMatch(snap.lines, goalsTotal)
-            : snap.lines;
-        const best = minOverHctgLine(lines, goalsTotal);
-        if (!best) {
+              ? "Modal +18 nao fechou"
+              : "Total de Gols NÃO ENCONTRADOS";
           st.attempts += 1;
-          st.error = "sem linha Over HCTG";
+          st.error = failMsg;
           if (st.attempts >= maxHctgAttempts) st.status = "error";
+          console.warn(
+            `[worker] ${eventId} ${row.home} x ${row.away} — 0 linhas ` +
+              (blocked ? "(splash/verificacao Betano) " : "") +
+              (ageGated ? "(modal +18 nao fechou) " : "") +
+              `(golsTab=${snap.golsTab} markets=${snap.marketsReady} ` +
+              `${((Date.now() - t0) / 1000).toFixed(1)}s)`,
+          );
           await insertWorkerLog(epoch, {
-            level: "warn",
+            level: blocked || ageGated ? "error" : "warn",
             source: workerSource,
-            action: "hctg_falha",
-            message: "Total de Gols NÃO ENCONTRADOS",
+            action: blocked ? "hctg_bloqueado" : ageGated ? "hctg_age_gate" : "hctg_falha",
+            message: blocked
+              ? "Playwright preso na Splash Screen — clique SIM (+18) na janela do worker e aguarde carregar"
+              : ageGated
+                ? "Modal +18 nao fechou (SIM)"
+                : "Total de Gols NÃO ENCONTRADOS",
             event_id: eventId,
             match_label: label,
             duration_ms: Date.now() - t0,
             payload: {
-              line_count: lines.length,
+              golsTab: snap.golsTab,
+              marketsReady: snap.marketsReady,
+              betanoBlocked: blocked,
+              ageGated,
               attempt: st.attempts,
               max_attempts: maxHctgAttempts,
             },
           });
         } else {
-          await persistHctg(row, { ...snap, lines, goalsTotal }, epoch);
-          st.status = "ok";
-          st.attempts = 0;
-          st.error = null;
-          st.line = best.line;
-          st.odd = best.over;
-          st.checkedAt = new Date().toISOString();
-          scrapeOk = true;
-          await insertWorkerLog(epoch, {
-            source: workerSource,
-            action: "hctg_odds",
-            message: hctgOddsLogMessage(lines, goalsTotal),
-            event_id: eventId,
-            match_label: label,
-            duration_ms: Date.now() - t0,
-            payload: {
-              line_count: lines.length,
-              min_over_line: best,
-              lines,
-              scoreText: snap.scoreText ?? row.live_score ?? null,
-              goalsTotal,
-            },
-          });
-          console.log(
-            `[worker] OK ${eventId} ${row.home} x ${row.away} — ${lines.length} linhas em ${((Date.now() - t0) / 1000).toFixed(1)}s`,
-          );
-          console.log(formatLinesTable(lines));
+          const goalsTotal =
+            snap.goalsTotal ??
+            goalsTotalFromScoreText(snap.scoreText) ??
+            goalsTotalFromScoreText(row.live_score);
+          const lines =
+            goalsTotal != null
+              ? trimHctgLinesForMatch(snap.lines, goalsTotal)
+              : snap.lines;
+          const best = minOverHctgLine(lines, goalsTotal);
+          if (!best) {
+            st.attempts += 1;
+            st.error = "sem linha Over HCTG";
+            if (st.attempts >= maxHctgAttempts) st.status = "error";
+            await insertWorkerLog(epoch, {
+              level: "warn",
+              source: workerSource,
+              action: "hctg_falha",
+              message: "Total de Gols NÃO ENCONTRADOS",
+              event_id: eventId,
+              match_label: label,
+              duration_ms: Date.now() - t0,
+              payload: {
+                line_count: lines.length,
+                attempt: st.attempts,
+                max_attempts: maxHctgAttempts,
+              },
+            });
+          } else {
+            await persistHctg(row, { ...snap, lines, goalsTotal }, epoch);
+            st.status = "ok";
+            st.attempts = 0;
+            st.error = null;
+            st.line = best.line;
+            st.odd = best.over;
+            st.checkedAt = new Date().toISOString();
+            scrapeOk = true;
+            await insertWorkerLog(epoch, {
+              source: workerSource,
+              action: "hctg_odds",
+              message: hctgOddsLogMessage(lines, goalsTotal),
+              event_id: eventId,
+              match_label: label,
+              duration_ms: Date.now() - t0,
+              payload: {
+                line_count: lines.length,
+                min_over_line: best,
+                lines,
+                scoreText: snap.scoreText ?? row.live_score ?? null,
+                goalsTotal,
+              },
+            });
+            console.log(
+              `[worker] OK ${eventId} ${row.home} x ${row.away} — ${lines.length} linhas em ${((Date.now() - t0) / 1000).toFixed(1)}s`,
+            );
+            console.log(formatLinesTable(lines));
+          }
         }
-      }
-    } catch (err) {
-      if (err instanceof ColetaPausadaError) {
-        console.log(`[worker] ${err.message}`);
-        await logScrapeAbort(err.message, epoch, {
+      } catch (err) {
+        if (err instanceof ColetaPausadaError) {
+          console.log(`[worker] ${err.message}`);
+          await logScrapeAbort(err.message, epoch, {
+            event_id: eventId,
+            match_label: matchLabel(row.home, row.away),
+          });
+          await closeChromeIfPausado();
+          return;
+        }
+        if (!(await isColetaAtiva(supabase)) || (await closeChromeIfPausado())) {
+          console.log(`[worker] erro ignorado — sistema pausado`);
+          return;
+        }
+        const errMsg = String(err?.message ?? err);
+        if (
+          /browser has been closed|Target page, context or browser/i.test(errMsg) &&
+          !(await isColetaAtiva(supabase))
+        ) {
+          console.log(`[worker] scrape abortado — sistema pausado`);
+          await closeChromeIfPausado();
+          return;
+        }
+        st.attempts += 1;
+        st.error = errMsg.slice(0, 120);
+        if (st.attempts >= maxHctgAttempts) st.status = "error";
+        console.error(`[worker] ERRO ${eventId}:`, errMsg);
+        await insertWorkerLog(epoch, {
+          level: "error",
+          source: workerSource,
+          action: "erro",
+          message: `Erro HCTG: ${err?.message ?? err}`,
           event_id: eventId,
           match_label: matchLabel(row.home, row.away),
+          duration_ms: Date.now() - t0,
+          payload: { attempt: st.attempts, max_attempts: maxHctgAttempts },
         });
-        await closeChromeIfPausado();
-        return;
+        await recoverBrowserAfterError("erro-jogo");
       }
-      if (!(await isColetaAtiva(supabase)) || (await closeChromeIfPausado())) {
-        console.log(`[worker] erro ignorado — sistema pausado`);
-        return;
-      }
-      const errMsg = String(err?.message ?? err);
-      if (
-        /browser has been closed|Target page, context or browser/i.test(errMsg) &&
-        !(await isColetaAtiva(supabase))
-      ) {
-        console.log(`[worker] scrape abortado — sistema pausado`);
-        await closeChromeIfPausado();
-        return;
-      }
-      st.attempts += 1;
-      st.error = errMsg.slice(0, 120);
-      if (st.attempts >= maxHctgAttempts) st.status = "error";
-      console.error(`[worker] ERRO ${eventId}:`, errMsg);
-      await insertWorkerLog(epoch, {
-        level: "error",
-        source: workerSource,
-        action: "erro",
-        message: `Erro HCTG: ${err?.message ?? err}`,
-        event_id: eventId,
-        match_label: matchLabel(row.home, row.away),
-        duration_ms: Date.now() - t0,
-        payload: { attempt: st.attempts, max_attempts: maxHctgAttempts },
-      });
-      await recoverBrowserAfterError("erro-jogo");
     }
-  }
 
-  roundRobinIndex = (idx + 1) % queue.length;
-  await publishWorkerQueue(epoch, queue, null);
-  lastCycleHadError = !scrapeOk && st.attempts >= maxHctgAttempts;
+    roundRobinIndex = (idx + 1) % queue.length;
+    lastCycleHadError = !scrapeOk && st.attempts >= maxHctgAttempts;
+  } finally {
+    await publishWorkerQueue(epoch, queue, null);
+  }
 }
 
 async function shutdown() {
@@ -878,9 +933,9 @@ async function startPolling() {
   const ativoInicio = await isColetaAtiva(supabase);
   if (!ativoInicio) {
     coletaWasPaused = true;
-    const delayMs = Math.max(5, pausePollSec) * 1000;
-    console.log(`[worker] sistema pausado — primeira verificacao em ${(delayMs / 1000).toFixed(0)}s`);
-    setTimeout(() => scheduleNextCycle(), delayMs);
+    console.log("[worker] sistema pausado — publicando fila e aguardando religar");
+    await runCycle();
+    scheduleNextCycle();
     return;
   }
   coletaWasPaused = false;

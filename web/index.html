@@ -2234,6 +2234,9 @@
       if (wait) {
         return `${formatMatchLabelHtml(wait[1])} - <span class="muted">— aguardando</span>`;
       }
+      if (/\sx\s/.test(line) && !/ - /.test(line)) {
+        return formatMatchLabelHtml(line);
+      }
       return escapeHtml(line);
     }
 
@@ -2248,7 +2251,7 @@
           if (/^Worker HCTG — fila ao vivo$/i.test(t)) {
             return `<div class="log-conference-title">${escapeHtml(line)}</div>`;
           }
-          if (/^Jogos:|^Verificando:|^Proximo:/i.test(t)) {
+          if (/^Jogos:|^Verificando:|^Proximo:|^Scrape pausado/i.test(t)) {
             return `<div class="log-conference-counts">${escapeHtml(line)}</div>`;
           }
           if (/^\(nenhum jogo ao vivo na fila\)$/i.test(t)) {
@@ -2274,6 +2277,7 @@
       const payload = row.payload ?? {};
       const total = payload.total ?? payload.games?.length;
       const checking = payload.checking_event_id;
+      const paused = payload.paused === true;
       const checkingGame = (payload.games ?? []).find(
         (g) => String(g.event_id) === String(checking),
       );
@@ -2282,7 +2286,7 @@
         const checkingLabel = checkingGame?.label || (checking ? `#${checking}` : null);
         metaEl.textContent =
           `Jogos: ${total ?? '—'}` +
-          (checkingLabel ? ` · Verificando: ${checkingLabel}` : '') +
+          (paused ? ' · Pausado' : checkingLabel ? ` · Verificando: ${checkingLabel}` : '') +
           ` · ${when}`;
       }
       bodyEl.innerHTML = `<div class="log-message">${formatWorkerQueueBlockHtml(row.message)}</div>`;
