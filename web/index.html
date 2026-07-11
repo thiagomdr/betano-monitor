@@ -2218,9 +2218,12 @@
     }
 
     function formatWorkerQueueLineHtml(line) {
-      const ok = line.match(/^(.+?) - V \+(.*?)\s+\((.*?)\)$/);
+      const ok = line.match(/^(.+?) - V \+(.*?)\s+\((.*?)\)(?: · (.+))?$/);
       if (ok) {
-        return `${formatMatchLabelHtml(ok[1])} - <span class="log-report-ok">V +${escapeHtml(ok[2])} (${escapeHtml(ok[3])})</span>`;
+        const dateHtml = ok[4]
+          ? ` <span class="muted">${escapeHtml(ok[4])}</span>`
+          : '';
+        return `${formatMatchLabelHtml(ok[1])} - <span class="log-report-ok">V +${escapeHtml(ok[2])} (${escapeHtml(ok[3])})</span>${dateHtml}`;
       }
       const checking = line.match(/^(.+?) - Verificando\.\.\.(.*)$/);
       if (checking) {

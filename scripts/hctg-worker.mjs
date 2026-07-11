@@ -372,6 +372,13 @@ function formatHctgLineLabel(n) {
   return Number(n).toLocaleString("pt-BR", { maximumFractionDigits: 2 });
 }
 
+function formatWorkerCheckedAt(iso) {
+  if (!iso) return "";
+  const d = new Date(iso);
+  if (Number.isNaN(d.getTime())) return "";
+  return ` · ${d.toLocaleString("pt-BR")}`;
+}
+
 function hydrateWorkerStateFromDb(queue) {
   for (const row of queue) {
     const id = String(row.event_id);
@@ -411,7 +418,7 @@ function buildWorkerQueueMessage(queue, checkingEventId, { paused = false } = {}
       return `${label} - Verificando...${workerAttemptLabel(st, true)}`;
     }
     if (st.status === "ok" && st.line != null && st.odd != null) {
-      return `${label} - V +${formatHctgLineLabel(st.line)} (${formatOddFixed2(st.odd)})`;
+      return `${label} - V +${formatHctgLineLabel(st.line)} (${formatOddFixed2(st.odd)})${formatWorkerCheckedAt(st.checkedAt)}`;
     }
     if (st.status === "error" || st.attempts >= maxHctgAttempts) {
       return `${label} - X ${st.error || "Erro HCTG"}`;
