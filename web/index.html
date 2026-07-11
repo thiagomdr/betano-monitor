@@ -406,6 +406,11 @@
       margin-bottom: 0.75rem;
     }
     .mercado-filters {
+      display: flex;
+      flex-wrap: wrap;
+      align-items: center;
+      justify-content: space-between;
+      gap: 0.65rem;
       margin-bottom: 0.75rem;
       font-size: 0.85rem;
       color: var(--muted);
@@ -418,6 +423,27 @@
       user-select: none;
     }
     .filter-validados input { cursor: pointer; accent-color: var(--accent); }
+    .mercado-bulk-actions {
+      display: inline-flex;
+      align-items: center;
+      gap: 0.5rem;
+    }
+    .mercado-bulk-actions .mercado-delete-btn {
+      font-size: 1.15rem;
+      padding: 0.35rem 0.5rem;
+    }
+    .mercado-selected-count:empty { display: none; }
+    .mercado-check-cell {
+      width: 2rem;
+      text-align: center;
+      vertical-align: middle;
+    }
+    .mercado-check-cell input {
+      cursor: pointer;
+      accent-color: var(--accent);
+      width: 1rem;
+      height: 1rem;
+    }
     .validacao-badge {
       display: inline-block;
       font-size: 0.76rem;
@@ -598,13 +624,13 @@
       line-height: 1;
       border-radius: 4px;
     }
-    .mercado-delete-btn:hover {
+    .mercado-delete-btn:hover:not(:disabled) {
       color: #ff6b6b;
       background: rgba(220, 53, 69, 0.15);
     }
     .mercado-delete-btn:disabled {
       opacity: 0.45;
-      cursor: wait;
+      cursor: not-allowed;
     }
     .mercado-profit.positive { color: var(--accent); font-weight: 700; }
     .mercado-profit.negative { color: #ff6b6b; font-weight: 700; }
@@ -713,20 +739,28 @@
   <main id="panel-mercado">
     <p class="hint">
       Monitoramento automatico da linha <strong>Over +0,5</strong> (placar + 0,5).
-      Novos jogos entram sozinhos; use a lixeira para ocultar da lista.
+      Novos jogos entram sozinhos; marque as caixas e use a lixeira para ocultar da lista.
     </p>
     <div class="mercado-filters">
       <label class="filter-validados">
         <input type="checkbox" id="filtro-validados" />
         Somente jogos validados (Telegram)
       </label>
+      <div class="mercado-bulk-actions">
+        <span class="mercado-selected-count muted" id="mercado-selected-count"></span>
+        <button type="button" class="mercado-delete-btn" id="btn-mercado-delete-selected"
+          title="Remover selecionados" aria-label="Remover jogos selecionados" disabled>🗑</button>
+      </div>
     </div>
     <section class="mercado-summary" id="mercado-summary" aria-live="polite"></section>
-    <p class="table-scroll-hint">Dica: role a tabela horizontalmente para ver Link e excluir.</p>
+    <p class="table-scroll-hint">Dica: role a tabela horizontalmente para ver todas as colunas.</p>
     <div class="table-wrap">
       <table>
         <thead>
           <tr>
+            <th class="mercado-check-cell" title="Selecionar">
+              <input type="checkbox" id="mercado-select-all" aria-label="Selecionar todos" />
+            </th>
             <th>#</th>
             <th>Jogo</th>
             <th title="Minuto do jogo">Tempo</th>
@@ -739,7 +773,6 @@
             <th>Lucro 1u</th>
             <th title="Ao Vivo ou Finalizado — clique para datas">Status</th>
             <th>Link</th>
-            <th title="Ocultar da lista"></th>
           </tr>
         </thead>
         <tbody id="mercado-tbody">
@@ -808,6 +841,8 @@
     let mercadoLoading = false;
     let mercadoFilterValidadosOnly = localStorage.getItem('mercadoFilterValidados') === '1';
     let mercadoMetaCache = null;
+    const mercadoSelectedIds = new Set();
+    let mercadoDeleteBusy = false;
     let logPollTimer = null;
     let workerQueuePollTimer = null;
     const WORKER_QUEUE_POLL_MS = 5000;
@@ -1169,20 +1204,41 @@
       await handleAuthResponse(res);
     }
 
-    async function deleteMercadoRow(eventId, label) {
-      if (!appCfg || !eventId) return;
-      const msg = label
-        ? `Remover "${label}" da lista?\n\nO cron nao recria esta linha.`
-        : 'Remover este jogo da lista?';
+    function syncMercadoSelectionUi() {
+      const btn = document.getElementById('btn-mercado-delete-selected');
+      const countEl = document.getElementById('mercado-selected-count');
+      const selectAll = document.getElementById('mercado-select-all');
+      const n = mercadoSelectedIds.size;
+      if (btn) btn.disabled = mercadoDeleteBusy || n === 0;
+      if (countEl) countEl.textContent = n > 0 ? `${n} selecionado${n === 1 ? '' : 's'}` : '';
+      if (selectAll) {
+        const checks = [...document.querySelectorAll('#mercado-tbody .mercado-row-check')];
+        const checked = checks.filter((c) => c.checked).length;
+        selectAll.checked = checks.length > 0 && checked === checks.length;
+        selectAll.indeterminate = checked > 0 && checked < checks.length;
+        selectAll.disabled = checks.length === 0;
+      }
+    }
+
+    async function deleteMercadoRows(eventIds) {
+      if (!appCfg || !eventIds.length) return;
+      const ids = [...new Set(eventIds.map((id) => String(id)).filter(Boolean))];
+      if (!ids.length) return;
+      const msg = ids.length === 1
+        ? 'Remover 1 jogo da lista?\n\nO cron nao recria esta linha.'
+        : `Remover ${ids.length} jogos da lista?\n\nO cron nao recria estas linhas.`;
       if (!window.confirm(msg)) return;
+      const list = ids.map((id) => `"${id.replace(/"/g, '')}"`).join(',');
       const updated = await supabasePatch(
-        `futebol_mercado_gols_05?event_id=eq.${encodeURIComponent(eventId)}`,
+        `futebol_mercado_gols_05?event_id=in.(${list})`,
         { resultado: 'excluido', updated_at: new Date().toISOString() },
       );
       if (!updated.length) {
         throw new Error('Nenhuma linha foi atualizada no Supabase.');
       }
-      mercadoCache = mercadoCache.filter((r) => String(r.event_id) !== String(eventId));
+      const removed = new Set(ids);
+      mercadoCache = mercadoCache.filter((r) => !removed.has(String(r.event_id)));
+      for (const id of removed) mercadoSelectedIds.delete(id);
       renderMercado();
     }
 
@@ -1870,10 +1926,15 @@
         return String(mercadoSortKey(b)).localeCompare(String(mercadoSortKey(a)));
       });
       renderMercadoSummary(rows);
+      const visibleIds = new Set(rows.map((r) => String(r.event_id)));
+      for (const id of [...mercadoSelectedIds]) {
+        if (!visibleIds.has(id)) mercadoSelectedIds.delete(id);
+      }
       if (!rows.length) {
         tbody.innerHTML = mercadoFilterValidadosOnly
           ? '<tr><td colspan="13" class="empty">Nenhum jogo validado no Telegram ainda.</td></tr>'
           : '<tr><td colspan="13" class="empty">Nenhum jogo monitorado ainda. Novos jogos serao registrados automaticamente.</td></tr>';
+        syncMercadoSelectionUi();
         return;
       }
       tbody.innerHTML = rows.map((row, i) => {
@@ -1886,7 +1947,13 @@
         const link = row.betano_url
           ? `<a href="${row.betano_url}" target="_blank" rel="noopener">abrir</a>`
           : '—';
+        const eventId = String(row.event_id);
+        const checked = mercadoSelectedIds.has(eventId) ? ' checked' : '';
         return `<tr>
+          <td class="mercado-check-cell" data-label="">
+            <input type="checkbox" class="mercado-row-check" data-event-id="${eventId}"
+              aria-label="Selecionar ${matchPlain.replace(/"/g, '&quot;')}"${checked} />
+          </td>
           <td data-label="#">${i + 1}</td>
           <td data-label="Jogo">${matchHtml}</td>
           <td data-label="Tempo">${mercadoTempoLabel(row)}</td>
@@ -1899,9 +1966,9 @@
           <td data-label="Lucro 1u">${formatMercadoProfitCell(row)}</td>
           <td data-label="Status">${mercadoStatusLabel(row)}</td>
           <td data-label="Link">${link}</td>
-          <td data-label=""><button type="button" class="mercado-delete-btn" data-delete-mercado="${row.event_id}" data-delete-label="${matchPlain.replace(/"/g, '&quot;')}" title="Remover da lista">🗑</button></td>
         </tr>`;
       }).join('');
+      syncMercadoSelectionUi();
     }
 
     function updateMercadoStatus(meta, visibleCount, displayCount) {
@@ -1984,6 +2051,45 @@
       });
     }
 
+    document.getElementById('mercado-select-all')?.addEventListener('change', (e) => {
+      const on = e.target.checked;
+      document.querySelectorAll('#mercado-tbody .mercado-row-check').forEach((cb) => {
+        const id = cb.getAttribute('data-event-id');
+        if (!id) return;
+        cb.checked = on;
+        if (on) mercadoSelectedIds.add(id);
+        else mercadoSelectedIds.delete(id);
+      });
+      syncMercadoSelectionUi();
+    });
+
+    document.getElementById('mercado-tbody')?.addEventListener('change', (e) => {
+      const cb = e.target.closest('.mercado-row-check');
+      if (!cb) return;
+      const id = cb.getAttribute('data-event-id');
+      if (!id) return;
+      if (cb.checked) mercadoSelectedIds.add(id);
+      else mercadoSelectedIds.delete(id);
+      syncMercadoSelectionUi();
+    });
+
+    document.getElementById('btn-mercado-delete-selected')?.addEventListener('click', async () => {
+      const btn = document.getElementById('btn-mercado-delete-selected');
+      if (!btn || btn.disabled || mercadoDeleteBusy) return;
+      const ids = [...mercadoSelectedIds];
+      if (!ids.length) return;
+      mercadoDeleteBusy = true;
+      syncMercadoSelectionUi();
+      try {
+        await deleteMercadoRows(ids);
+      } catch (err) {
+        window.alert(err.message || String(err));
+      } finally {
+        mercadoDeleteBusy = false;
+        syncMercadoSelectionUi();
+      }
+    });
+
     document.getElementById('mercado-tbody')?.closest('main')?.addEventListener('click', async (e) => {
       const placarBtn = e.target.closest('[data-placar-goals]');
       if (placarBtn) {
@@ -2019,18 +2125,6 @@
         } else {
           showMercadoElevatedPopover(popBtn, eventId);
         }
-        return;
-      }
-      const btn = e.target.closest('[data-delete-mercado]');
-      if (!btn || btn.disabled) return;
-      const eventId = btn.getAttribute('data-delete-mercado');
-      const label = btn.getAttribute('data-delete-label') || '';
-      btn.disabled = true;
-      try {
-        await deleteMercadoRow(eventId, label);
-      } catch (err) {
-        window.alert(err.message || String(err));
-        btn.disabled = false;
       }
     });
 
