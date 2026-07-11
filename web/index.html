@@ -55,6 +55,7 @@
       color: var(--muted);
     }
     .status.error { color: #ff6b6b; }
+    .status.warn { color: #e6b84d; }
     .login-screen {
       min-height: 100vh;
       display: flex;
@@ -744,6 +745,10 @@
     let mercadoMetaCache = null;
     let logPollTimer = null;
     let logLoading = false;
+    let logLoadSeq = 0;
+    const LOG_LIST_COLUMNS =
+      'id,created_at,level,source,action,message,event_id,match_label,duration_ms';
+    const LOG_LIST_LIMIT = 200;
     let logCache = [];
     let activeTab = 'mercado';
     let sistemaAtivo = true;
@@ -759,7 +764,7 @@
       live_json_vs_sistema: 'JSON × Sistema',
       sistema_pausado: 'Sistema pausado',
       sistema_iniciado: 'Sistema iniciado',
-      mercado_captura: 'Captura +0,5',
+      coleta_abortada: 'Scrape abortado',
       mercado_red: 'RED',
       mercado_sem_linha: 'Sem linha',
       telegram_captura: 'Telegram captura',
@@ -905,8 +910,95 @@
 
     async function getAccessToken() {
       const sb = await initSupabaseClient();
-      const { data: { session } } = await sb.auth.getSession();
+      let { data: { session } } = await sb.auth.getSession();
+      const expiresMs = session?.expires_at ? session.expires_at * 1000 : 0;
+      if (session && expiresMs > 0 && expiresMs < Date.now() + 60_000) {
+        const { data: refreshed } = await sb.auth.refreshSession();
+        session = refreshed.session ?? session;
+      }
       return session?.access_token ?? null;
+    }
+
+    function sleepMs(ms) {
+      return new Promise((resolve) => setTimeout(resolve, ms));
+    }
+
+    function isRetryableFetchError(err) {
+      const msg = String(err?.message || err).toLowerCase();
+      return (
+        err?.name === 'AbortError' ||
+        msg.includes('failed to fetch') ||
+        msg.includes('networkerror') ||
+        msg.includes('network request failed') ||
+        msg.includes('load failed')
+      );
+    }
+
+    // #region agent log
+    function panelDbgLog(hypothesisId, location, message, data = {}) {
+      const entry = {
+        sessionId: 'fb8026',
+        hypothesisId,
+        location,
+        message,
+        data,
+        timestamp: Date.now(),
+      };
+      fetch('http://127.0.0.1:7904/ingest/86615625-6ae5-4e98-a1da-0a5f0f15fc42', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'X-Debug-Session-Id': 'fb8026' },
+        body: JSON.stringify(entry),
+      }).catch(() => {});
+      try {
+        const key = 'panelDbg_fb8026';
+        const prev = JSON.parse(sessionStorage.getItem(key) || '[]');
+        prev.push(entry);
+        sessionStorage.setItem(key, JSON.stringify(prev.slice(-40)));
+      } catch {
+        /* ignore */
+      }
+    }
+    // #endregion
+
+    async function restFetchWithRetry(url, init, { retries = 3, label = 'rest' } = {}) {
+      let lastErr;
+      for (let attempt = 1; attempt <= retries; attempt++) {
+        const controller = new AbortController();
+        const timer = setTimeout(() => controller.abort(), 25_000);
+        try {
+          const res = await fetch(url, { ...init, signal: controller.signal });
+          clearTimeout(timer);
+          return res;
+        } catch (err) {
+          clearTimeout(timer);
+          lastErr = err;
+          // #region agent log
+          panelDbgLog('F1', 'index.html:restFetchWithRetry', 'fetch failed', {
+            label,
+            attempt,
+            retries,
+            err: String(err?.message || err).slice(0, 200),
+          });
+          // #endregion
+          if (attempt < retries && isRetryableFetchError(err)) {
+            await sleepMs(400 * attempt);
+            continue;
+          }
+          throw err;
+        }
+      }
+      throw lastErr;
+    }
+
+    async function handleAuthResponse(res) {
+      if (res.status === 401 || res.status === 403) {
+        showLogin();
+        throw new Error('Sessao expirada. Faca login novamente.');
+      }
+      if (!res.ok) {
+        const text = await res.text();
+        throw new Error(`Supabase ${res.status}: ${text.slice(0, 200)}`);
+      }
     }
 
     function showLogin() {
@@ -926,28 +1018,21 @@
     async function supabaseGet(path) {
       const token = await getAccessToken();
       if (!token) throw new Error('Faca login para continuar.');
-      const res = await fetch(`${appCfg.url}/rest/v1/${path}`, {
+      const res = await restFetchWithRetry(`${appCfg.url}/rest/v1/${path}`, {
         headers: {
           apikey: appCfg.anonKey,
           Authorization: `Bearer ${token}`,
           Accept: 'application/json',
         },
-      });
-      if (res.status === 401 || res.status === 403) {
-        showLogin();
-        throw new Error('Sessao expirada. Faca login novamente.');
-      }
-      if (!res.ok) {
-        const text = await res.text();
-        throw new Error(`Supabase ${res.status}: ${text.slice(0, 200)}`);
-      }
+      }, { label: `GET ${path.split('?')[0]}` });
+      await handleAuthResponse(res);
       return res.json();
     }
 
     async function supabasePatch(path, body) {
       const token = await getAccessToken();
       if (!token) throw new Error('Faca login para continuar.');
-      const res = await fetch(`${appCfg.url}/rest/v1/${path}`, {
+      const res = await restFetchWithRetry(`${appCfg.url}/rest/v1/${path}`, {
         method: 'PATCH',
         headers: {
           apikey: appCfg.anonKey,
@@ -956,15 +1041,8 @@
           Prefer: 'return=representation',
         },
         body: JSON.stringify(body),
-      });
-      if (res.status === 401 || res.status === 403) {
-        showLogin();
-        throw new Error('Sessao expirada. Faca login novamente.');
-      }
-      if (!res.ok) {
-        const text = await res.text();
-        throw new Error(`Supabase ${res.status}: ${text.slice(0, 200)}`);
-      }
+      }, { label: `PATCH ${path.split('?')[0]}` });
+      await handleAuthResponse(res);
       const rows = await res.json();
       return Array.isArray(rows) ? rows : [];
     }
@@ -972,7 +1050,7 @@
     async function supabaseRpc(fn, args = {}) {
       const token = await getAccessToken();
       if (!token) throw new Error('Faca login para continuar.');
-      const res = await fetch(`${appCfg.url}/rest/v1/rpc/${fn}`, {
+      const res = await restFetchWithRetry(`${appCfg.url}/rest/v1/rpc/${fn}`, {
         method: 'POST',
         headers: {
           apikey: appCfg.anonKey,
@@ -980,15 +1058,8 @@
           'Content-Type': 'application/json',
         },
         body: JSON.stringify(args),
-      });
-      if (res.status === 401 || res.status === 403) {
-        showLogin();
-        throw new Error('Sessao expirada. Faca login novamente.');
-      }
-      if (!res.ok) {
-        const text = await res.text();
-        throw new Error(`Supabase RPC ${res.status}: ${text.slice(0, 200)}`);
-      }
+      }, { label: `RPC ${fn}` });
+      await handleAuthResponse(res);
       const text = await res.text();
       if (!text) return null;
       try {
@@ -996,6 +1067,25 @@
       } catch {
         return text;
       }
+    }
+
+    /** Apaga todos os logs (filtro id not null = todas as linhas). Requer policy delete no BD. */
+    async function supabaseDeleteAllSistemaLog() {
+      const token = await getAccessToken();
+      if (!token) throw new Error('Faca login para continuar.');
+      const res = await restFetchWithRetry(
+        `${appCfg.url}/rest/v1/futebol_sistema_log?id=not.is.null`,
+        {
+          method: 'DELETE',
+          headers: {
+            apikey: appCfg.anonKey,
+            Authorization: `Bearer ${token}`,
+            Prefer: 'return=minimal',
+          },
+        },
+        { label: 'DELETE futebol_sistema_log' },
+      );
+      await handleAuthResponse(res);
     }
 
     async function deleteMercadoRow(eventId, label) {
@@ -1728,14 +1818,32 @@
         updateMercadoStatus(mercadoMetaCache, visible.length, display.length);
         renderMercado();
       } catch (err) {
+        const msg = err.message || String(err);
+        // #region agent log
+        panelDbgLog('F2', 'index.html:loadMercado', 'load failed', {
+          msg: msg.slice(0, 200),
+          cacheLen: mercadoCache.length,
+        });
+        // #endregion
         const status = document.getElementById('status');
-        if (status) {
-          status.className = 'status error';
-          status.textContent = err.message || String(err);
-        }
-        if (tbody) {
-          tbody.innerHTML =
-            `<tr><td colspan="13" class="empty">${err.message || String(err)}</td></tr>`;
+        if (mercadoCache.length) {
+          const visible = mercadoVisibleRows(mercadoCache);
+          const display = mercadoDisplayRows(mercadoCache);
+          updateMercadoStatus(mercadoMetaCache, visible.length, display.length);
+          renderMercado();
+          if (status) {
+            status.className = 'status warn';
+            status.textContent = `Atualizacao falhou (${msg}) — exibindo dados anteriores`;
+          }
+        } else {
+          if (status) {
+            status.className = 'status error';
+            status.textContent = msg;
+          }
+          if (tbody) {
+            tbody.innerHTML =
+              `<tr><td colspan="13" class="empty">${msg}</td></tr>`;
+          }
         }
       } finally {
         mercadoLoading = false;
@@ -1940,7 +2048,7 @@
       return `<h4>${cat}</h4>${head}${reportHtml}${payloadHtml}`;
     }
 
-    function showLogDetailPopover(btn, logId) {
+    async function showLogDetailPopover(btn, logId) {
       const pop = document.getElementById('mercado-elevated-popover');
       if (!pop) return;
       const tipKey = `log-${logId}`;
@@ -1948,11 +2056,29 @@
         hideMercadoElevatedPopover();
         return;
       }
-      const row = logCache.find((r) => String(r.id) === String(logId));
-      pop.innerHTML = renderLogDetailHtml(row);
+      let row = logCache.find((r) => String(r.id) === String(logId));
       pop.dataset.tipKey = tipKey;
       delete pop.dataset.eventId;
       positionMercadoPopover(btn, pop);
+      pop.classList.add('open');
+      if (row && row.payload === undefined && logId) {
+        pop.innerHTML = '<p class="muted">Carregando detalhes…</p>';
+        try {
+          const full = await supabaseGet(
+            `futebol_sistema_log?select=payload&id=eq.${encodeURIComponent(logId)}&limit=1`,
+          );
+          const payload = full?.[0]?.payload ?? null;
+          const idx = logCache.findIndex((r) => String(r.id) === String(logId));
+          if (idx >= 0) {
+            logCache[idx] = { ...logCache[idx], payload };
+            row = logCache[idx];
+          }
+        } catch (err) {
+          pop.innerHTML = `<p class="muted">${escapeHtml(err.message || String(err))}</p>`;
+          return;
+        }
+      }
+      pop.innerHTML = renderLogDetailHtml(row);
     }
 
     function formatLogMessageHtml(message) {
@@ -2018,7 +2144,10 @@
         const detalhes = row.action === 'live_json_vs_sistema'
           ? formatLiveConferenceMessageHtml(row.message)
           : (row.match_label
-            ? `${formatMatchLabelHtml(row.match_label)} / ${formatLogMessageHtml(row.message)}`
+            ? `${formatMatchLabelHtml(row.match_label)} / ${formatLogMessageHtml(row.message)}` +
+              (row.source && row.source !== 'edge-live' && row.source !== 'painel'
+                ? ` <span class="muted">[${escapeHtml(row.source)}]</span>`
+                : '')
             : formatLogMessageHtml(row.message));
         return `<tr class="${rowCls}">
           <td data-label="Data/Hora">${formatDate(row.created_at)}</td>
@@ -2035,29 +2164,69 @@
       el.textContent = `${logCache.length} registro(s) · mais recente ${when}`;
     }
 
+    function isRedundantSistemaLogRow(row) {
+      if (row?.action === 'mercado_sem_linha') return true;
+      const msg = String(row?.message ?? '');
+      return /Encerrado sem linha \+0,5/i.test(msg) && /fora do live/i.test(msg);
+    }
+
     async function loadSistemaLog() {
-      if (logLoading) return;
-      logLoading = true;
+      const seq = ++logLoadSeq;
       const tbody = document.getElementById('log-tbody');
-      try {
-        await initAppCfg();
-        const rows = await supabaseGet(
-          'futebol_sistema_log?select=*&order=created_at.desc&limit=300',
-        );
-        logCache = rows ?? [];
+      if (logCache.length) {
         renderSistemaLog();
         updateLogStatus();
-      } catch (err) {
-        if (tbody) {
-          tbody.innerHTML = `<tr><td colspan="3" class="empty">${err.message || String(err)}</td></tr>`;
-        }
+      } else if (tbody) {
+        tbody.innerHTML = '<tr><td colspan="3" class="empty">Carregando…</td></tr>';
+      }
+      logLoading = true;
+      try {
+        await initAppCfg();
+        const t0 = performance.now();
+        const rows = await supabaseGet(
+          `futebol_sistema_log?select=${LOG_LIST_COLUMNS}&order=created_at.desc&limit=${LOG_LIST_LIMIT}`,
+        );
+        if (seq !== logLoadSeq) return;
+        // #region agent log
+        panelDbgLog('L1', 'index.html:loadSistemaLog', 'ok', {
+          ms: Math.round(performance.now() - t0),
+          count: (rows ?? []).length,
+        });
+        // #endregion
+        logCache = (rows ?? []).filter((row) => !isRedundantSistemaLogRow(row));
+        renderSistemaLog();
+        updateLogStatus();
         const el = document.getElementById('log-status');
-        if (el) {
-          el.className = 'status error';
-          el.textContent = err.message || String(err);
+        if (el) el.className = 'status';
+      } catch (err) {
+        if (seq !== logLoadSeq) return;
+        const msg = err.message || String(err);
+        // #region agent log
+        panelDbgLog('L2', 'index.html:loadSistemaLog', 'load failed', {
+          msg: msg.slice(0, 200),
+          cacheLen: logCache.length,
+        });
+        // #endregion
+        if (logCache.length) {
+          renderSistemaLog();
+          updateLogStatus();
+          const el = document.getElementById('log-status');
+          if (el) {
+            el.className = 'status warn';
+            el.textContent = `Atualizacao falhou (${msg}) — exibindo log anterior`;
+          }
+        } else {
+          if (tbody) {
+            tbody.innerHTML = `<tr><td colspan="3" class="empty">${msg}</td></tr>`;
+          }
+          const el = document.getElementById('log-status');
+          if (el) {
+            el.className = 'status error';
+            el.textContent = msg;
+          }
         }
       } finally {
-        logLoading = false;
+        if (seq === logLoadSeq) logLoading = false;
       }
     }
 
@@ -2066,12 +2235,43 @@
       const btn = document.getElementById('btn-log-clear');
       if (btn) btn.disabled = true;
       try {
-        await supabaseRpc('clear_futebol_sistema_log');
+        await initAppCfg();
+        try {
+          await supabaseRpc('clear_futebol_sistema_log');
+          // #region agent log
+          panelDbgLog('L3', 'index.html:clearSistemaLog', 'cleared via rpc', {});
+          // #endregion
+        } catch (rpcErr) {
+          const rpcMsg = rpcErr?.message || String(rpcErr);
+          const needsFallback =
+            rpcMsg.includes('21000') || /WHERE clause/i.test(rpcMsg);
+          // #region agent log
+          panelDbgLog('L3', 'index.html:clearSistemaLog', 'rpc failed', {
+            msg: rpcMsg.slice(0, 240),
+            needsFallback,
+          });
+          // #endregion
+          if (!needsFallback) throw rpcErr;
+          await supabaseDeleteAllSistemaLog();
+          // #region agent log
+          panelDbgLog('L3', 'index.html:clearSistemaLog', 'cleared via rest delete', {});
+          // #endregion
+        }
         logCache = [];
         renderSistemaLog();
         updateLogStatus();
       } catch (err) {
-        window.alert(err.message || String(err));
+        const msg = err.message || String(err);
+        // #region agent log
+        panelDbgLog('L3', 'index.html:clearSistemaLog', 'clear failed', {
+          msg: msg.slice(0, 240),
+        });
+        // #endregion
+        window.alert(
+          msg.includes('21000') || /WHERE clause/i.test(msg)
+            ? 'Nao foi possivel limpar o log. Rode no projeto:\n  supabase db push'
+            : msg,
+        );
       } finally {
         if (btn) btn.disabled = false;
       }
@@ -2135,10 +2335,10 @@
         const rows = await supabaseGet(
           'futebol_live_coleta_config?select=ativo&id=eq.default&limit=1',
         );
-        sistemaAtivo = rows?.[0]?.ativo !== false;
+        sistemaAtivo = rows?.[0]?.ativo === true;
       } catch (err) {
         console.warn('loadSistemaAtivo', err);
-        sistemaAtivo = true;
+        sistemaAtivo = false;
       }
       renderSistemaToggle();
     }
@@ -2147,14 +2347,17 @@
       if (sistemaToggleBusy) return;
       const next = !sistemaAtivo;
       const confirmMsg = next
-        ? 'Iniciar a coleta Edge (cron Supabase)?\n\nO Chrome no seu PC so abre se o worker local estiver rodando:\n  .\\scripts\\start-monitor.ps1'
-        : 'Pausar a coleta Edge (cron Supabase)?\n\nO worker local no PC para de scrapear enquanto estiver pausado.';
+        ? 'Ligar o sistema?\n\nAtiva a coleta JSON (Edge) e permite scrape HCTG no worker local.\n\nWorker local: .\\scripts\\run-local-hctg-worker.ps1'
+        : 'Pausar o sistema?\n\nEdge e worker local verificam ativo=false antes de cada coleta (JSON ou Chrome).';
       if (!window.confirm(confirmMsg)) return;
       sistemaToggleBusy = true;
       renderSistemaToggle();
       try {
         const ativo = await supabaseRpc('set_futebol_sistema_ativo', { p_ativo: next });
         sistemaAtivo = ativo === true || ativo === 'true';
+        if (next && sistemaAtivo) {
+          loadMercado();
+        }
         if (activeTab === 'log') loadSistemaLog();
       } catch (err) {
         window.alert(err.message || String(err));
