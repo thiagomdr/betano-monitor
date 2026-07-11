@@ -5,14 +5,13 @@
  * Round-robin: 1 jogo por ciclo, fila = ao vivo exceto win (GREEN) / loss (RED).
  *
  * Env: SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY
- * Opcional: HCTG_POLL_SEC=90, HCTG_POLL_JITTER_SEC=25,
- *   HCTG_MAX_ATTEMPTS=3, HCTG_BROWSER_RESTART_MIN=60,
+ * Opcional: HCTG_ERROR_RETRY_SEC=15, HCTG_MAX_ATTEMPTS=3, HCTG_BROWSER_RESTART_MIN=60,
  *   HCTG_WORKER_SOURCE=local-worker, HCTG_HTML_SOURCE=html-dom-local,
  *   HCTG_HEADLESS=0|1, HCTG_PAUSE_POLL_SEC=15
  *
  * Windows PC: .\scripts\run-local-hctg-worker.ps1
  */
-import { readFileSync, existsSync } from "fs";
+import { readFileSync, existsSync, appendFileSync } from "fs";
 import { dirname, join } from "path";
 import { fileURLToPath } from "url";
 import { createClient } from "@supabase/supabase-js";
@@ -64,6 +63,35 @@ const scrapeTimeoutMs = Number(process.env.HCTG_SCRAPE_TIMEOUT_MS || "120000");
 const workerSource = (process.env.HCTG_WORKER_SOURCE || "local-worker").trim() || "local-worker";
 const htmlSource = (process.env.HCTG_HTML_SOURCE || "html-dom-local").trim() || "html-dom-local";
 const headless = (process.env.HCTG_HEADLESS || "0").trim() === "1";
+
+// #region agent log
+function dbgWorker(hypothesisId, location, message, data = {}) {
+  const payload = {
+    sessionId: "6a21a5",
+    hypothesisId,
+    location,
+    message,
+    data,
+    timestamp: Date.now(),
+  };
+  fetch("http://127.0.0.1:7904/ingest/86615625-6ae5-4e98-a1da-0a5f0f15fc42", {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      "X-Debug-Session-Id": "6a21a5",
+    },
+    body: JSON.stringify(payload),
+  }).catch(() => {});
+  try {
+    appendFileSync(
+      join(__dirname, "..", "debug-6a21a5.log"),
+      JSON.stringify(payload) + "\n",
+    );
+  } catch {
+    /* ignore */
+  }
+}
+// #endregion
 
 function isPlaywrightBrowserMissing(err) {
   const msg = String(err?.message ?? err);
@@ -134,14 +162,12 @@ function randomInt(min, max) {
 }
 
 function nextPollDelayMs() {
+  // Coleta imediata apos cada jogo; so espera em erro (retry curto).
   if (lastCycleHadError) {
     const sec = Math.max(5, errorRetrySec);
     return sec * 1000;
   }
-  const jitter = Math.max(0, pollJitterSec);
-  const minSec = Math.max(30, pollSec - jitter);
-  const maxSec = pollSec + jitter;
-  return randomInt(minSec, maxSec) * 1000;
+  return 0;
 }
 
 if (!supabaseUrl || !serviceKey) {
@@ -366,6 +392,7 @@ function getWorkerGameState(eventId) {
       odd: null,
       checkedAt: null,
       addedThisCycle: false,
+      addedAt: null,
     });
   }
   return workerGameState.get(id);
@@ -378,6 +405,7 @@ function markNewGamesInQueue(queue) {
       const st = getWorkerGameState(id);
       if (st.status !== "ok" && st.status !== "error") {
         st.addedThisCycle = true;
+        if (!st.addedAt) st.addedAt = new Date().toISOString();
       }
     }
   }
@@ -481,7 +509,8 @@ function formatGameQueueLine(label, st, { checking = false, paused = false } = {
     return `${label} - Erro: ${st.error} · tentativa ${st.attempts}/${maxHctgAttempts}`;
   }
   if (st.addedThisCycle) {
-    return `${label} - Adicionado neste ciclo`;
+    if (!st.addedAt) st.addedAt = new Date().toISOString();
+    return `${label} - Adicionado neste ciclo${formatWorkerCheckedAt(st.addedAt)}`;
   }
   return `${label} - Na fila`;
 }
@@ -529,6 +558,18 @@ async function publishWorkerQueue(epoch, queue, checkingEventId = null, extra = 
     paused ? null : checkingEventId,
   );
   const actionLabel = workerActionLabel(queue, checkingEventId, paused);
+  // #region agent log
+  dbgWorker("A", "hctg-worker.mjs:publishWorkerQueue", "publish fila", {
+    cycle: cycleCount,
+    paused,
+    checkingEventId,
+    actionLabel,
+    queueLen: queue.length,
+    displayLen: displayQueue.length,
+    roundRobinIndex,
+    mode: "round-robin-1",
+  });
+  // #endregion
   const games = displayQueue.map((row) => {
     const id = String(row.event_id);
     const st = workerGameState.get(id) || getWorkerGameState(id);
@@ -548,6 +589,7 @@ async function publishWorkerQueue(epoch, queue, checkingEventId = null, extra = 
       odd: st.odd,
       checked_at: st.checkedAt,
       added_this_cycle: st.addedThisCycle === true,
+      added_at: st.addedAt ?? null,
       display_line: formatGameQueueLine(label, st, { checking, paused }),
     };
   });
@@ -718,6 +760,15 @@ async function runCycle() {
 
   const coletaSt = await readColetaState(supabase);
   const ativo = coletaSt?.ativo === true;
+
+  // #region agent log
+  dbgWorker("B", "hctg-worker.mjs:runCycle", "ciclo inicio", {
+    cycle: cycleCount,
+    ativo,
+    queueLen: queue.length,
+    roundRobinIndex,
+  });
+  // #endregion
 
   if (!ativo) {
     await closeChromeIfPausado();
@@ -959,13 +1010,20 @@ process.on("SIGTERM", shutdown);
 
 console.log(
   `[worker] mode=${workerSource} html=${htmlSource} headless=${headless} ` +
-    `poll=${pollSec}s±${pollJitterSec}s round-robin=1 ` +
+    `poll=imediato erro-retry=${errorRetrySec}s round-robin=1 ` +
     `max_attempts=${maxHctgAttempts} ` +
     `restart=${restartEveryCycles > 0 ? `${restartEveryCycles}ciclo|` : ""}${restartEveryMin}min ` +
-    `aba=unica cache=${restartEveryMin}min erro-retry=${errorRetrySec}s ` +
+    `aba=unica cache=${restartEveryMin}min ` +
     `routes=none ` +
     `fila=${WORKER_QUEUE_RESULTADOS.join(",")} url=${supabaseUrl}`,
 );
+// #region agent log
+dbgWorker("A", "hctg-worker.mjs:startup", "worker boot banner", {
+  mode: "round-robin-1",
+  maxHctgAttempts,
+  workerSource,
+});
+// #endregion
 
 async function scheduleNextCycle() {
   const ativo = await isColetaAtiva(supabase);
@@ -980,7 +1038,11 @@ async function scheduleNextCycle() {
   if (justResumed) {
     console.log("[worker] sistema religado — ciclo imediato");
   } else if (ativo) {
-    console.log(`[worker] proximo ciclo em ${(delayMs / 1000).toFixed(0)}s`);
+    if (delayMs > 0) {
+      console.log(`[worker] proximo ciclo em ${(delayMs / 1000).toFixed(0)}s (retry apos erro)`);
+    } else {
+      console.log("[worker] proximo ciclo imediato");
+    }
   } else {
     console.log(`[worker] sistema pausado — proxima verificacao em ${(delayMs / 1000).toFixed(0)}s`);
     await closeChromeIfPausado();

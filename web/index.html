@@ -2246,7 +2246,10 @@
         return `${label} - <span class="log-report-warn">Erro: ${escapeHtml(g.error)} · tentativa ${g.attempts}/${maxAtt}</span>`;
       }
       if (g.added_this_cycle) {
-        return `${label} - <span class="muted">Adicionado neste ciclo</span>`;
+        const dateHtml = g.added_at
+          ? ` <span class="muted">${escapeHtml(formatDate(g.added_at))}</span>`
+          : '';
+        return `${label} - <span class="muted">Adicionado neste ciclo</span>${dateHtml}`;
       }
       return `${label} - <span class="muted">Na fila</span>`;
     }
@@ -2310,9 +2313,12 @@
       if (retry) {
         return `${formatMatchLabelHtml(retry[1])} - <span class="log-report-warn">Erro: ${escapeHtml(retry[2])} · tentativa ${escapeHtml(retry[3])}</span>`;
       }
-      const added = line.match(/^(.+?) - Adicionado neste ciclo$/);
+      const added = line.match(/^(.+?) - Adicionado neste ciclo(?: · (.+))?$/);
       if (added) {
-        return `${formatMatchLabelHtml(added[1])} - <span class="muted">Adicionado neste ciclo</span>`;
+        const dateHtml = added[2]
+          ? ` <span class="muted">${escapeHtml(added[2])}</span>`
+          : '';
+        return `${formatMatchLabelHtml(added[1])} - <span class="muted">Adicionado neste ciclo</span>${dateHtml}`;
       }
       const naFila = line.match(/^(.+?) - Na fila$/);
       if (naFila) {
@@ -2480,6 +2486,16 @@
           `futebol_sistema_log?select=${LOG_QUEUE_COLUMNS}&action=eq.hctg_worker_fila&order=created_at.desc&limit=1`,
         );
         workerQueueCache = rows?.[0] ?? workerQueueCache;
+        // #region agent log
+        {
+          const r = workerQueueCache;
+          const p = r?.payload ?? {};
+          const ageSec = r?.created_at
+            ? Math.round((Date.now() - new Date(r.created_at).getTime()) / 1000)
+            : null;
+          fetch('http://127.0.0.1:7904/ingest/86615625-6ae5-4e98-a1da-0a5f0f15fc42',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'6a21a5'},body:JSON.stringify({sessionId:'6a21a5',hypothesisId:'C',location:'index.html:loadWorkerQueueOnly',message:'panel fila poll',data:{ageSec,actionLabel:p.action_label??null,cycle:p.cycle??null,paused:p.paused===true,checking:!!(p.games||[]).find(g=>g.checking),total:p.total??null,created_at:r?.created_at??null},timestamp:Date.now()})}).catch(()=>{});
+        }
+        // #endregion
         renderWorkerQueuePinned();
       } catch {
         /* mantem cache anterior */
