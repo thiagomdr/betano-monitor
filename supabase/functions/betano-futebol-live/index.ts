@@ -116,7 +116,7 @@ function mercadoHadElevatedFromHctg(snap: HctgSnapshot, goalsTotal: number): boo
 }
 
 
-/** HCTG vem do worker OddsPapi (WebSocket) / legado HTML — Edge so le do BD. */
+/** HCTG vem do worker HTML local — Edge so le do BD. Nunca gera odds HCTG via JSON. */
 const EMPTY_HCTG: HctgSnapshot = { lines: [], source: "pending", marketIds: [] };
 
 function hctgSnapshotFromDbRow(row: Json | null | undefined): HctgSnapshot {
@@ -1331,61 +1331,16 @@ function totalsFromLooseGoals(
   return canonicalizeTotalsOver05(totals, goalsTotal);
 }
 
-/** Mercados de gols do evento: overview?eventId= + selecoes soltas + fallbacks. */
+/** Mercados de gols do evento via JSON — desativado (fonte unica = Worker HCTG). */
 async function fetchEventGoalMarkets(
-  supabase: ReturnType<typeof createClient>,
-  eventId: string,
-  event: Json,
-  goalsTotal: number,
-  globalOverview: Json,
-  epoch: string,
+  _supabase: ReturnType<typeof createClient>,
+  _eventId: string,
+  _event: Json,
+  _goalsTotal: number,
+  _globalOverview: Json,
+  _epoch: string,
 ): Promise<TotalsOdds> {
-  const base = `${OVERVIEW_URL}&eventId=${encodeURIComponent(eventId)}`;
-  const version = event.version;
-  const contentVersion = event.contentVersion;
-  const scopedUrls = [base];
-  if (version != null && contentVersion != null) {
-    scopedUrls.push(
-      `${base}&version=${encodeURIComponent(String(version))}` +
-      `&contentVersion=${encodeURIComponent(String(contentVersion))}`,
-    );
-  }
-
-  for (const url of scopedUrls) {
-    try {
-      const scoped = asRecord(await betanoGet(supabase, url, epoch));
-      if (!scoped?.selections) continue;
-      const selections = asRecord(scoped.selections) ?? {};
-      const anchorOver = mainHctgAnchorOver(event, scoped) ??
-        mainHctgAnchorOver(event, overview);
-      const needLine = goalsTotal + 0.5;
-      let totals = extractTotalsOdds(eventId, event, scoped, goalsTotal);
-
-      const directOver = pickLooseOverOddForLine(selections, needLine, anchorOver);
-      if (directOver != null) {
-        totals = mergeAndCanonicalizeTotals(
-          totals,
-          totalsFromDirectOverLine(needLine, directOver, goalsTotal),
-          goalsTotal,
-        );
-      }
-
-      const loose = harvestLooseGoalTotals(selections, goalsTotal);
-      if (loose.length) {
-        totals = mergeAndCanonicalizeTotals(
-          totals,
-          totalsFromLooseGoals(loose, goalsTotal),
-          goalsTotal,
-        );
-      }
-      if (canCaptureTrueOver05(totals, goalsTotal)) return totals;
-      if (totals.over_0_odd != null) return totals;
-      if (directOver != null) return totals;
-    } catch {
-      // tenta proxima URL
-    }
-  }
-  return fetchEventTotalsOdds(supabase, eventId, goalsTotal, epoch);
+  return { ...EMPTY_TOTALS_ODDS };
 }
 
 /** Extrai mercados/selecoes aninhados em marketOffers (inclui HCTG alternativos). */
@@ -1537,52 +1492,14 @@ function supplementOverviewHctgOrphans(
   return mergeAndCanonicalizeTotals(totals, patched, goalsTotal);
 }
 
-/** Busca mercados extras do evento (totais Under/Over) quando o overview nao traz. */
+/** Desativado: odds so via Worker HTML (hctg_lines). Nao busca markets-offers/JSON. */
 async function fetchEventTotalsOdds(
-  supabase: ReturnType<typeof createClient>,
-  eventId: string,
-  goalsTotal: number,
-  epoch: string,
+  _supabase: ReturnType<typeof createClient>,
+  _eventId: string,
+  _goalsTotal: number,
+  _epoch: string,
 ): Promise<TotalsOdds> {
-  const urls = [
-    `${BETANO_BASE}/api/event/markets-offers/${eventId}`,
-    `${BETANO_BASE}/danae-webapi/api/live/events/${eventId}?queryLanguageId=5&queryOperatorId=8`,
-  ];
-
-  for (const url of urls) {
-    try {
-      const data = await betanoGet(supabase, url, epoch);
-
-      const fromOffers = flattenOffersMarkets(data);
-      if (Object.keys(fromOffers.markets).length > 0) {
-        const fakeOverview = { markets: fromOffers.markets, selections: fromOffers.selections };
-        const parsed = extractTotalsOdds(
-          eventId,
-          { marketIdList: Object.keys(fromOffers.markets) },
-          fakeOverview,
-          goalsTotal,
-        );
-        if (hasAnyTotalsOdds(parsed)) return parsed;
-      }
-
-      const rec = asRecord(data) ?? {};
-      const inner = asRecord(rec.result) ?? asRecord(rec.data) ?? rec;
-      const markets = asRecord(inner.markets) ?? asRecord(rec.markets) ?? {};
-      const selections = asRecord(inner.selections) ?? asRecord(rec.selections) ?? {};
-      const fakeOverview = { markets, selections };
-      const fromStruct = extractTotalsOdds(
-        eventId,
-        { marketIdList: Object.keys(markets) },
-        fakeOverview,
-        goalsTotal,
-      );
-      if (hasAnyTotalsOdds(fromStruct)) return fromStruct;
-    } catch {
-      // tenta proximo
-    }
-  }
-
-  return EMPTY_TOTALS_ODDS;
+  return { ...EMPTY_TOTALS_ODDS };
 }
 
 async function fetchEventUnderOdds(
@@ -3102,13 +3019,15 @@ Deno.serve(async (req) => {
       const league = extractLeague(event, leagues);
       const minute = extractMinute(event);
       const injury = extractInjuryTime(event);
-      const ml = extractMlOdds(eventId, overview);
+      // 1X2 do JSON desativado — unica fonte de odds = Worker HCTG.
+      const ml = { home: null as number | null, draw: null as number | null, away: null as number | null };
       const goalsTotal = (score.home ?? 0) + (score.away ?? 0);
       const mercadoResultado = mercadoResultadoByEvent.get(eventId) ?? null;
       const url = betanoUrl(eventId, teams.home, teams.away);
       const hctgSnap = hctgByEvent.get(eventId) ?? { ...EMPTY_HCTG };
       if (hctgSnap.lines.length > 0) hctgWithLines += 1;
       else hctgEmpty += 1;
+      // Odds totais so a partir do Worker (hctg_lines no BD) — nunca do JSON Betano.
       const totals = buildTotalsFromHctgSnapshot(hctgSnap, goalsTotal);
 
       const under = totals;
@@ -3237,16 +3156,14 @@ Deno.serve(async (req) => {
         updated_at: nowIso,
       }, { onConflict: "event_id" });
 
-      // Congela odds aos 85' (primeira coleta >= 85); nao altera depois
+      // Congela odds aos 85' so se o Worker ja gravou HCTG (sem fallback JSON).
       if (
         minute != null &&
         minute >= MIN_MINUTE_DEFAULT &&
-        !prevGame?.odds_85_captured_at
+        !prevGame?.odds_85_captured_at &&
+        hasAnyTotalsOdds(totals)
       ) {
-        let snap = totals;
-        if (!hasAnyTotalsOdds(snap)) {
-          snap = await fetchEventTotalsOdds(supabase, eventId, goalsTotal, coletaEpoch);
-        }
+        const snap = totals;
         await supabase
           .from("futebol_historico_jogos")
           .update({
