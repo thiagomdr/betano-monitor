@@ -494,25 +494,43 @@ function sortQueueForDisplay(queue, startIndex = roundRobinIndex, checkingEventI
   return [...verified, ...pending];
 }
 
-function formatGameQueueLine(label, st, { checking = false, paused = false } = {}) {
+function formatScoreForQueue(score) {
+  const raw = String(score ?? "").trim();
+  if (!raw || raw === "—") return "—";
+  const m = raw.match(/^(\d+)\s*[-:xX]\s*(\d+)$/);
+  if (m) return `${m[1]} x ${m[2]}`;
+  return raw.replace(/-/g, " x ");
+}
+
+function formatQueueMatchPrefix(label, row = {}) {
+  const minute =
+    row.last_minute != null && row.last_minute !== ""
+      ? `${row.last_minute}'`
+      : "—'";
+  const score = formatScoreForQueue(row.live_score);
+  return `${label} - ${minute} - ${score}`;
+}
+
+function formatGameQueueLine(label, st, { checking = false, paused = false, row = null } = {}) {
+  const prefix = formatQueueMatchPrefix(label, row ?? {});
   if (checking && !paused) {
     const n = Math.min(st.attempts + 1, maxHctgAttempts);
-    return `${label} - Coletando... (${n}/${maxHctgAttempts})`;
+    return `${prefix} - Coletando... (${n}/${maxHctgAttempts})`;
   }
   if (st.status === "ok" && st.line != null && st.odd != null) {
-    return `${label} - V +${formatHctgLineLabel(st.line)} (${formatOddFixed2(st.odd)})${formatWorkerCheckedAt(st.checkedAt)}`;
+    return `${prefix} - +${formatHctgLineLabel(st.line)} (${formatOddFixed2(st.odd)})${formatWorkerCheckedAt(st.checkedAt)}`;
   }
   if (st.status === "error" || st.attempts >= maxHctgAttempts) {
-    return `${label} - X ${st.error || "Erro HCTG"}`;
+    return `${prefix} - X ${st.error || "Erro HCTG"}`;
   }
   if ((st.status === "retry" || st.attempts > 0) && st.error) {
-    return `${label} - Erro: ${st.error} · tentativa ${st.attempts}/${maxHctgAttempts}`;
+    return `${prefix} - Erro: ${st.error} · tentativa ${st.attempts}/${maxHctgAttempts}`;
   }
   if (st.addedThisCycle) {
     if (!st.addedAt) st.addedAt = new Date().toISOString();
-    return `${label} - Adicionado neste ciclo${formatWorkerCheckedAt(st.addedAt)}`;
+    return `${prefix} - Adicionado neste ciclo${formatWorkerCheckedAt(st.addedAt)}`;
   }
-  return `${label} - Na fila`;
+  return `${prefix} - Na fila`;
 }
 
 function buildWorkerQueueMessage(queue, checkingEventId, ctx = {}) {
@@ -522,7 +540,7 @@ function buildWorkerQueueMessage(queue, checkingEventId, ctx = {}) {
     const id = String(row.event_id);
     const st = workerGameState.get(id) || getWorkerGameState(id);
     const checking = checkingEventId != null && id === String(checkingEventId);
-    return formatGameQueueLine(label, st, { checking, paused });
+    return formatGameQueueLine(label, st, { checking, paused, row });
   });
 
   return [
@@ -581,6 +599,7 @@ async function publishWorkerQueue(epoch, queue, checkingEventId = null, extra = 
       betano_url: row.betano_url ?? null,
       resultado: row.resultado,
       last_minute: row.last_minute,
+      live_score: row.live_score ?? null,
       checking: checking && !paused,
       attempts: st.attempts,
       max_attempts: maxHctgAttempts,
@@ -591,7 +610,7 @@ async function publishWorkerQueue(epoch, queue, checkingEventId = null, extra = 
       checked_at: st.checkedAt,
       added_this_cycle: st.addedThisCycle === true,
       added_at: st.addedAt ?? null,
-      display_line: formatGameQueueLine(label, st, { checking, paused }),
+      display_line: formatGameQueueLine(label, st, { checking, paused, row }),
     };
   });
 

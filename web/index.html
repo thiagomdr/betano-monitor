@@ -2247,12 +2247,30 @@
         .join('\n');
     }
 
-    function formatWorkerQueueGameHtml(g) {
+    function formatWorkerQueueScore(score) {
+      const raw = String(score ?? '').trim();
+      if (!raw || raw === '—') return '—';
+      const m = raw.match(/^(\d+)\s*[-:xX]\s*(\d+)$/);
+      if (m) return `${m[1]} x ${m[2]}`;
+      return raw.replace(/-/g, ' x ');
+    }
+
+    function formatWorkerQueueMatchPrefixHtml(g) {
       const label = formatMatchLabelHtml(g.label || '—', g.betano_url);
+      const minute =
+        g.last_minute != null && g.last_minute !== ''
+          ? `${g.last_minute}'`
+          : "—'";
+      const score = formatWorkerQueueScore(g.live_score);
+      return `${label} - ${escapeHtml(minute)} - ${escapeHtml(score)}`;
+    }
+
+    function formatWorkerQueueGameHtml(g) {
+      const prefix = formatWorkerQueueMatchPrefixHtml(g);
       const maxAtt = g.max_attempts ?? 3;
       if (g.checking) {
         const n = Math.min((g.attempts ?? 0) + 1, maxAtt);
-        return `${label} - <span class="log-report-warn">Coletando... (${n}/${maxAtt})</span>`;
+        return `${prefix} - <span class="log-report-warn">Coletando... (${n}/${maxAtt})</span>`;
       }
       if (g.status === 'ok' && g.line != null && g.odd != null) {
         const lineStr = formatNumber(g.line);
@@ -2263,21 +2281,21 @@
         const dateHtml = g.checked_at
           ? ` <span class="muted">${escapeHtml(formatDate(g.checked_at))}</span>`
           : '';
-        return `${label} - <span class="log-report-ok">V +${escapeHtml(lineStr)} (${escapeHtml(oddStr)})</span>${dateHtml}`;
+        return `${prefix} - <span class="log-report-ok">+${escapeHtml(lineStr)} (${escapeHtml(oddStr)})</span>${dateHtml}`;
       }
       if (g.status === 'error' || (g.attempts >= maxAtt && g.attempts > 0)) {
-        return `${label} - <span class="log-report-err">X ${escapeHtml(g.error || 'Erro HCTG')}</span>`;
+        return `${prefix} - <span class="log-report-err">X ${escapeHtml(g.error || 'Erro HCTG')}</span>`;
       }
       if ((g.status === 'retry' || g.attempts > 0) && g.error) {
-        return `${label} - <span class="log-report-warn">Erro: ${escapeHtml(g.error)} · tentativa ${g.attempts}/${maxAtt}</span>`;
+        return `${prefix} - <span class="log-report-warn">Erro: ${escapeHtml(g.error)} · tentativa ${g.attempts}/${maxAtt}</span>`;
       }
       if (g.added_this_cycle) {
         const dateHtml = g.added_at
           ? ` <span class="muted">${escapeHtml(formatDate(g.added_at))}</span>`
           : '';
-        return `${label} - <span class="muted">Adicionado neste ciclo</span>${dateHtml}`;
+        return `${prefix} - <span class="muted">Adicionado neste ciclo</span>${dateHtml}`;
       }
-      return `${label} - <span class="muted">Na fila</span>`;
+      return `${prefix} - <span class="muted">Na fila</span>`;
     }
 
     function sortWorkerQueueGamesForDisplay(games) {
@@ -2324,39 +2342,79 @@
     }
 
     function formatWorkerQueueLineHtml(line) {
-      const ok = line.match(/^(.+?) - V \+(.*?)\s+\((.*?)\)(?: · (.+))?$/);
-      if (ok) {
-        const dateHtml = ok[4]
-          ? ` <span class="muted">${escapeHtml(ok[4])}</span>`
+      const ok = line.match(
+        /^(.+?) - (\d+'|—') - (.+?) - \+?(.*?)\s+\((.*?)\)(?: · (.+))?$/,
+      );
+      if (ok && !/Coletando|Erro:|Adicionado|Na fila|^X /.test(ok[4])) {
+        const dateHtml = ok[6]
+          ? ` <span class="muted">${escapeHtml(ok[6])}</span>`
           : '';
-        return `${formatMatchLabelHtml(ok[1])} - <span class="log-report-ok">V +${escapeHtml(ok[2])} (${escapeHtml(ok[3])})</span>${dateHtml}`;
+        return `${formatMatchLabelHtml(ok[1])} - ${escapeHtml(ok[2])} - ${escapeHtml(ok[3])} - <span class="log-report-ok">+${escapeHtml(ok[4])} (${escapeHtml(ok[5])})</span>${dateHtml}`;
       }
-      const collecting = line.match(/^(.+?) - Coletando\.\.\. \((\d+\/\d+)\)$/);
+      // Legado com V
+      const okV = line.match(/^(.+?) - V \+(.*?)\s+\((.*?)\)(?: · (.+))?$/);
+      if (okV) {
+        const dateHtml = okV[4]
+          ? ` <span class="muted">${escapeHtml(okV[4])}</span>`
+          : '';
+        return `${formatMatchLabelHtml(okV[1])} - <span class="log-report-ok">+${escapeHtml(okV[2])} (${escapeHtml(okV[3])})</span>${dateHtml}`;
+      }
+      const collecting = line.match(
+        /^(.+?)(?: - (\d+'|—') - (.+?))? - Coletando\.\.\. \((\d+\/\d+)\)$/,
+      );
       if (collecting) {
-        return `${formatMatchLabelHtml(collecting[1])} - <span class="log-report-warn">Coletando... (${escapeHtml(collecting[2])})</span>`;
+        const mid =
+          collecting[2] && collecting[3]
+            ? ` - ${escapeHtml(collecting[2])} - ${escapeHtml(collecting[3])}`
+            : '';
+        return `${formatMatchLabelHtml(collecting[1])}${mid} - <span class="log-report-warn">Coletando... (${escapeHtml(collecting[4])})</span>`;
       }
-      const retry = line.match(/^(.+?) - Erro: (.+?) · tentativa (\d+\/\d+)$/);
+      const retry = line.match(
+        /^(.+?)(?: - (\d+'|—') - (.+?))? - Erro: (.+?) · tentativa (\d+\/\d+)$/,
+      );
       if (retry) {
-        return `${formatMatchLabelHtml(retry[1])} - <span class="log-report-warn">Erro: ${escapeHtml(retry[2])} · tentativa ${escapeHtml(retry[3])}</span>`;
+        const mid =
+          retry[2] && retry[3]
+            ? ` - ${escapeHtml(retry[2])} - ${escapeHtml(retry[3])}`
+            : '';
+        return `${formatMatchLabelHtml(retry[1])}${mid} - <span class="log-report-warn">Erro: ${escapeHtml(retry[4])} · tentativa ${escapeHtml(retry[5])}</span>`;
       }
-      const added = line.match(/^(.+?) - Adicionado neste ciclo(?: · (.+))?$/);
+      const added = line.match(
+        /^(.+?)(?: - (\d+'|—') - (.+?))? - Adicionado neste ciclo(?: · (.+))?$/,
+      );
       if (added) {
-        const dateHtml = added[2]
-          ? ` <span class="muted">${escapeHtml(added[2])}</span>`
+        const mid =
+          added[2] && added[3]
+            ? ` - ${escapeHtml(added[2])} - ${escapeHtml(added[3])}`
+            : '';
+        const dateHtml = added[4]
+          ? ` <span class="muted">${escapeHtml(added[4])}</span>`
           : '';
-        return `${formatMatchLabelHtml(added[1])} - <span class="muted">Adicionado neste ciclo</span>${dateHtml}`;
+        return `${formatMatchLabelHtml(added[1])}${mid} - <span class="muted">Adicionado neste ciclo</span>${dateHtml}`;
       }
-      const naFila = line.match(/^(.+?) - Na fila$/);
+      const naFila = line.match(
+        /^(.+?)(?: - (\d+'|—') - (.+?))? - Na fila$/,
+      );
       if (naFila) {
-        return `${formatMatchLabelHtml(naFila[1])} - <span class="muted">Na fila</span>`;
+        const mid =
+          naFila[2] && naFila[3]
+            ? ` - ${escapeHtml(naFila[2])} - ${escapeHtml(naFila[3])}`
+            : '';
+        return `${formatMatchLabelHtml(naFila[1])}${mid} - <span class="muted">Na fila</span>`;
       }
       const checking = line.match(/^(.+?) - Verificando\.\.\.(.*)$/);
       if (checking) {
         return `${formatMatchLabelHtml(checking[1])} - <span class="log-report-warn">Verificando...${escapeHtml(checking[2])}</span>`;
       }
-      const err = line.match(/^(.+?) - X (.*)$/);
+      const err = line.match(
+        /^(.+?)(?: - (\d+'|—') - (.+?))? - X (.*)$/,
+      );
       if (err) {
-        return `${formatMatchLabelHtml(err[1])} - <span class="log-report-err">X ${escapeHtml(err[2])}</span>`;
+        const mid =
+          err[2] && err[3]
+            ? ` - ${escapeHtml(err[2])} - ${escapeHtml(err[3])}`
+            : '';
+        return `${formatMatchLabelHtml(err[1])}${mid} - <span class="log-report-err">X ${escapeHtml(err[4])}</span>`;
       }
       const wait = line.match(/^(.+?) - — aguardando$/);
       if (wait) {
