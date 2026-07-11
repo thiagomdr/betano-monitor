@@ -578,6 +578,7 @@ async function publishWorkerQueue(epoch, queue, checkingEventId = null, extra = 
     return {
       event_id: id,
       label,
+      betano_url: row.betano_url ?? null,
       resultado: row.resultado,
       last_minute: row.last_minute,
       checking: checking && !paused,

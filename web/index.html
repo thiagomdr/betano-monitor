@@ -276,6 +276,20 @@
       color: var(--muted);
       font-weight: 500;
     }
+    a.match-link {
+      color: inherit;
+      text-decoration: none;
+      cursor: pointer;
+    }
+    a.match-link:hover {
+      text-decoration: underline;
+      text-underline-offset: 2px;
+    }
+    a.match-link .team-home,
+    a.match-link .team-away,
+    a.match-link .match-vs {
+      /* mantem cores dos times dentro do link */
+    }
     .log-detail-line {
       padding: 0.2rem 0;
       border-bottom: 1px solid rgba(255, 255, 255, 0.06);
@@ -869,13 +883,22 @@
       return `<span class="team-home">${h}</span> <span class="match-vs">x</span> <span class="team-away">${a}</span>`;
     }
 
-    function formatMatchLabelHtml(label) {
+    function wrapMatchHtmlWithLink(matchHtml, url) {
+      const href = String(url || '').trim();
+      if (!href || !/^https?:\/\//i.test(href)) return matchHtml;
+      return `<a class="match-link" href="${escapeHtml(href)}" target="_blank" rel="noopener noreferrer" title="Abrir na Betano">${matchHtml}</a>`;
+    }
+
+    function formatMatchLabelHtml(label, url) {
       if (!label) return '';
       const parts = String(label).split(/\s+x\s+/i);
+      let html;
       if (parts.length >= 2) {
-        return formatMatchHtml(parts[0].trim(), parts.slice(1).join(' x ').trim());
+        html = formatMatchHtml(parts[0].trim(), parts.slice(1).join(' x ').trim());
+      } else {
+        html = `<strong>${escapeHtml(label)}</strong>`;
       }
-      return `<strong>${escapeHtml(label)}</strong>`;
+      return wrapMatchHtmlWithLink(html, url);
     }
 
     function formatTimeOnly(iso) {
@@ -1817,7 +1840,10 @@
         return;
       }
       tbody.innerHTML = rows.map((row, i) => {
-        const matchHtml = formatMatchHtml(row.home, row.away);
+        const matchHtml = wrapMatchHtmlWithLink(
+          formatMatchHtml(row.home, row.away),
+          row.betano_url,
+        );
         const matchPlain = `${row.home || '—'} x ${row.away || '—'}`;
         const league = [row.country, row.league].filter(Boolean).join(' · ') || '—';
         const link = row.betano_url
@@ -2222,7 +2248,7 @@
     }
 
     function formatWorkerQueueGameHtml(g) {
-      const label = formatMatchLabelHtml(g.label || '—');
+      const label = formatMatchLabelHtml(g.label || '—', g.betano_url);
       const maxAtt = g.max_attempts ?? 3;
       if (g.checking) {
         const n = Math.min((g.attempts ?? 0) + 1, maxAtt);
