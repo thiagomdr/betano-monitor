@@ -3110,7 +3110,7 @@ Deno.serve(async (req) => {
 
       const { data: prevGame } = await supabase
         .from("futebol_historico_jogos")
-        .select("home_score,away_score,odds_85_captured_at")
+        .select("home_score,away_score")
         .eq("event_id", eventId)
         .maybeSingle();
       const prevHome = prevGame?.home_score ?? 0;
@@ -3155,37 +3155,6 @@ Deno.serve(async (req) => {
         last_seen_at: nowIso,
         updated_at: nowIso,
       }, { onConflict: "event_id" });
-
-      // Congela odds aos 85' so se o Worker ja gravou HCTG (sem fallback JSON).
-      if (
-        minute != null &&
-        minute >= MIN_MINUTE_DEFAULT &&
-        !prevGame?.odds_85_captured_at &&
-        hasAnyTotalsOdds(totals)
-      ) {
-        const snap = totals;
-        await supabase
-          .from("futebol_historico_jogos")
-          .update({
-            odd_under_05: snap.under_0_odd,
-            odd_under_15: snap.under_1_odd,
-            odd_under_25: snap.under_2_odd,
-            odd_over_05: snap.over_0_odd,
-            odd_over_15: snap.over_1_odd,
-            odd_over_25: snap.over_2_odd,
-            odd_under_05_line: snap.under_0_line,
-            odd_under_15_line: snap.under_1_line,
-            odd_under_25_line: snap.under_2_line,
-            odd_over_05_line: snap.over_0_line,
-            odd_over_15_line: snap.over_1_line,
-            odd_over_25_line: snap.over_2_line,
-            odds_85_minute: minute,
-            odds_85_score: score.text,
-            odds_85_captured_at: nowIso,
-          })
-          .eq("event_id", eventId)
-          .is("odds_85_captured_at", null);
-      }
 
       const timelineResult = await fetchGoalsTimeline(
         eventId,
