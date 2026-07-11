@@ -1845,6 +1845,18 @@
       return list;
     }
 
+    /** Ao vivo: Monitorando → Aposta → GREEN → demais. */
+    function liveResultadoRank(row) {
+      if (!row.is_live) return 99;
+      switch (row.resultado) {
+        case 'watching': return 0;
+        case 'pending': return 1;
+        case 'win': return 2;
+        case 'loss': return 3;
+        default: return 4;
+      }
+    }
+
     function renderMercado() {
       const tbody = document.getElementById('mercado-tbody');
       if (!tbody) return;
@@ -1852,6 +1864,9 @@
         const liveA = a.is_live ? 1 : 0;
         const liveB = b.is_live ? 1 : 0;
         if (liveB !== liveA) return liveB - liveA;
+        const rankA = liveResultadoRank(a);
+        const rankB = liveResultadoRank(b);
+        if (rankA !== rankB) return rankA - rankB;
         return String(mercadoSortKey(b)).localeCompare(String(mercadoSortKey(a)));
       });
       renderMercadoSummary(rows);
