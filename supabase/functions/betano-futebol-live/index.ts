@@ -423,9 +423,20 @@ function extractMlOdds(
       const price = toNum(sel.price ?? sel.odds ?? sel.decimalOdds);
       const sname = String(sel.name ?? sel.shortName ?? "").toLowerCase();
       const stype = String(sel.type ?? sel.outcomeType ?? "").toLowerCase();
+      // Nao usar isHome===false: marca draw/outros e inverte casa/fora.
       if (sname === "x" || sname.includes("empate") || stype.includes("draw")) draw = price;
-      else if (sname === "1" || stype.includes("home") || sel.isHome === true) home = price;
-      else if (sname === "2" || stype.includes("away") || sel.isHome === false) away = price;
+      else if (
+        sname === "1" ||
+        stype === "home" ||
+        stype.includes("home") ||
+        sel.isHome === true
+      ) home = price;
+      else if (
+        sname === "2" ||
+        stype === "away" ||
+        stype.includes("away") ||
+        sel.isAway === true
+      ) away = price;
     }
     if (home != null || draw != null || away != null) return { home, draw, away };
   }
@@ -440,6 +451,8 @@ type FavoritoDriftRow = {
   odd_inicial: number;
   odd_max: number;
   status: string;
+  ml_home_inicial?: number | null;
+  ml_away_inicial?: number | null;
 };
 
 function pickFavoritoLado(
@@ -449,6 +462,23 @@ function pickFavoritoLado(
   // Empate de odd → home (lado fixo na abertura).
   if (mlAway < mlHome) return { lado: "away", odd: mlAway };
   return { lado: "home", odd: mlHome };
+}
+
+/** Se o favorito gravado nao e o menor odd do par inicial, corrige o lado. */
+function repairFavoritoIfInverted(
+  lado: "home" | "away",
+  oddInicial: number,
+  homeIni: number | null,
+  awayIni: number | null,
+): { lado: "home" | "away"; odd: number; repaired: boolean } {
+  if (homeIni == null || awayIni == null) {
+    return { lado, odd: oddInicial, repaired: false };
+  }
+  const correct = pickFavoritoLado(homeIni, awayIni);
+  if (correct.lado === lado) {
+    return { lado, odd: oddInicial, repaired: false };
+  }
+  return { lado: correct.lado, odd: correct.odd, repaired: true };
 }
 
 function favoritoVenceuFromScore(
@@ -559,14 +589,50 @@ async function processFavoritoDriftLive(
     return "updated";
   }
 
-  const lado = row.favorito_lado === "away" ? "away" : "home";
+  const homeIniPrev = Number(row.ml_home_inicial);
+  const awayIniPrev = Number(row.ml_away_inicial);
+  const homeIniOk = Number.isFinite(homeIniPrev) && homeIniPrev >= 1.01 ? homeIniPrev : null;
+  const awayIniOk = Number.isFinite(awayIniPrev) && awayIniPrev >= 1.01 ? awayIniPrev : null;
+  const oddIniPrev = Number(row.odd_inicial);
+  const repaired = repairFavoritoIfInverted(
+    row.favorito_lado === "away" ? "away" : "home",
+    Number.isFinite(oddIniPrev) && oddIniPrev >= 1.01 ? oddIniPrev : ml_home!,
+    homeIniOk,
+    awayIniOk,
+  );
+  // #region agent log
+  if (repaired.repaired) {
+    console.log(
+      JSON.stringify({
+        sessionId: "230425",
+        hypothesisId: "A",
+        location: "betano-futebol-live:repairFavoritoIfInverted",
+        message: "repaired inverted favorito",
+        data: {
+          event_id: input.event_id,
+          from: row.favorito_lado,
+          to: repaired.lado,
+          homeIni: homeIniOk,
+          awayIni: awayIniOk,
+          odd_inicial: repaired.odd,
+        },
+        timestamp: Date.now(),
+      }),
+    );
+  }
+  // #endregion
+
+  const lado = repaired.lado;
+  const oddInicial = repaired.odd;
   const oddAtual = lado === "home" ? ml_home! : ml_away!;
-  let oddMax = Number(row.odd_max);
-  let minutoMax: number | null | undefined = undefined;
+  let oddMax = repaired.repaired ? oddAtual : Number(row.odd_max);
+  if (!(Number.isFinite(oddMax) && oddMax >= 1.01)) oddMax = oddAtual;
+  let minutoMax: number | null | undefined = repaired.repaired ? input.minute : undefined;
   if (oddAtual > oddMax + 0.001) {
     oddMax = oddAtual;
     minutoMax = input.minute;
   }
+  if (repaired.repaired && oddInicial > oddMax) oddMax = oddInicial;
 
   const patch: Record<string, unknown> = {
     ...clockPatch,
@@ -576,15 +642,22 @@ async function processFavoritoDriftLive(
     ml_draw_atual: input.ml_draw,
     ml_away_atual: ml_away,
   };
-  // Backfill odds iniciais (linhas abertas antes das colunas existirem).
-  const homeIniPrev = Number(row.ml_home_inicial);
-  const awayIniPrev = Number(row.ml_away_inicial);
-  const missingIni =
-    !(Number.isFinite(homeIniPrev) && homeIniPrev >= 1.01) ||
-    !(Number.isFinite(awayIniPrev) && awayIniPrev >= 1.01);
-  if (missingIni) {
-    patch.ml_home_inicial = ml_home;
-    patch.ml_away_inicial = ml_away;
+  if (repaired.repaired) {
+    patch.favorito_lado = lado;
+    patch.favorito_nome = lado === "home" ? input.home : input.away;
+    patch.odd_inicial = oddInicial;
+    patch.minuto_odd_max = input.minute;
+  }
+  // Backfill seguro: nunca sobrescrever o par inicial com odds atuais (inverte o favorito na UI).
+  // So completa o lado do favorito a partir de odd_inicial quando a coluna ainda e nula.
+  if (homeIniOk == null && lado === "home") patch.ml_home_inicial = oddInicial;
+  if (awayIniOk == null && lado === "away") patch.ml_away_inicial = oddInicial;
+  if (homeIniOk == null && lado === "away" && ml_home != null) {
+    // rival ausente: so preenche se for maior que o favorito (consistente)
+    if (ml_home > oddInicial) patch.ml_home_inicial = ml_home;
+  }
+  if (awayIniOk == null && lado === "home" && ml_away != null) {
+    if (ml_away > oddInicial) patch.ml_away_inicial = ml_away;
   }
   if (minutoMax !== undefined) patch.minuto_odd_max = minutoMax;
 

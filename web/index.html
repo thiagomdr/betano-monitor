@@ -2285,8 +2285,6 @@
           const ini = Number(r.odd_inicial);
           const max = Number(r.odd_max);
           const atual = Number(r.odd_atual);
-          const deltaMax = Number.isFinite(ini) && Number.isFinite(max) ? (max - ini) : null;
-          const deltaAtual = Number.isFinite(ini) && Number.isFinite(atual) ? (atual - ini) : null;
           const jogo = wrapMatchHtmlWithLink(
             formatMatchHtml(r.home || '?', r.away || '?'),
             r.betano_url,
@@ -2324,12 +2322,41 @@
             const n = Number(v);
             return Number.isFinite(n) && n >= 1.01 ? n : null;
           };
-          const favLado = r.favorito_lado === 'away' ? 'away' : 'home';
+          let favLado = r.favorito_lado === 'away' ? 'away' : 'home';
           let homeIni = parseFavoritoOdd(r.ml_home_inicial);
           let awayIni = parseFavoritoOdd(r.ml_away_inicial);
-          const iniOdd = parseFavoritoOdd(r.odd_inicial);
+          let iniOdd = parseFavoritoOdd(r.odd_inicial);
           if (homeIni == null && favLado === 'home' && iniOdd != null) homeIni = iniOdd;
           if (awayIni == null && favLado === 'away' && iniOdd != null) awayIni = iniOdd;
+          let repairedFav = false;
+          if (homeIni != null && awayIni != null) {
+            const lowerLado = awayIni < homeIni ? 'away' : 'home';
+            if (favLado !== lowerLado) {
+              repairedFav = true;
+              favLado = lowerLado;
+              iniOdd = lowerLado === 'home' ? homeIni : awayIni;
+            }
+          }
+          let displayAtual = Number.isFinite(atual) && atual >= 1.01 ? atual : null;
+          let displayMax = Number.isFinite(max) && max >= 1.01 ? max : null;
+          let displayIni = iniOdd;
+          if (repairedFav && displayIni != null) {
+            const curMl = favLado === 'home'
+              ? parseFavoritoOdd(r.ml_home_atual)
+              : parseFavoritoOdd(r.ml_away_atual);
+            displayAtual = curMl ?? displayIni;
+            displayMax = Math.max(displayIni, displayAtual);
+          }
+          const deltaMax = displayIni != null && displayMax != null ? (displayMax - displayIni) : null;
+          const deltaAtual = displayIni != null && displayAtual != null ? (displayAtual - displayIni) : null;
+          // #region agent log
+          {
+            const label = `${r.home || ''} x ${r.away || ''}`;
+            if (/George|Llamas|Blacktown|Tadotsu/i.test(label) || repairedFav) {
+              fetch('http://127.0.0.1:7904/ingest/86615625-6ae5-4e98-a1da-0a5f0f15fc42',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'230425'},body:JSON.stringify({sessionId:'230425',runId:'post-fix',hypothesisId:'A',location:'web/index.html:loadFavoritoDrift',message:'favorito after repair check',data:{event_id:r.event_id,home:r.home,away:r.away,db_favorito_lado:r.favorito_lado,display_favLado:favLado,repairedFav,homeIni,awayIni,db_odd_inicial:r.odd_inicial,displayIni,displayAtual,displayMax,ladoMatchesLower:homeIni!=null&&awayIni!=null?favLado===(awayIni<homeIni?'away':'home'):null},timestamp:Date.now()})}).catch(()=>{});
+            }
+          }
+          // #endregion
           let oddIniCell = '—';
           if (homeIni != null && awayIni != null) {
             const homeCls = favLado === 'home' ? 'hctg-pill' : 'hctg-pill rival';
@@ -2340,11 +2367,11 @@
               `<span class="${awayCls}" title="${escapeHtml(r.away || 'Fora')}">${fmtOdd(awayIni)}</span>` +
               `${minIni ? ` ${minIni}` : ''}` +
               `</span>`;
-          } else if (iniOdd != null) {
-            oddIniCell = `<span class="hctg-pill">${fmtOdd(iniOdd)}</span>${minIni ? ` ${minIni}` : ''}`;
+          } else if (displayIni != null) {
+            oddIniCell = `<span class="hctg-pill">${fmtOdd(displayIni)}</span>${minIni ? ` ${minIni}` : ''}`;
           }
           let oddMaxCell = '—';
-          if (Number.isFinite(max)) {
+          if (displayMax != null) {
             let deltaMaxHtml = '';
             if (deltaMax != null) {
               const sign = deltaMax >= 0 ? '+' : '';
@@ -2354,13 +2381,13 @@
             }
             oddMaxCell =
               `<span class="favorito-odd-atual-wrap">` +
-              `<span class="hctg-pill max">${fmtOdd(max)}</span>` +
+              `<span class="hctg-pill max">${fmtOdd(displayMax)}</span>` +
               deltaMaxHtml +
               `${minMax ? ` ${minMax}` : ''}` +
               `</span>`;
           }
           let oddAtualCell = '—';
-          if (Number.isFinite(atual) && atual >= 1.01) {
+          if (displayAtual != null) {
             let deltaAtualHtml = '';
             if (deltaAtual != null) {
               const sign = deltaAtual >= 0 ? '+' : '';
@@ -2370,7 +2397,7 @@
             }
             oddAtualCell =
               `<span class="favorito-odd-atual-wrap">` +
-              `<span class="hctg-pill atual">${fmtOdd(atual)}</span>` +
+              `<span class="hctg-pill atual">${fmtOdd(displayAtual)}</span>` +
               deltaAtualHtml +
               `</span>`;
           }
