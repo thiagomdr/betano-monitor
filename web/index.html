@@ -1106,9 +1106,9 @@
       </label>
       <div class="stats-col-builder-wrap">
         <button type="button" class="btn-secondary" id="btn-stats-montar-tabela" aria-haspopup="dialog" aria-expanded="false">
-          Montar tabela
+          Montar Tabela
         </button>
-        <div id="stats-columns-popover" role="dialog" aria-label="Montar colunas da tabela" hidden></div>
+        <div id="stats-columns-popover" role="dialog" aria-label="Montar Colunas da Tabela" hidden></div>
       </div>
     </div>
     <div class="coleta-countdown" id="coleta-countdown-mercado" aria-live="polite">
@@ -1116,7 +1116,7 @@
       <span class="cd-item"><span class="cd-label">Worker</span><span class="cd-value" data-cd="worker">—</span></span>
       <span class="cd-hint">próxima atualização</span>
     </div>
-    <p class="table-scroll-hint">Dica: role a tabela horizontalmente para ver todas as colunas. Use Montar tabela para escolher grupos e colunas.</p>
+    <p class="table-scroll-hint">Dica: role a tabela horizontalmente para ver todas as colunas. Use Montar Tabela para escolher grupos e colunas.</p>
     <div class="table-wrap">
       <table id="stats-table">
         <thead id="stats-thead"></thead>
@@ -1297,57 +1297,57 @@
     const STATS_COL_GROUPS = [
       {
         id: 'ident',
-        label: 'Identificação do jogo',
+        label: 'Identificação do Jogo',
         cols: [
-          { id: 'num', label: '#', title: 'Ordem na lista', info: 'Número de ordem do jogo na tabela.' },
+          { id: 'num', label: '#', title: 'Ordem na Lista', info: 'Número de ordem do jogo na tabela.' },
           { id: 'jogo', label: 'Jogo', title: 'Times', info: 'Times da partida: casa × fora.' },
-          { id: 'tempo', label: 'Tempo', title: 'Minuto do jogo', info: 'Minuto atual do jogo, com acréscimos quando anunciados (ex.: 45\'+3).' },
+          { id: 'tempo', label: 'Tempo', title: 'Minuto do Jogo', info: 'Minuto atual do jogo, com acréscimos quando anunciados (ex.: 45\'+3).' },
           { id: 'placar', label: 'Placar', title: 'Placar', info: 'Placar do jogo (casa–fora).' },
           { id: 'liga', label: 'Liga', title: 'Competição', info: 'País e competição do jogo.' },
-          { id: 'status', label: 'Status', title: 'Status do jogo', info: 'Se o jogo está ao vivo ou finalizado.' },
+          { id: 'status', label: 'Status', title: 'Status do Jogo', info: 'Se o jogo está ao vivo ou finalizado.' },
         ],
       },
       {
         id: 'finalizacao',
         label: 'Finalização',
         cols: [
-          { id: 'sot', label: 'Chutes a gol', title: 'Chutes a gol', info: 'Chutes no alvo (casa × fora).' },
-          { id: 'soff', label: 'Chutes fora', title: 'Chutes fora', info: 'Chutes para fora do gol (casa × fora).' },
-          { id: 'blocked', label: 'Bloqueados', title: 'Chutes bloqueados', info: 'Chutes bloqueados pela defesa (casa × fora).' },
-          { id: 'shots', label: 'Chutes', title: 'Total de chutes', info: 'Total de chutes: a gol + fora + bloqueados (casa × fora).' },
+          { id: 'sot', label: 'Chutes a Gol', title: 'Chutes a Gol', info: 'Chutes no alvo (casa × fora).' },
+          { id: 'soff', label: 'Chutes Fora', title: 'Chutes Fora', info: 'Chutes para fora do gol (casa × fora).' },
+          { id: 'blocked', label: 'Bloqueados', title: 'Chutes Bloqueados', info: 'Chutes bloqueados pela defesa (casa × fora).' },
+          { id: 'shots', label: 'Chutes', title: 'Total de Chutes', info: 'Total de chutes: a gol + fora + bloqueados (casa × fora).' },
           { id: 'saves', label: 'Defesas', title: 'Defesas', info: 'Defesas do goleiro (casa × fora).' },
           { id: 'pens', label: 'Pênaltis', title: 'Pênaltis', info: 'Pênaltis cobrados no jogo (casa × fora).' },
         ],
       },
       {
         id: 'dominio',
-        label: 'Domínio / pressão',
+        label: 'Domínio / Pressão',
         cols: [
-          { id: 'posse', label: 'Posse', title: 'Posse de bola', info: 'Posse de bola em % (casa × fora).' },
+          { id: 'posse', label: 'Posse', title: 'Posse de Bola', info: 'Posse de bola em % (casa × fora).' },
           { id: 'ataques', label: 'Ataques', title: 'Ataques', info: 'Ataques registrados (casa × fora).' },
-          { id: 'ataques_perig', label: 'At. perigosos', title: 'Ataques perigosos', info: 'Ataques perigosos / entrada na área (casa × fora).' },
-          { id: 'bola_segura', label: 'Bola segura', title: 'Bola segura', info: 'Bola em zona segura (casa × fora).' },
+          { id: 'ataques_perig', label: 'At. Perigosos', title: 'Ataques Perigosos', info: 'Ataques perigosos / entrada na área (casa × fora).' },
+          { id: 'bola_segura', label: 'Bola Segura', title: 'Bola Segura', info: 'Bola em zona segura (casa × fora).' },
         ],
       },
       {
         id: 'parada',
-        label: 'Bola parada',
+        label: 'Bola Parada',
         cols: [
           { id: 'escanteios', label: 'Escanteios', title: 'Escanteios', info: 'Escanteios (casa × fora).' },
           { id: 'faltas', label: 'Faltas', title: 'Faltas', info: 'Faltas cometidas (casa × fora).' },
-          { id: 'livres', label: 'Livres', title: 'Tiros livres', info: 'Tiros livres (casa × fora).' },
+          { id: 'livres', label: 'Livres', title: 'Tiros Livres', info: 'Tiros livres (casa × fora).' },
           { id: 'impedimentos', label: 'Impedimentos', title: 'Impedimentos', info: 'Impedimentos (casa × fora).' },
           { id: 'laterais', label: 'Laterais', title: 'Laterais', info: 'Arremessos laterais (casa × fora).' },
-          { id: 'tiros_meta', label: 'Tiros de meta', title: 'Tiros de meta', info: 'Tiros de meta (casa × fora).' },
+          { id: 'tiros_meta', label: 'Tiros de Meta', title: 'Tiros de Meta', info: 'Tiros de meta (casa × fora).' },
         ],
       },
       {
         id: 'disciplina',
         label: 'Disciplina',
         cols: [
-          { id: 'amarelos', label: 'Amarelos', title: 'Cartões amarelos', info: 'Cartões amarelos (casa × fora).' },
-          { id: 'vermelhos', label: 'Vermelhos', title: 'Cartões vermelhos', info: 'Cartões vermelhos (casa × fora).' },
-          { id: 'av', label: 'A/V', title: 'Amarelo/vermelho', info: 'Segundo amarelo resultando em vermelho (casa × fora).' },
+          { id: 'amarelos', label: 'Amarelos', title: 'Cartões Amarelos', info: 'Cartões amarelos (casa × fora).' },
+          { id: 'vermelhos', label: 'Vermelhos', title: 'Cartões Vermelhos', info: 'Cartões vermelhos (casa × fora).' },
+          { id: 'av', label: 'A/V', title: 'Amarelo/Vermelho', info: 'Segundo amarelo resultando em vermelho (casa × fora).' },
         ],
       },
       {
@@ -1449,9 +1449,9 @@
         case 'status':
           return `<td data-label="Status">${mercadoStatusLabel(row)}</td>`;
         case 'sot':
-          return `<td class="stats-group-start" data-label="Chutes a gol">${mercadoSotLabel(row)}</td>`;
+          return `<td class="stats-group-start" data-label="Chutes a Gol">${mercadoSotLabel(row)}</td>`;
         case 'soff':
-          return `<td data-label="Chutes fora">${mercadoChutesForaLabel(row)}</td>`;
+          return `<td data-label="Chutes Fora">${mercadoChutesForaLabel(row)}</td>`;
         case 'blocked':
           return `<td data-label="Bloqueados">${mercadoBloqueadosLabel(row)}</td>`;
         case 'shots':
@@ -1465,9 +1465,9 @@
         case 'ataques':
           return `<td data-label="Ataques">${mercadoAtaquesLabel(row)}</td>`;
         case 'ataques_perig':
-          return `<td data-label="At. perigosos">${mercadoAtaquesPerigososLabel(row)}</td>`;
+          return `<td data-label="At. Perigosos">${mercadoAtaquesPerigososLabel(row)}</td>`;
         case 'bola_segura':
-          return `<td data-label="Bola segura">${mercadoBolaSeguraLabel(row)}</td>`;
+          return `<td data-label="Bola Segura">${mercadoBolaSeguraLabel(row)}</td>`;
         case 'escanteios':
           return `<td class="stats-group-start" data-label="Escanteios">${mercadoEscanteiosLabel(row)}</td>`;
         case 'faltas':
@@ -1479,7 +1479,7 @@
         case 'laterais':
           return `<td data-label="Laterais">${mercadoLateraisLabel(row)}</td>`;
         case 'tiros_meta':
-          return `<td data-label="Tiros de meta">${mercadoTirosMetaLabel(row)}</td>`;
+          return `<td data-label="Tiros de Meta">${mercadoTirosMetaLabel(row)}</td>`;
         case 'amarelos':
           return `<td class="stats-group-start" data-label="Amarelos">${mercadoAmarelosLabel(row)}</td>`;
         case 'vermelhos':
@@ -3257,7 +3257,7 @@
       });
       if (!statsVisibleColCount()) {
         tbody.innerHTML =
-          `<tr><td colspan="${colCount}" class="empty">Nenhuma coluna selecionada. Use Montar tabela.</td></tr>`;
+          `<tr><td colspan="${colCount}" class="empty">Nenhuma coluna selecionada. Use Montar Tabela.</td></tr>`;
         return;
       }
       if (!rows.length) {
