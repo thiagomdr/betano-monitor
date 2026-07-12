@@ -1882,6 +1882,148 @@ async function fetchEventUnderOdds(
 
 const SPORTRADAR_STATS =
   "https://stats.fn.sportradar.com/common/en/Europe:Berlin/gismo/match_details";
+const SPORTRADAR_MATCH_INFO =
+  "https://stats.fn.sportradar.com/common/en/Europe:Berlin/gismo/match_info";
+
+const SPORTRADAR_FETCH_HEADERS = {
+  Accept: "application/json, text/plain, */*",
+  "User-Agent":
+    "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
+  Referer: "https://www.betano.bet.br/",
+  Origin: "https://www.betano.bet.br",
+};
+
+/** Codigos Sportradar Live Data: weather / pitch overall_conditions. */
+function sportradarConditionLabel(code: number | null): string | null {
+  if (code == null) return null;
+  switch (code) {
+    case 0:
+      return "Desconhecido";
+    case 1:
+      return "Bom";
+    case 2:
+      return "Médio";
+    case 3:
+      return "Ruim";
+    case 4:
+      return "Indoor";
+    case 5:
+      return "Extremo";
+    default:
+      return String(code);
+  }
+}
+
+function textOrNull(v: unknown): string | null {
+  if (v == null) return null;
+  const s = String(v).trim();
+  return s || null;
+}
+
+type MatchMeta = {
+  stadium_name: string | null;
+  stadium_city: string | null;
+  stadium_country: string | null;
+  stadium_capacity: number | null;
+  referee_name: string | null;
+  manager_home: string | null;
+  manager_away: string | null;
+  weather_code: number | null;
+  weather: string | null;
+  pitch_code: number | null;
+  pitch: string | null;
+  temperature: number | null;
+  wind: number | null;
+  season_name: string | null;
+  tournament_name: string | null;
+  available: boolean;
+};
+
+function emptyMatchMeta(): MatchMeta {
+  return {
+    stadium_name: null,
+    stadium_city: null,
+    stadium_country: null,
+    stadium_capacity: null,
+    referee_name: null,
+    manager_home: null,
+    manager_away: null,
+    weather_code: null,
+    weather: null,
+    pitch_code: null,
+    pitch: null,
+    temperature: null,
+    wind: null,
+    season_name: null,
+    tournament_name: null,
+    available: false,
+  };
+}
+
+/** Metadados do jogo (estadio, arbitro, clima) via match_info. */
+async function tryFetchMatchInfo(
+  betradarMatchId: string | number | null,
+): Promise<MatchMeta> {
+  if (betradarMatchId == null || betradarMatchId === "") {
+    return emptyMatchMeta();
+  }
+  const url = `${SPORTRADAR_MATCH_INFO}/${betradarMatchId}`;
+  try {
+    const res = await fetch(url, { headers: SPORTRADAR_FETCH_HEADERS });
+    if (!res.ok) return emptyMatchMeta();
+    const data = asRecord(await res.json());
+    const doc0 = Array.isArray(data?.doc) ? asRecord(data.doc[0]) : null;
+    if (String(doc0?.event ?? "") === "exception") return emptyMatchMeta();
+    const payload = asRecord(doc0?.data) ?? {};
+    const match = asRecord(payload.match) ?? {};
+    const stadium = asRecord(payload.stadium) ?? {};
+    const referee = asRecord(payload.referee) ?? {};
+    const manager = asRecord(payload.manager) ?? {};
+    const managerHome = asRecord(manager.home) ?? {};
+    const managerAway = asRecord(manager.away) ?? {};
+    const season = asRecord(payload.season) ?? {};
+    const tournament = asRecord(payload.tournament) ?? {};
+    const stadiumCc = asRecord(stadium.cc) ?? {};
+
+    const weatherCode = toInt(match.weather);
+    const pitchCode = toInt(match.pitchcondition ?? match.pitch_condition);
+    const capacityRaw = stadium.capacity;
+    const capacity = toInt(capacityRaw) ??
+      (typeof capacityRaw === "string" ? toInt(capacityRaw.replace(/\D/g, "")) : null);
+
+    const meta: MatchMeta = {
+      stadium_name: textOrNull(stadium.name),
+      stadium_city: textOrNull(stadium.city),
+      stadium_country: textOrNull(stadium.country) ?? textOrNull(stadiumCc.name),
+      stadium_capacity: capacity,
+      referee_name: textOrNull(referee.name),
+      manager_home: textOrNull(managerHome.name) ?? textOrNull(managerHome.fullname),
+      manager_away: textOrNull(managerAway.name) ?? textOrNull(managerAway.fullname),
+      weather_code: weatherCode,
+      weather: sportradarConditionLabel(weatherCode),
+      pitch_code: pitchCode,
+      pitch: sportradarConditionLabel(pitchCode),
+      temperature: toInt(match.temperature),
+      wind: toInt(match.wind),
+      season_name: textOrNull(season.name),
+      tournament_name: textOrNull(tournament.name),
+      available: false,
+    };
+    meta.available = [
+      meta.stadium_name,
+      meta.referee_name,
+      meta.manager_home,
+      meta.manager_away,
+      meta.weather,
+      meta.pitch,
+      meta.season_name,
+      meta.tournament_name,
+    ].some((v) => v != null);
+    return meta;
+  } catch {
+    return emptyMatchMeta();
+  }
+}
 
 type TeamStats = {
   home_shots_on_target: number | null;
@@ -2024,15 +2166,7 @@ async function tryFetchStats(
   const errors: string[] = [];
   for (const url of urls) {
     try {
-      const res = await fetch(url, {
-        headers: {
-          Accept: "application/json, text/plain, */*",
-          "User-Agent":
-            "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
-          Referer: "https://www.betano.bet.br/",
-          Origin: "https://www.betano.bet.br",
-        },
-      });
+      const res = await fetch(url, { headers: SPORTRADAR_FETCH_HEADERS });
       if (!res.ok) {
         errors.push(`${url} HTTP ${res.status}`);
         continue;
@@ -2601,12 +2735,14 @@ async function persistSportradarStats(
     away_score: number | null;
     is_live?: boolean;
     stats: TeamStats;
+    match_meta?: MatchMeta | null;
   },
 ): Promise<void> {
   const nowIso = new Date().toISOString();
   const s = input.stats;
+  const m = input.match_meta ?? emptyMatchMeta();
   const values = s.values && typeof s.values === "object" ? s.values : {};
-  await supabase.from("futebol_sportradar_stats").upsert({
+  const row: Record<string, unknown> = {
     event_id: input.event_id,
     betradar_match_id: input.betradar_match_id,
     home: input.home,
@@ -2664,7 +2800,26 @@ async function persistSportradarStats(
     source_url: s.source_url,
     fetched_at: nowIso,
     updated_at: nowIso,
-  }, { onConflict: "event_id" });
+  };
+  // So grava metadados quando match_info respondeu — evita apagar com null em falha.
+  if (m.available) {
+    row.stadium_name = m.stadium_name;
+    row.stadium_city = m.stadium_city;
+    row.stadium_country = m.stadium_country;
+    row.stadium_capacity = m.stadium_capacity;
+    row.referee_name = m.referee_name;
+    row.manager_home = m.manager_home;
+    row.manager_away = m.manager_away;
+    row.weather_code = m.weather_code;
+    row.weather = m.weather;
+    row.pitch_code = m.pitch_code;
+    row.pitch = m.pitch;
+    row.temperature = m.temperature;
+    row.wind = m.wind;
+    row.season_name = m.season_name;
+    row.tournament_name = m.tournament_name;
+  }
+  await supabase.from("futebol_sportradar_stats").upsert(row, { onConflict: "event_id" });
 }
 
 async function persistSportradarTimeline(
@@ -3721,11 +3876,11 @@ Deno.serve(async (req) => {
       const under = totals;
 
       const betradarId = extractBetradarMatchId(event);
-      const stats = await tryFetchStats(
-        supabase,
-        betradarId != null ? String(betradarId) : null,
-        coletaEpoch,
-      );
+      const betradarIdStr = betradarId != null ? String(betradarId) : null;
+      const [stats, matchMeta] = await Promise.all([
+        tryFetchStats(supabase, betradarIdStr, coletaEpoch),
+        tryFetchMatchInfo(betradarIdStr),
+      ]);
       if (stats.available) statsOk += 1;
 
       const rowBase = {
@@ -3847,7 +4002,7 @@ Deno.serve(async (req) => {
       try {
         await persistSportradarStats(supabase, {
           event_id: eventId,
-          betradar_match_id: betradarId != null ? String(betradarId) : null,
+          betradar_match_id: betradarIdStr,
           home: teams.home,
           away: teams.away,
           league: league.league,
@@ -3858,6 +4013,7 @@ Deno.serve(async (req) => {
           away_score: score.away,
           is_live: true,
           stats,
+          match_meta: matchMeta,
         });
       } catch (err) {
         console.warn(`[sportradar-stats] falha ao gravar ${eventId}:`, err);

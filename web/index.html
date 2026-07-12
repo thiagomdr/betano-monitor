@@ -955,7 +955,7 @@
   </header>
   <main id="panel-mercado">
     <p class="hint">
-      Estatísticas Sportradar por jogo. Use os filtros numéricos à vontade. Clique nos contadores (placar, escanteios, chutes, defesas, faltas…) para o balão de minutos.
+      Estatísticas Sportradar por jogo (inclui estádio, árbitro, clima via match_info). Use os filtros numéricos à vontade. Clique nos contadores (placar, escanteios, chutes, defesas, faltas…) para o balão de minutos.
     </p>
     <div class="stats-filters" id="stats-filters">
       <label class="filter-validados">
@@ -1016,12 +1016,17 @@
             <th title="Clique para minutos das lesões">Lesões</th>
             <th title="Pênaltis (contador)">Pênaltis</th>
             <th>Liga</th>
+            <th title="Estádio Sportradar (match_info)">Estádio</th>
+            <th title="Árbitro">Árbitro</th>
+            <th title="Técnicos casa / fora">Técnicos</th>
+            <th title="Clima (Bom/Médio/Ruim) + temperatura se houver">Clima</th>
+            <th title="Condição do gramado">Gramado</th>
             <th title="Ao Vivo ou Finalizado">Status</th>
             <th>Link</th>
           </tr>
         </thead>
         <tbody id="mercado-tbody">
-          <tr><td colspan="28" class="empty">Carregando…</td></tr>
+          <tr><td colspan="33" class="empty">Carregando…</td></tr>
         </tbody>
       </table>
     </div>
@@ -2391,6 +2396,40 @@
       return statsPairLabel(row.home_penalties, row.away_penalties);
     }
 
+    function mercadoEstadioLabel(row) {
+      const name = row.stadium_name ? String(row.stadium_name).trim() : '';
+      const place = [row.stadium_city, row.stadium_country].filter(Boolean).join(', ');
+      if (!name && !place) return '<span class="muted">—</span>';
+      if (name && place) return `${escapeHtml(name)} <span class="muted">· ${escapeHtml(place)}</span>`;
+      return escapeHtml(name || place);
+    }
+
+    function mercadoArbitroLabel(row) {
+      const name = row.referee_name ? String(row.referee_name).trim() : '';
+      return name ? escapeHtml(name) : '<span class="muted">—</span>';
+    }
+
+    function mercadoTecnicosLabel(row) {
+      const home = row.manager_home ? String(row.manager_home).trim() : '';
+      const away = row.manager_away ? String(row.manager_away).trim() : '';
+      if (!home && !away) return '<span class="muted">—</span>';
+      return `${escapeHtml(home || '—')} <span class="muted">/</span> ${escapeHtml(away || '—')}`;
+    }
+
+    function mercadoClimaLabel(row) {
+      const parts = [];
+      if (row.weather) parts.push(String(row.weather));
+      if (row.temperature != null && row.temperature !== '') parts.push(`${row.temperature}°`);
+      if (row.wind != null && row.wind !== '') parts.push(`vento ${row.wind}`);
+      if (!parts.length) return '<span class="muted">—</span>';
+      return escapeHtml(parts.join(' · '));
+    }
+
+    function mercadoGramadoLabel(row) {
+      const pitch = row.pitch ? String(row.pitch).trim() : '';
+      return pitch ? escapeHtml(pitch) : '<span class="muted">—</span>';
+    }
+
     function favoritoPlacarLabel(row) {
       const score = row.placar_final || row.placar_atual || '—';
       if (!score || score === '—') return '<span class="muted">—</span>';
@@ -2872,7 +2911,7 @@
         return String(mercadoSortKey(b)).localeCompare(String(mercadoSortKey(a)));
       });
       if (!rows.length) {
-        tbody.innerHTML = '<tr><td colspan="28" class="empty">Nenhum jogo com esses filtros.</td></tr>';
+        tbody.innerHTML = '<tr><td colspan="33" class="empty">Nenhum jogo com esses filtros.</td></tr>';
         return;
       }
       tbody.innerHTML = rows.map((row, i) => {
@@ -2914,6 +2953,11 @@
           <td data-label="Lesões">${mercadoLesoesLabel(row)}</td>
           <td data-label="Pênaltis">${mercadoPenaltisLabel(row)}</td>
           <td data-label="Liga">${league}</td>
+          <td data-label="Estádio">${mercadoEstadioLabel(row)}</td>
+          <td data-label="Árbitro">${mercadoArbitroLabel(row)}</td>
+          <td data-label="Técnicos">${mercadoTecnicosLabel(row)}</td>
+          <td data-label="Clima">${mercadoClimaLabel(row)}</td>
+          <td data-label="Gramado">${mercadoGramadoLabel(row)}</td>
           <td data-label="Status">${mercadoStatusLabel(row)}</td>
           <td data-label="Link">${link}</td>
         </tr>`;
@@ -3505,7 +3549,7 @@
           }
           if (tbody) {
             tbody.innerHTML =
-              `<tr><td colspan="28" class="empty">${msg}</td></tr>`;
+              `<tr><td colspan="33" class="empty">${msg}</td></tr>`;
           }
         }
       } finally {
