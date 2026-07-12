@@ -868,6 +868,10 @@
       opacity: 0.28;
       cursor: default;
     }
+    #stats-table thead tr.stats-col-row th .stats-col-move-btn.is-active {
+      background: rgba(94, 179, 255, 0.35);
+      color: #fff;
+    }
     #stats-table thead tr.stats-col-row th .stats-tri {
       display: block;
       width: 0;
@@ -1609,62 +1613,124 @@
       return html.replace(/^<(td|th)(\s|>)/, `<$1 style="color:${safe}"$2`);
     }
 
-    function loadStatsColumnOrder() {
-      try {
-        const raw = localStorage.getItem('statsColumnOrder');
-        if (!raw) return [...ALL_STATS_COL_IDS];
-        const arr = JSON.parse(raw);
-        if (!Array.isArray(arr)) return [...ALL_STATS_COL_IDS];
-        const valid = arr.filter((id) => ALL_STATS_COL_IDS.includes(id));
-        const missing = ALL_STATS_COL_IDS.filter((id) => !valid.includes(id));
-        return [...valid, ...missing];
-      } catch {
-        return [...ALL_STATS_COL_IDS];
+    // Discard legacy column-reorder preference (arrows now sort rows, not columns).
+    try {
+      localStorage.removeItem('statsColumnOrder');
+    } catch {
+      /* ignore */
+    }
+
+    /** @type {{ colId: string|null, dir: 'asc'|'desc'|null }} */
+    let statsSort = { colId: null, dir: null };
+
+    function statsPairSortValue(home, away) {
+      if (home == null && away == null) return null;
+      return (Number(home) || 0) + (Number(away) || 0);
+    }
+
+    function statsColSortValue(colId, row) {
+      switch (colId) {
+        case 'num':
+          return null;
+        case 'jogo':
+          return `${row.home || ''} x ${row.away || ''}`.toLowerCase();
+        case 'tempo': {
+          const m = Number(row.last_minute);
+          if (!Number.isFinite(m)) return null;
+          const inj = Number(row.injury_time);
+          return m + (Number.isFinite(inj) && inj > 0 ? inj / 100 : 0);
+        }
+        case 'placar': {
+          const score = statsScoreText(row);
+          if (!score || score === '—') return null;
+          return goalsTotalFromScoreText(score);
+        }
+        case 'liga': {
+          const t = [row.country, row.league].filter(Boolean).join(' ').toLowerCase();
+          return t || null;
+        }
+        case 'status':
+          return row.is_live ? 1 : 0;
+        case 'sot':
+          return statsPairSortValue(row.home_shots_on_target, row.away_shots_on_target);
+        case 'soff':
+          return statsPairSortValue(row.home_shots_off_target, row.away_shots_off_target);
+        case 'blocked':
+          return statsPairSortValue(row.home_shots_blocked, row.away_shots_blocked);
+        case 'shots':
+          return statsPairSortValue(row.home_shots_total, row.away_shots_total);
+        case 'saves':
+          return statsPairSortValue(row.home_saves, row.away_saves);
+        case 'pens':
+          return statsPairSortValue(row.home_penalties, row.away_penalties);
+        case 'posse':
+          return statsPairSortValue(row.home_possession, row.away_possession);
+        case 'ataques':
+          return statsPairSortValue(row.home_attacks, row.away_attacks);
+        case 'ataques_perig':
+          return statsPairSortValue(row.home_dangerous_attacks, row.away_dangerous_attacks);
+        case 'bola_segura':
+          return statsPairSortValue(row.home_ball_safe, row.away_ball_safe);
+        case 'escanteios':
+          return statsPairSortValue(row.home_corners, row.away_corners);
+        case 'faltas':
+          return statsPairSortValue(row.home_fouls, row.away_fouls);
+        case 'livres':
+          return statsPairSortValue(row.home_free_kicks, row.away_free_kicks);
+        case 'impedimentos':
+          return statsPairSortValue(row.home_offsides, row.away_offsides);
+        case 'laterais':
+          return statsPairSortValue(row.home_throw_ins, row.away_throw_ins);
+        case 'tiros_meta':
+          return statsPairSortValue(row.home_goal_kicks, row.away_goal_kicks);
+        case 'amarelos':
+          return statsPairSortValue(row.home_yellow_cards, row.away_yellow_cards);
+        case 'vermelhos':
+          return statsPairSortValue(row.home_red_cards, row.away_red_cards);
+        case 'av':
+          return statsPairSortValue(row.home_yellow_red_cards, row.away_yellow_red_cards);
+        case 'subs':
+          return statsPairSortValue(row.home_substitutions, row.away_substitutions);
+        case 'lesoes':
+          return statsPairSortValue(row.home_injuries, row.away_injuries);
+        case 'estadio':
+          return [row.stadium_name, row.stadium_city, row.stadium_country].filter(Boolean).join(' ').toLowerCase() || null;
+        case 'arbitro':
+          return row.referee_name ? String(row.referee_name).toLowerCase() : null;
+        case 'tecnicos':
+          return [row.manager_home, row.manager_away].filter(Boolean).join(' ').toLowerCase() || null;
+        case 'clima':
+          return [row.weather, row.temperature, row.wind].filter((v) => v != null && v !== '').join(' ').toLowerCase() || null;
+        case 'gramado':
+          return row.pitch ? String(row.pitch).toLowerCase() : null;
+        default:
+          return null;
       }
     }
 
-    let statsColumnOrder = loadStatsColumnOrder();
-
-    function persistStatsColumnOrder() {
-      localStorage.setItem('statsColumnOrder', JSON.stringify(statsColumnOrder));
+    function cmpStatsSortValues(va, vb, dir) {
+      const aNull = va == null || va === '';
+      const bNull = vb == null || vb === '';
+      if (aNull && bNull) return 0;
+      if (aNull) return 1;
+      if (bNull) return -1;
+      let c = 0;
+      if (typeof va === 'number' && typeof vb === 'number') c = va - vb;
+      else c = String(va).localeCompare(String(vb), 'pt', { numeric: true, sensitivity: 'base' });
+      return dir === 'desc' ? -c : c;
     }
 
-    function statsColOrderRank(colId) {
-      const idx = statsColumnOrder.indexOf(colId);
-      return idx >= 0 ? idx : ALL_STATS_COL_IDS.length + 1;
-    }
-
-    function orderedGroupCols(group) {
-      return [...(group?.cols || [])].sort(
-        (a, b) => statsColOrderRank(a.id) - statsColOrderRank(b.id),
-      );
-    }
-
-    function moveStatsColumn(colId, dir) {
-      const group = STATS_COL_GROUPS.find((g) => g.cols.some((c) => c.id === colId));
-      if (!group) return false;
-      // Only adjacent VISIBLE columns — matches thead arrows (hidden cols must not be swap targets).
-      const orderedIds = orderedGroupCols(group)
-        .filter((c) => statsVisibleCols.has(c.id))
-        .map((c) => c.id);
-      const idx = orderedIds.indexOf(colId);
-      const swapIdx = idx + dir;
-      if (idx < 0 || swapIdx < 0 || swapIdx >= orderedIds.length) return false;
-      const otherId = orderedIds[swapIdx];
-      const iGlobal = statsColumnOrder.indexOf(colId);
-      const jGlobal = statsColumnOrder.indexOf(otherId);
-      if (iGlobal < 0 || jGlobal < 0) return false;
-      const beforeVisible = orderedIds.slice();
-      statsColumnOrder[iGlobal] = otherId;
-      statsColumnOrder[jGlobal] = colId;
-      persistStatsColumnOrder();
-      const afterVisible = orderedGroupCols(group)
-        .filter((c) => statsVisibleCols.has(c.id))
-        .map((c) => c.id);
+    function setStatsSort(colId, dir) {
+      if (!colId || (dir !== 'asc' && dir !== 'desc')) return;
+      if (statsSort.colId === colId && statsSort.dir === dir) {
+        statsSort = { colId: null, dir: null };
+      } else {
+        statsSort = { colId, dir };
+      }
       // #region agent log
-      fetch('http://127.0.0.1:7904/ingest/86615625-6ae5-4e98-a1da-0a5f0f15fc42',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'71820e'},body:JSON.stringify({sessionId:'71820e',runId:'post-fix',hypothesisId:'E',location:'web/index.html:moveStatsColumn',message:'Column move applied (visible neighbors only)',data:{colId,dir,otherId,beforeVisible,afterVisible,groupId:group.id,buildMarker:'thead-move-v2'},timestamp:Date.now()})}).catch(()=>{});
+      fetch('http://127.0.0.1:7904/ingest/86615625-6ae5-4e98-a1da-0a5f0f15fc42',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'71820e'},body:JSON.stringify({sessionId:'71820e',runId:'post-fix',hypothesisId:'F',location:'web/index.html:setStatsSort',message:'Row sort by column',data:{colId:statsSort.colId,dir:statsSort.dir,buildMarker:'row-sort-v1'},timestamp:Date.now()})}).catch(()=>{});
       // #endregion
-      return true;
+      renderMercado();
     }
 
     function statsVisibleGroups() {
@@ -1672,7 +1738,7 @@
         .map((g) => ({
           id: g.id,
           label: g.label,
-          cols: orderedGroupCols(g).filter((c) => statsVisibleCols.has(c.id)),
+          cols: g.cols.filter((c) => statsVisibleCols.has(c.id)),
         }))
         .filter((g) => g.cols.length > 0);
     }
@@ -1701,9 +1767,9 @@
               const title = tip ? ` title="${escapeHtml(tip)}"` : '';
               const color = getStatsColTextColor(c.id);
               const style = color ? ` style="color:${escapeHtml(color)}"` : '';
-              const upDisabled = ci === 0 ? ' disabled' : '';
-              const downDisabled = ci === g.cols.length - 1 ? ' disabled' : '';
-              return `<th${cls}${title}${style} data-stats-col="${escapeHtml(c.id)}"><span class="stats-th-inner"><span class="stats-th-label">${escapeHtml(c.label)}</span><span class="stats-col-move"><button type="button" class="stats-col-move-btn" data-stats-move="-1" data-stats-col-id="${escapeHtml(c.id)}" title="Mover para cima" aria-label="Mover ${escapeHtml(c.label)} para cima"${upDisabled}><span class="stats-tri stats-tri-up"></span></button><button type="button" class="stats-col-move-btn" data-stats-move="1" data-stats-col-id="${escapeHtml(c.id)}" title="Mover para baixo" aria-label="Mover ${escapeHtml(c.label)} para baixo"${downDisabled}><span class="stats-tri stats-tri-down"></span></button></span></span></th>`;
+              const ascActive = statsSort.colId === c.id && statsSort.dir === 'asc' ? ' is-active' : '';
+              const descActive = statsSort.colId === c.id && statsSort.dir === 'desc' ? ' is-active' : '';
+              return `<th${cls}${title}${style} data-stats-col="${escapeHtml(c.id)}"><span class="stats-th-inner"><span class="stats-th-label">${escapeHtml(c.label)}</span><span class="stats-col-move"><button type="button" class="stats-col-move-btn${ascActive}" data-stats-sort="asc" data-stats-col-id="${escapeHtml(c.id)}" title="Ordenar do menor para o maior" aria-label="Ordenar ${escapeHtml(c.label)} do menor para o maior"><span class="stats-tri stats-tri-up"></span></button><button type="button" class="stats-col-move-btn${descActive}" data-stats-sort="desc" data-stats-col-id="${escapeHtml(c.id)}" title="Ordenar do maior para o menor" aria-label="Ordenar ${escapeHtml(c.label)} do maior para o menor"><span class="stats-tri stats-tri-down"></span></button></span></span></th>`;
             })
             .join(''),
         )
@@ -1711,23 +1777,18 @@
       thead.innerHTML =
         `<tr class="stats-group-row">${groupRow}</tr>` +
         `<tr class="stats-col-row">${colRow}</tr>`;
-      thead.querySelectorAll('button.stats-col-move-btn').forEach((moveBtn) => {
-        moveBtn.addEventListener('click', (e) => {
+      thead.querySelectorAll('button.stats-col-move-btn').forEach((sortBtn) => {
+        sortBtn.addEventListener('click', (e) => {
           e.preventDefault();
           e.stopPropagation();
-          if (moveBtn.disabled) return;
-          const colId = moveBtn.getAttribute('data-stats-col-id');
-          const dir = Number(moveBtn.getAttribute('data-stats-move'));
-          if (!colId || !dir) return;
-          // #region agent log
-          fetch('http://127.0.0.1:7904/ingest/86615625-6ae5-4e98-a1da-0a5f0f15fc42',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'71820e'},body:JSON.stringify({sessionId:'71820e',runId:'post-fix',hypothesisId:'D',location:'web/index.html:stats-col-move-btn',message:'Table header column move clicked',data:{colId,dir,buildMarker:'thead-move-v1'},timestamp:Date.now()})}).catch(()=>{});
-          // #endregion
-          if (!moveStatsColumn(colId, dir)) return;
-          renderMercado();
+          const colId = sortBtn.getAttribute('data-stats-col-id');
+          const dir = sortBtn.getAttribute('data-stats-sort');
+          if (!colId || (dir !== 'asc' && dir !== 'desc')) return;
+          setStatsSort(colId, dir);
         });
       });
       // #region agent log
-      fetch('http://127.0.0.1:7904/ingest/86615625-6ae5-4e98-a1da-0a5f0f15fc42',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'71820e'},body:JSON.stringify({sessionId:'71820e',runId:'post-fix',hypothesisId:'D',location:'web/index.html:renderStatsThead',message:'Thead rendered with move controls',data:{theadMoveBtnCount:thead.querySelectorAll('button.stats-col-move-btn').length,visibleColCount:statsVisibleColCount(),builderMoveBtnCount:document.querySelectorAll('#stats-columns-popover button.scb-move-btn').length,buildMarker:'thead-move-v1'},timestamp:Date.now()})}).catch(()=>{});
+      fetch('http://127.0.0.1:7904/ingest/86615625-6ae5-4e98-a1da-0a5f0f15fc42',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'71820e'},body:JSON.stringify({sessionId:'71820e',runId:'post-fix',hypothesisId:'F',location:'web/index.html:renderStatsThead',message:'Thead rendered with row-sort controls',data:{sortBtnCount:thead.querySelectorAll('button.stats-col-move-btn').length,statsSort,buildMarker:'row-sort-v1'},timestamp:Date.now()})}).catch(()=>{});
       // #endregion
     }
 
@@ -3573,6 +3634,14 @@
         if (aPinned && bPinned) return pinA - pinB;
         if (aPinned) return -1;
         if (bPinned) return 1;
+        if (statsSort.colId && statsSort.dir) {
+          const cmp = cmpStatsSortValues(
+            statsColSortValue(statsSort.colId, a),
+            statsColSortValue(statsSort.colId, b),
+            statsSort.dir,
+          );
+          if (cmp !== 0) return cmp;
+        }
         const liveA = a.is_live ? 1 : 0;
         const liveB = b.is_live ? 1 : 0;
         if (liveB !== liveA) return liveB - liveA;
@@ -3635,7 +3704,7 @@
       hideMercadoElevatedPopover();
       const draft = new Set(statsVisibleCols);
       const groupsHtml = STATS_COL_GROUPS.map((g) => {
-        const cols = orderedGroupCols(g);
+        const cols = g.cols;
         const colsHtml = cols
           .map((c) => {
             const info = c.info || c.title || c.label;
