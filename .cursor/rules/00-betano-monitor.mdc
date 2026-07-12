@@ -20,10 +20,11 @@ Projeto vigente: **betano-monitor**. Toda documentação, regras Cursor, scripts
 ## Princípio
 
 - **Fonte da verdade = PostgreSQL (Supabase)**. Painel só lê tabelas.
-- **Odds Total de Gols (HCTG)** = scrape DOM Playwright → `hctg_lines` (worker Kubmix; análise legada).
-- **Análise favorito 1X2 (fase atual):** Edge lê `ml_home`/`ml_away` do overview JSON → tabela `futebol_favorito_drift` (odd inicial → máximo + minuto → se o favorito venceu). Print do odd inicial via worker Playwright (Kubmix).
+- **Worker Kubmix (produção atual):** só **prints** do odd inicial favorito (Playwright). **Não** coleta mais Total de Gols / `hctg_lines` (`HCTG_SCRAPE=0`).
+- **Odds Total de Gols (HCTG):** legado — religar com `HCTG_SCRAPE=1` se necessário; Mercado +0,5 sem scrape DOM novo.
+- **Análise favorito 1X2 (fase atual):** Edge lê `ml_home`/`ml_away` do overview JSON → tabela `futebol_favorito_drift` (odd inicial → máximo + minuto → se o favorito venceu). Print via worker Kubmix.
 - Edge `betano-futebol-live`: placar, lista, mercado +0,5, **favorito drift**; **não** gera odds HCTG.
-- **Print favorito:** worker Kubmix captura screenshot → Storage `betano-screenshot-debug`; Edge apaga no settle.
+- **Print favorito:** worker Kubmix → Storage `betano-screenshot-debug`; Edge apaga no settle.
 
 ## Análise favorito 1X2 (fase atual)
 
@@ -37,8 +38,10 @@ Projeto vigente: **betano-monitor**. Toda documentação, regras Cursor, scripts
 
 ## HCTG — fonte e proibições
 
-**Fonte de produção:** Playwright HTML na Kubmix (IP `189.45.251.202`, sa-east-1) → aba Gols → Total de Gols.  
-`HCTG_WORKER_SOURCE=kubmix-worker`, `HCTG_HTML_SOURCE=html-dom-kubmix`, headed via `xvfb-run` (`HCTG_HEADLESS=0`).
+**Produção atual (Kubmix):** worker **não** scrapeia Total de Gols (`HCTG_SCRAPE=0`). Só prints favorito.  
+Religar scrape HCTG: `HCTG_SCRAPE=1` no unit systemd + restart.
+
+**Legado / opcional:** Playwright HTML → aba Gols → Total de Gols → `hctg_lines` (`html-dom-kubmix`).
 
 **Proibido para odds HCTG em produção:**
 - Extrair/gravar HCTG a partir de `overview/latest`, `overview?eventId=`, `markets-offers` da Betano (mistura mercados).

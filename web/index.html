@@ -483,7 +483,8 @@
       background: var(--panel);
     }
     tr:last-child td { border-bottom: none; }
-    #mercado-tbody tr:hover td {
+    #mercado-tbody tr:hover td,
+    #favorito-tbody tr:hover td {
       background: rgba(232, 238, 247, 0.08);
     }
     .muted { color: var(--muted); }
@@ -661,7 +662,8 @@
       }
       table { font-size: 0.82rem; }
       thead { display: none; }
-      #mercado-tbody tr {
+      #mercado-tbody tr,
+      #favorito-tbody tr {
         display: block;
         margin-bottom: 0.75rem;
         padding: 0.65rem;
@@ -669,8 +671,10 @@
         border-radius: 8px;
         background: var(--panel);
       }
-      #mercado-tbody tr:hover td { background: transparent; }
-      #mercado-tbody td {
+      #mercado-tbody tr:hover td,
+      #favorito-tbody tr:hover td { background: transparent; }
+      #mercado-tbody td,
+      #favorito-tbody td {
         display: flex;
         flex-direction: column;
         align-items: flex-start;
@@ -680,8 +684,10 @@
         border-bottom: 1px solid rgba(36, 48, 68, 0.5);
         text-align: left;
       }
-      #mercado-tbody td:last-child { border-bottom: none; }
-      #mercado-tbody td::before {
+      #mercado-tbody td:last-child,
+      #favorito-tbody td:last-child { border-bottom: none; }
+      #mercado-tbody td::before,
+      #favorito-tbody td::before {
         content: attr(data-label);
         font-weight: 600;
         color: var(--muted);
@@ -689,8 +695,10 @@
         text-transform: uppercase;
         text-align: left;
       }
-      #mercado-tbody td[data-label=""]::before { content: none; }
-      #mercado-tbody td.empty {
+      #mercado-tbody td[data-label=""]::before,
+      #favorito-tbody td[data-label=""]::before { content: none; }
+      #mercado-tbody td.empty,
+      #favorito-tbody td.empty {
         display: block;
         text-align: center;
       }
@@ -798,11 +806,11 @@
         <thead>
           <tr>
             <th>Jogo</th>
-            <th>Favorito</th>
+            <th>Tempo</th>
+            <th>Placar</th>
             <th>Odd ini</th>
             <th>Odd máx</th>
             <th>Δ</th>
-            <th>Placar</th>
             <th>Resultado</th>
             <th>Print</th>
             <th>Status</th>
@@ -2062,8 +2070,11 @@
             formatMatchHtml(r.home || '?', r.away || '?'),
             r.betano_url,
           );
-          const fav = r.favorito_nome || (r.favorito_lado === 'away' ? r.away : r.home) || r.favorito_lado;
           const placar = r.placar_final || r.placar_atual || '—';
+          const minutoAtual = r.minuto_atual != null ? r.minuto_atual : r.minuto_odd_max;
+          const tempoCell = minutoAtual != null && minutoAtual !== ''
+            ? `${minutoAtual}'`
+            : '<span class="muted">—</span>';
           let resultado = '—';
           if (r.status === 'settled') {
             if (r.favorito_venceu === true) resultado = '<span style="color:var(--accent)">Venceu</span>';
@@ -2093,11 +2104,11 @@
             : '—';
           return `<tr>
             <td data-label="Jogo">${jogo}</td>
-            <td data-label="Favorito">${fav || '—'}</td>
+            <td data-label="Tempo">${tempoCell}</td>
+            <td data-label="Placar">${placar}</td>
             <td data-label="Odd ini">${oddIniCell}</td>
             <td data-label="Odd máx">${oddMaxCell}</td>
             <td data-label="Δ">${deltaCell}</td>
-            <td data-label="Placar">${placar}</td>
             <td data-label="Resultado">${resultado}</td>
             <td data-label="Print">${printCell}</td>
             <td data-label="Status">${st}</td>

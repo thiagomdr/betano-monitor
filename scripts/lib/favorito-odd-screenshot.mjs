@@ -24,18 +24,20 @@ function supabaseAdmin() {
   return createClient(url, key);
 }
 
-/** Linhas watching sem print ainda (prioridade: abertos ha pouco). */
+/** Linhas watching sem print, ou com print antigo a recapturar (FAVORITO_RECAPTURE=1). */
 export async function fetchFavoritoScreenshotPending(limit = 1) {
   const supabase = supabaseAdmin();
-  const { data, error } = await supabase
+  const recapture = (process.env.FAVORITO_RECAPTURE || "0").trim() === "1";
+  let q = supabase
     .from("futebol_favorito_drift")
     .select(
       "event_id,home,away,betano_url,favorito_lado,favorito_nome,odd_inicial,minuto_inicial,screenshot_url",
     )
     .eq("status", "watching")
-    .is("screenshot_url", null)
     .order("first_seen_at", { ascending: true })
     .limit(limit);
+  if (!recapture) q = q.is("screenshot_url", null);
+  const { data, error } = await q;
   if (error) throw error;
   return data ?? [];
 }
@@ -56,6 +58,193 @@ async function clickResultadoTab(page) {
     }
   }
   return false;
+}
+
+/**
+ * Fecha / limpa / esconde o cupom de apostas (widget flutuante "Cupom de Apostas")
+ * e o banner de cookies, para nao cobrir o odd 1X2 no print.
+ */
+export async function dismissBetslip(page) {
+  const clickIfVisible = async (locator, timeout = 700) => {
+    try {
+      const el = locator.first();
+      if (!(await el.isVisible({ timeout }))) return false;
+      await el.click({ timeout: 2500, force: true });
+      return true;
+    } catch {
+      return false;
+    }
+  };
+
+  // Cookies (banner branco embaixo)
+  for (const sel of [
+    'button:has-text("SIM, EU ACEITO")',
+    'button:has-text("Sim, eu aceito")',
+    'button:has-text("NÃO, OBRIGADO")',
+    'button:has-text("Não, obrigado")',
+    'button:has-text("Aceitar todos")',
+    'button:has-text("Aceitar")',
+  ]) {
+    await clickIfVisible(page.locator(sel));
+  }
+
+  // Limpar / minimizar por botoes
+  const textClicks = [
+    () => page.getByRole("button", { name: /remover todas|limpar cupom|^limpar$|clear all|remove all/i }),
+    () => page.getByRole("button", { name: /fechar cupom|minimizar|recolher|close betslip/i }),
+    () => page.locator("button, [role='button']").filter({ hasText: /remover todas|limpar cupom|^limpar$/i }),
+    () => page.locator("[aria-label*='Fechar' i], [aria-label*='Close' i], [aria-label*='Limpar' i], [aria-label*='Minimizar' i]"),
+  ];
+  for (const getLoc of textClicks) {
+    try {
+      if (await clickIfVisible(getLoc())) await page.waitForTimeout(200);
+    } catch {
+      /* next */
+    }
+  }
+
+  // Esconde o widget flutuante pelo conteudo visual (Cupom de Apostas / APOSTE JÁ)
+  try {
+    await page.evaluate(() => {
+      const hide = (el) => {
+        if (!el || el === document.body || el === document.documentElement) return;
+        el.style.setProperty("display", "none", "important");
+        el.style.setProperty("visibility", "hidden", "important");
+        el.style.setProperty("opacity", "0", "important");
+        el.style.setProperty("pointer-events", "none", "important");
+      };
+
+      const looksLikeCupom = (text) =>
+        /cupom de apostas/i.test(text) ||
+        (/aposte j[aá]/i.test(text) && /cupom|seleç|selec|odd/i.test(text));
+
+      const all = Array.from(document.querySelectorAll("div, section, aside, article, form"));
+      for (const el of all) {
+        const text = (el.innerText || "").trim();
+        if (!text || text.length > 2500) continue;
+        if (!looksLikeCupom(text.slice(0, 200))) continue;
+
+        const style = window.getComputedStyle(el);
+        const pos = style.position;
+        const rect = el.getBoundingClientRect();
+        const floating =
+          pos === "fixed" ||
+          pos === "absolute" ||
+          pos === "sticky" ||
+          (rect.bottom > window.innerHeight * 0.45 && rect.right > window.innerWidth * 0.45);
+
+        if (!floating && !/cupom de apostas/i.test(text.slice(0, 40))) continue;
+
+        // Sobe ate o container do painel (largura tipica do cupom)
+        let target = el;
+        for (let i = 0; i < 6 && target.parentElement; i++) {
+          const p = target.parentElement;
+          const r = p.getBoundingClientRect();
+          const ps = window.getComputedStyle(p).position;
+          if (
+            (ps === "fixed" || ps === "absolute" || ps === "sticky") &&
+            r.width > 160 &&
+            r.width < 560 &&
+            r.height > 60
+          ) {
+            target = p;
+            break;
+          }
+          if (r.width > 160 && r.width < 560 && r.height > 100 && r.height < window.innerHeight * 0.95) {
+            target = p;
+          }
+        }
+        hide(target);
+      }
+
+      // Lixeira / X dentro de qualquer resto visivel com "Cupom"
+      for (const b of document.querySelectorAll("button, [role='button'], a, span")) {
+        const t = (b.getAttribute("aria-label") || b.textContent || "").trim();
+        if (/^(×|✕|x)$/i.test(t) || /fechar|limpar|clear|remover|minimizar|recolher/i.test(t)) {
+          const root = b.closest("div, aside, section");
+          if (root && /cupom/i.test(root.innerText || "")) {
+            try {
+              b.click();
+            } catch {
+              /* ignore */
+            }
+          }
+        }
+      }
+    });
+  } catch {
+    /* ignore */
+  }
+
+  // CSS amplo (classes + cookies banner)
+  try {
+    await page.addStyleTag({
+      content: `
+        [data-qa*="betslip" i],
+        [data-testid*="betslip" i],
+        [id*="betslip" i],
+        [class*="betslip" i],
+        [class*="bet-slip" i],
+        [class*="Betslip" i],
+        [class*="coupon" i],
+        [class*="Coupon" i],
+        [class*="bet-slip-container" i],
+        [class*="selections-wrapper" i],
+        [class*="BetSlip" i],
+        [class*="betSlip" i],
+        aside[class*="slip" i],
+        [aria-label*="Cupom" i],
+        [aria-label*="Betslip" i],
+        [class*="cookie" i],
+        [id*="cookie" i],
+        [class*="consent" i] {
+          display: none !important;
+          visibility: hidden !important;
+          opacity: 0 !important;
+          pointer-events: none !important;
+        }
+      `,
+    });
+  } catch {
+    /* ignore */
+  }
+
+  await page.waitForTimeout(400);
+}
+
+/**
+ * Print da area central do evento (mercados), sem barra esquerda/direita nem cupom.
+ * Evita seletores frageis que pegavam "Futebol (45)" / abas erradas.
+ */
+async function screenshot1x2Block(page) {
+  try {
+    await page.evaluate(() => {
+      const markers = Array.from(document.querySelectorAll("h1, h2, h3, div, span")).filter((el) => {
+        const t = (el.textContent || "").trim();
+        return /resultado|1\s*[xX]\s*2|casa|empate|fora/i.test(t) && t.length < 40;
+      });
+      const el = markers[0];
+      if (el) el.scrollIntoView({ block: "center", behavior: "instant" });
+    });
+  } catch {
+    /* ignore */
+  }
+  await page.waitForTimeout(400);
+
+  const vp = page.viewportSize() || { width: 1920, height: 1080 };
+  // Layout Betano live: lista/mini-cupons esquerda + mercados centro + lateral direita
+  const left = Math.min(480, Math.floor(vp.width * 0.26));
+  const rightMargin = Math.min(380, Math.floor(vp.width * 0.20));
+  const top = 64;
+  const bottomMargin = 72;
+  const width = Math.max(480, vp.width - left - rightMargin);
+  const height = Math.max(420, vp.height - top - bottomMargin);
+
+  return page.screenshot({
+    type: "png",
+    fullPage: false,
+    clip: { x: left, y: top, width, height },
+  });
 }
 
 /**
@@ -83,7 +272,6 @@ export async function captureFavoritoOddScreenshot(page, row) {
   }
   await dismissOverlays(page);
 
-  // Confirma que nao redirecionou para o lobby
   const finalUrl = page.url();
   if (!finalUrl.includes(eventId)) {
     console.warn(`[favorito-shot] ${eventId} redirecionou para ${finalUrl}`);
@@ -92,8 +280,9 @@ export async function captureFavoritoOddScreenshot(page, row) {
 
   await clickResultadoTab(page);
   await page.waitForTimeout(1200);
+  await dismissBetslip(page);
 
-  const png = await page.screenshot({ type: "png", fullPage: false });
+  const png = await screenshot1x2Block(page);
   const objectPath = `favorito/${eventId}/odd-inicial.png`;
   const supabase = supabaseAdmin();
   const { error: upErr } = await supabase.storage
@@ -106,11 +295,12 @@ export async function captureFavoritoOddScreenshot(page, row) {
   if (!publicUrl) throw new Error("getPublicUrl vazio");
 
   const nowIso = new Date().toISOString();
+  const publicUrlFresh = `${publicUrl}${publicUrl.includes("?") ? "&" : "?"}t=${Date.now()}`;
   const { error: dbErr } = await supabase
     .from("futebol_favorito_drift")
     .update({
       screenshot_path: objectPath,
-      screenshot_url: publicUrl,
+      screenshot_url: publicUrlFresh,
       screenshot_captured_at: nowIso,
       updated_at: nowIso,
     })
@@ -121,7 +311,7 @@ export async function captureFavoritoOddScreenshot(page, row) {
   console.log(
     `[favorito-shot] OK ${eventId} ${row.home} x ${row.away} odd_ini=${row.odd_inicial} → ${objectPath}`,
   );
-  return { path: objectPath, url: publicUrl };
+  return { path: objectPath, url: publicUrlFresh };
 }
 
 /**

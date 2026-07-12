@@ -166,6 +166,10 @@ export async function dismissOverlays(page) {
     'button:has-text("Aceitar")',
     'button:has-text("Accept all")',
     'button:has-text("Accept")',
+    'button:has-text("SIM, EU ACEITO")',
+    'button:has-text("Sim, eu aceito")',
+    'button:has-text("NÃO, OBRIGADO")',
+    'button:has-text("Não, obrigado")',
   ]) {
     await clickIfVisible(page.locator(sel));
   }

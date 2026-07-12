@@ -64,8 +64,15 @@ const scrapeTimeoutMs = Number(process.env.HCTG_SCRAPE_TIMEOUT_MS || "120000");
 const workerSource = (process.env.HCTG_WORKER_SOURCE || "local-worker").trim() || "local-worker";
 const htmlSource = (process.env.HCTG_HTML_SOURCE || "html-dom-local").trim() || "html-dom-local";
 const headless = (process.env.HCTG_HEADLESS || "0").trim() === "1";
-/** Prints do odd inicial favorito (fase 2). Desligar: FAVORITO_SCREENSHOT=0 */
+/** Prints do odd inicial favorito. Desligar: FAVORITO_SCREENSHOT=0 */
 const favoritoScreenshotOn = (process.env.FAVORITO_SCREENSHOT || "1").trim() !== "0";
+/**
+ * Scrape DOM Total de Gols → hctg_lines (Mercado +0,5).
+ * Producao atual: desligado (so prints favorito). Religar: HCTG_SCRAPE=1
+ */
+const hctgScrapeOn = (process.env.HCTG_SCRAPE || "0").trim() === "1";
+/** Intervalo entre ciclos quando so prints (evita busy-loop). */
+const favoritoPollSec = Number(process.env.FAVORITO_POLL_SEC || "20");
 
 // #region agent log
 function dbgWorker(hypothesisId, location, message, data = {}) {
@@ -165,11 +172,15 @@ function randomInt(min, max) {
 }
 
 function nextPollDelayMs() {
-  // Coleta imediata apos cada jogo; so espera em erro (retry curto).
   if (lastCycleHadError) {
     const sec = Math.max(5, errorRetrySec);
     return sec * 1000;
   }
+  // So prints: espera entre ciclos (nao busy-loop quando nao ha pendentes).
+  if (!hctgScrapeOn) {
+    return Math.max(5, favoritoPollSec) * 1000;
+  }
+  // HCTG: imediato apos cada jogo; so espera em erro.
   return 0;
 }
 
@@ -851,7 +862,7 @@ async function runCycle() {
   if (favoritoScreenshotOn) {
     try {
       const page = await ensureScrapePage(epoch);
-      const shot = await processPendingFavoritoScreenshots(page, { limit: 1 });
+      const shot = await processPendingFavoritoScreenshots(page, { limit: 2 });
       if (shot.done || shot.failed) {
         console.log(
           `[worker] favorito-shot ciclo ${cycleCount}: done=${shot.done} failed=${shot.failed}`,
@@ -865,6 +876,16 @@ async function runCycle() {
       }
       console.error(`[worker] favorito-shot:`, err?.message ?? err);
     }
+  }
+
+  // Modo atual: worker so tira prints do favorito — sem scrape Total de Gols / Mercado +0,5.
+  if (!hctgScrapeOn) {
+    console.log(
+      `[worker] ciclo ${cycleCount} — HCTG scrape off (so prints favorito)`,
+    );
+    await publishWorkerQueue(epoch, [], null);
+    lastCycleHadError = false;
+    return;
   }
 
   if (!queue.length) {
@@ -1073,7 +1094,8 @@ process.on("SIGTERM", shutdown);
 
 console.log(
   `[worker] mode=${workerSource} html=${htmlSource} headless=${headless} ` +
-    `poll=imediato erro-retry=${errorRetrySec}s round-robin=1 ` +
+    `hctg_scrape=${hctgScrapeOn ? "on" : "off"} favorito_shot=${favoritoScreenshotOn ? "on" : "off"} ` +
+    `poll=${hctgScrapeOn ? "imediato" : `${favoritoPollSec}s`} erro-retry=${errorRetrySec}s round-robin=1 ` +
     `max_attempts=${maxHctgAttempts} ` +
     `restart=${restartEveryCycles > 0 ? `${restartEveryCycles}ciclo|` : ""}${restartEveryMin}min ` +
     `aba=unica cache=${restartEveryMin}min ` +
@@ -1102,7 +1124,12 @@ async function scheduleNextCycle() {
     console.log("[worker] sistema religado — ciclo imediato");
   } else if (ativo) {
     if (delayMs > 0) {
-      console.log(`[worker] proximo ciclo em ${(delayMs / 1000).toFixed(0)}s (retry apos erro)`);
+      const why = lastCycleHadError
+        ? "retry apos erro"
+        : !hctgScrapeOn
+          ? "prints favorito"
+          : "espera";
+      console.log(`[worker] proximo ciclo em ${(delayMs / 1000).toFixed(0)}s (${why})`);
     } else {
       console.log("[worker] proximo ciclo imediato");
     }
