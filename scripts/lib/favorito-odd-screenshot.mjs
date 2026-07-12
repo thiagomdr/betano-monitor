@@ -213,8 +213,7 @@ export async function dismissBetslip(page) {
 }
 
 /**
- * Print da area central do evento (mercados), sem barra esquerda/direita nem cupom.
- * Evita seletores frageis que pegavam "Futebol (45)" / abas erradas.
+ * Print da viewport inteira (sem clip/recorte).
  */
 async function screenshot1x2Block(page) {
   try {
@@ -231,19 +230,9 @@ async function screenshot1x2Block(page) {
   }
   await page.waitForTimeout(400);
 
-  const vp = page.viewportSize() || { width: 1920, height: 1080 };
-  // Layout Betano live: lista/mini-cupons esquerda + mercados centro + lateral direita
-  const left = Math.min(480, Math.floor(vp.width * 0.26));
-  const rightMargin = Math.min(380, Math.floor(vp.width * 0.20));
-  const top = 64;
-  const bottomMargin = 72;
-  const width = Math.max(480, vp.width - left - rightMargin);
-  const height = Math.max(420, vp.height - top - bottomMargin);
-
   return page.screenshot({
     type: "png",
     fullPage: false,
-    clip: { x: left, y: top, width, height },
   });
 }
 
