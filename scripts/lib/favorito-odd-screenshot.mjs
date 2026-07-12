@@ -24,6 +24,25 @@ function supabaseAdmin() {
   return createClient(url, key);
 }
 
+/** Nome de arquivo seguro: Time A x Time B → time-a_x_time-b_odds-iniciais.png */
+export function favoritoShotFileName(home, away) {
+  const slug = (name, fallback) => {
+    const s = String(name || "")
+      .normalize("NFD")
+      .replace(/[\u0300-\u036f]/g, "")
+      .toLowerCase()
+      .replace(/[^a-z0-9]+/g, "-")
+      .replace(/^-+|-+$/g, "")
+      .slice(0, 80);
+    return s || fallback;
+  };
+  return `${slug(home, "time-1")}_x_${slug(away, "time-2")}_odds-iniciais.png`;
+}
+
+export function favoritoShotObjectPath(home, away) {
+  return `favorito/${favoritoShotFileName(home, away)}`;
+}
+
 /** Linhas watching sem print, ou com print antigo a recapturar (FAVORITO_RECAPTURE=1). */
 export async function fetchFavoritoScreenshotPending(limit = 1) {
   const supabase = supabaseAdmin();
@@ -31,7 +50,7 @@ export async function fetchFavoritoScreenshotPending(limit = 1) {
   let q = supabase
     .from("futebol_favorito_drift")
     .select(
-      "event_id,home,away,betano_url,favorito_lado,favorito_nome,odd_inicial,minuto_inicial,minuto_atual,screenshot_url",
+      "event_id,home,away,betano_url,favorito_lado,favorito_nome,odd_inicial,minuto_inicial,minuto_atual,screenshot_url,screenshot_path",
     )
     .eq("status", "watching")
     .order("first_seen_at", { ascending: true })
@@ -272,8 +291,16 @@ export async function captureFavoritoOddScreenshot(page, row) {
   await dismissBetslip(page);
 
   const png = await screenshot1x2Block(page);
-  const objectPath = `favorito/${eventId}/odd-inicial.png`;
+  const objectPath = favoritoShotObjectPath(row.home, row.away);
   const supabase = supabaseAdmin();
+  const oldPath = row.screenshot_path ? String(row.screenshot_path) : null;
+  if (oldPath && oldPath !== objectPath) {
+    try {
+      await supabase.storage.from(BUCKET).remove([oldPath]);
+    } catch {
+      /* ignore */
+    }
+  }
   const { error: upErr } = await supabase.storage
     .from(BUCKET)
     .upload(objectPath, png, { contentType: "image/png", upsert: true });
