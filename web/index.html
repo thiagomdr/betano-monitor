@@ -2105,6 +2105,20 @@
       return Number.isFinite(v) ? v.toFixed(2) : '—';
     }
 
+    /** Print: dd/mm HH:mm (40') */
+    function formatFavoritoPrintLabel(iso, minute) {
+      if (!iso) return '—';
+      const d = new Date(iso);
+      if (Number.isNaN(d.getTime())) return '—';
+      const dd = String(d.getDate()).padStart(2, '0');
+      const mm = String(d.getMonth() + 1).padStart(2, '0');
+      const hh = String(d.getHours()).padStart(2, '0');
+      const mi = String(d.getMinutes()).padStart(2, '0');
+      const minNum = minute != null && minute !== '' ? Number(minute) : NaN;
+      const minPart = Number.isFinite(minNum) ? ` (${minNum}')` : '';
+      return `${dd}/${mm} ${hh}:${mi}${minPart}`;
+    }
+
     const FAVORITO_COL_WIDTHS_KEY = 'favoritoColWidths.v1';
     const FAVORITO_COL_DEFAULTS = {
       jogo: 200,
@@ -2114,7 +2128,7 @@
       odd_max: 96,
       delta: 96,
       resultado: 80,
-      print: 72,
+      print: 118,
       status: 88,
     };
     const FAVORITO_COL_MIN = 40;
@@ -2211,6 +2225,25 @@
           'futebol_favorito_drift?select=*&order=updated_at.desc&limit=200',
         );
         const list = Array.isArray(rows) ? rows : [];
+        // Tempo: nunca usar minuto_odd_max (pico da odd). Enriquecer com last_minute do mercado.
+        const liveIds = list
+          .filter((r) => r.status === 'watching')
+          .map((r) => r.event_id)
+          .filter(Boolean);
+        const mercadoMinuteById = {};
+        if (liveIds.length) {
+          try {
+            const idFilter = liveIds.map((id) => encodeURIComponent(String(id))).join(',');
+            const mercadoRows = await supabaseGet(
+              `futebol_mercado_gols_05?select=event_id,last_minute&event_id=in.(${idFilter})`,
+            );
+            for (const m of Array.isArray(mercadoRows) ? mercadoRows : []) {
+              if (m?.event_id != null && m.last_minute != null) {
+                mercadoMinuteById[String(m.event_id)] = Number(m.last_minute);
+              }
+            }
+          } catch (_) { /* mercado opcional para Tempo */ }
+        }
         const watching = list.filter((r) => r.status === 'watching').length;
         const settled = list.filter((r) => r.status === 'settled').length;
         const wins = list.filter((r) => r.favorito_venceu === true).length;
@@ -2239,8 +2272,15 @@
             r.betano_url,
           );
           const placar = r.placar_final || r.placar_atual || '—';
-          const minutoAtual = r.minuto_atual != null ? r.minuto_atual : r.minuto_odd_max;
-          const tempoCell = minutoAtual != null && minutoAtual !== ''
+          // Tempo = minuto do jogo (minuto_atual), nunca minuto_odd_max.
+          let minutoAtual = r.minuto_atual != null && r.minuto_atual !== ''
+            ? Number(r.minuto_atual)
+            : null;
+          const mercadoMin = mercadoMinuteById[String(r.event_id)];
+          if (Number.isFinite(mercadoMin)) {
+            if (minutoAtual == null || mercadoMin > minutoAtual) minutoAtual = mercadoMin;
+          }
+          const tempoCell = Number.isFinite(minutoAtual)
             ? `${minutoAtual}'`
             : '<span class="muted">—</span>';
           let resultado = '—';
@@ -2252,7 +2292,9 @@
           const st = r.status === 'watching' ? 'Ao vivo' : 'Finalizado';
           let printCell = '—';
           if (r.screenshot_url) {
-            printCell = `<a href="${r.screenshot_url}" target="_blank" rel="noopener" style="color:var(--accent)">OK · Ver</a>`;
+            const shotMin = r.screenshot_minuto != null ? r.screenshot_minuto : r.minuto_inicial;
+            const label = formatFavoritoPrintLabel(r.screenshot_captured_at, shotMin);
+            printCell = `<a href="${r.screenshot_url}" target="_blank" rel="noopener" style="color:var(--accent)" title="Abrir print">${label}</a>`;
           } else if (r.status === 'watching') {
             printCell = '<span class="muted">pendente</span>';
           }

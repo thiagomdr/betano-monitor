@@ -481,8 +481,11 @@ async function processFavoritoDriftLive(
   },
 ): Promise<"opened" | "updated" | "skipped"> {
   const { ml_home, ml_away } = input;
-  if (ml_home == null || ml_away == null) return "skipped";
-  if (!(ml_home >= 1.01) || !(ml_away >= 1.01)) return "skipped";
+  const mlOk =
+    ml_home != null &&
+    ml_away != null &&
+    ml_home >= 1.01 &&
+    ml_away >= 1.01;
 
   const nowIso = new Date().toISOString();
   const { data: prev } = await supabase
@@ -498,13 +501,14 @@ async function processFavoritoDriftLive(
     // Odd "inicial": so abre se o jogo ainda esta nos primeiros N minutos.
     // Sem minuto (kickoff / clock ausente) tambem aceita.
     // Teste: secret FAVORITO_OPEN_MAX_MINUTE=90 (depois voltar para 5).
+    if (!mlOk) return "skipped";
     const openMaxMinute = Math.max(
       0,
       Number(Deno.env.get("FAVORITO_OPEN_MAX_MINUTE") || "5") || 5,
     );
     if (input.minute != null && input.minute > openMaxMinute) return "skipped";
 
-    const pick = pickFavoritoLado(ml_home, ml_away);
+    const pick = pickFavoritoLado(ml_home!, ml_away!);
     const nome = pick.lado === "home" ? input.home : input.away;
     await supabase.from("futebol_favorito_drift").insert({
       event_id: input.event_id,
@@ -536,8 +540,27 @@ async function processFavoritoDriftLive(
     return "opened";
   }
 
+  // Linha ja aberta: sempre atualiza relogio/placar (mesmo se 1X2 sumiu).
+  const clockPatch: Record<string, unknown> = {
+    home: input.home,
+    away: input.away,
+    league: input.league,
+    country: input.country,
+    betano_url: input.betano_url,
+    minuto_atual: input.minute,
+    placar_atual: input.score_text,
+    home_score: input.home_score,
+    away_score: input.away_score,
+    updated_at: nowIso,
+  };
+
+  if (!mlOk) {
+    await supabase.from("futebol_favorito_drift").update(clockPatch).eq("event_id", input.event_id);
+    return "updated";
+  }
+
   const lado = row.favorito_lado === "away" ? "away" : "home";
-  const oddAtual = lado === "home" ? ml_home : ml_away;
+  const oddAtual = lado === "home" ? ml_home! : ml_away!;
   let oddMax = Number(row.odd_max);
   let minutoMax: number | null | undefined = undefined;
   if (oddAtual > oddMax + 0.001) {
@@ -546,21 +569,12 @@ async function processFavoritoDriftLive(
   }
 
   const patch: Record<string, unknown> = {
-    home: input.home,
-    away: input.away,
-    league: input.league,
-    country: input.country,
-    betano_url: input.betano_url,
+    ...clockPatch,
     odd_atual: oddAtual,
     odd_max: oddMax,
-    minuto_atual: input.minute,
     ml_home_atual: ml_home,
     ml_draw_atual: input.ml_draw,
     ml_away_atual: ml_away,
-    placar_atual: input.score_text,
-    home_score: input.home_score,
-    away_score: input.away_score,
-    updated_at: nowIso,
   };
   // Backfill odds iniciais (linhas abertas antes das colunas existirem).
   const homeIniPrev = Number(row.ml_home_inicial);
@@ -640,6 +654,7 @@ async function finalizeFavoritoDriftOffLive(
       screenshot_path: null,
       screenshot_url: null,
       screenshot_captured_at: null,
+      screenshot_minuto: null,
     }).eq("event_id", eventId);
     settled += 1;
   }

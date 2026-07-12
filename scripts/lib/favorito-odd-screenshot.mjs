@@ -31,7 +31,7 @@ export async function fetchFavoritoScreenshotPending(limit = 1) {
   let q = supabase
     .from("futebol_favorito_drift")
     .select(
-      "event_id,home,away,betano_url,favorito_lado,favorito_nome,odd_inicial,minuto_inicial,screenshot_url",
+      "event_id,home,away,betano_url,favorito_lado,favorito_nome,odd_inicial,minuto_inicial,minuto_atual,screenshot_url",
     )
     .eq("status", "watching")
     .order("first_seen_at", { ascending: true })
@@ -296,12 +296,18 @@ export async function captureFavoritoOddScreenshot(page, row) {
 
   const nowIso = new Date().toISOString();
   const publicUrlFresh = `${publicUrl}${publicUrl.includes("?") ? "&" : "?"}t=${Date.now()}`;
+  const shotMinuteRaw = row.minuto_atual ?? row.minuto_inicial;
+  const shotMinute =
+    shotMinuteRaw != null && Number.isFinite(Number(shotMinuteRaw))
+      ? Number(shotMinuteRaw)
+      : null;
   const { error: dbErr } = await supabase
     .from("futebol_favorito_drift")
     .update({
       screenshot_path: objectPath,
       screenshot_url: publicUrlFresh,
       screenshot_captured_at: nowIso,
+      screenshot_minuto: shotMinute,
       updated_at: nowIso,
     })
     .eq("event_id", eventId)
