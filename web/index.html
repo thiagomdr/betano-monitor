@@ -1026,10 +1026,10 @@
             <th title="Clique para minutos dos chutes (a gol, fora e bloqueados)">Chutes</th>
             <th title="Clique para minutos das defesas">Defesas</th>
             <th title="Pênaltis (contador)">Pênaltis</th>
-            <th class="stats-group-start" title="Posse de bola % (sem timeline individual)">Posse</th>
-            <th title="Ataques (contador; sem timeline individual)">Ataques</th>
-            <th title="Ataques perigosos (contador; sem timeline individual)">At. perigosos</th>
-            <th title="Bola segura (contador; sem timeline individual)">Bola segura</th>
+            <th class="stats-group-start" title="Clique para ver posse por time">Posse</th>
+            <th title="Clique para ver ataques por time">Ataques</th>
+            <th title="Clique para ver ataques perigosos por time">At. perigosos</th>
+            <th title="Clique para ver bola segura por time">Bola segura</th>
             <th class="stats-group-start" title="Clique para minutos dos escanteios">Escanteios</th>
             <th title="Clique para minutos das faltas (cobranças)">Faltas</th>
             <th title="Clique para minutos dos livres">Livres</th>
@@ -2217,6 +2217,21 @@
       return text;
     }
 
+    /** Balão com valor por time (sem timeline) — Posse / Ataques / etc. */
+    function mercadoTeamValuesLabel(row, homeVal, awayVal, tipKey, title, suffix = '') {
+      const text = statsPairPlain(homeVal, awayVal, suffix);
+      if (!text) return '<span class="muted">—</span>';
+      const homeName = row.home ? String(row.home) : 'Casa';
+      const awayName = row.away ? String(row.away) : 'Fora';
+      const fmt = (v) => (v == null || v === '' ? '—' : `${v}${suffix}`);
+      const tip = tipLinesHtml([
+        `<strong>${escapeHtml(title)}</strong>`,
+        `Casa · ${escapeHtml(homeName)}: ${escapeHtml(fmt(homeVal))}`,
+        `Fora · ${escapeHtml(awayName)}: ${escapeHtml(fmt(awayVal))}`,
+      ]);
+      return `<button type="button" class="table-tip-btn placar" data-table-tip="${tipKey}-${row.event_id}" data-tip-html="${encodeURIComponent(tip)}" title="${escapeHtml(title)} por time">${text}</button>`;
+    }
+
     function statsPairSum(home, away) {
       if (home == null && away == null) return null;
       return (Number(home) || 0) + (Number(away) || 0);
@@ -2381,15 +2396,44 @@
     }
 
     function mercadoAtaquesLabel(row) {
-      return statsPairLabel(row.home_attacks, row.away_attacks);
+      return mercadoTeamValuesLabel(
+        row,
+        row.home_attacks,
+        row.away_attacks,
+        'ataques',
+        'Ataques',
+      );
     }
 
     function mercadoAtaquesPerigososLabel(row) {
-      return statsPairLabel(row.home_dangerous_attacks, row.away_dangerous_attacks);
+      return mercadoTeamValuesLabel(
+        row,
+        row.home_dangerous_attacks,
+        row.away_dangerous_attacks,
+        'ataques-perig',
+        'Ataques perigosos',
+      );
     }
 
     function mercadoBolaSeguraLabel(row) {
-      return statsPairLabel(row.home_ball_safe, row.away_ball_safe);
+      return mercadoTeamValuesLabel(
+        row,
+        row.home_ball_safe,
+        row.away_ball_safe,
+        'bola-segura',
+        'Bola segura',
+      );
+    }
+
+    function mercadoPosseLabel(row) {
+      return mercadoTeamValuesLabel(
+        row,
+        row.home_possession,
+        row.away_possession,
+        'posse',
+        'Posse',
+        '%',
+      );
     }
 
     function mercadoSubsLabel(row) {
@@ -2927,9 +2971,7 @@
         const link = row.betano_url
           ? `<a href="${row.betano_url}" target="_blank" rel="noopener">abrir</a>`
           : '—';
-        const poss = (row.home_possession != null || row.away_possession != null)
-          ? statsPairLabel(row.home_possession, row.away_possession, '%')
-          : '<span class="muted">—</span>';
+        const poss = mercadoPosseLabel(row);
         return `<tr>
           <td class="stats-group-start" data-label="#">${i + 1}</td>
           <td data-label="Jogo">${matchHtml}</td>
