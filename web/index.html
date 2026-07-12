@@ -627,7 +627,45 @@
       background: rgba(94, 179, 255, 0.28);
       color: #fff;
     }
-    #stats-columns-popover .scb-col input,
+    #stats-columns-popover .scb-color {
+      position: relative;
+      flex: 0 0 auto;
+      width: 1.15rem;
+      height: 1.15rem;
+      padding: 0;
+      border-radius: 50%;
+      border: 1px solid rgba(94, 179, 255, 0.45);
+      background: rgba(94, 179, 255, 0.12);
+      color: #9ecfff;
+      cursor: pointer;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      overflow: hidden;
+    }
+    #stats-columns-popover .scb-color:hover {
+      background: rgba(94, 179, 255, 0.28);
+      color: #fff;
+    }
+    #stats-columns-popover .scb-color.has-custom {
+      border-color: currentColor;
+    }
+    #stats-columns-popover .scb-color svg {
+      width: 0.72rem;
+      height: 0.72rem;
+      pointer-events: none;
+    }
+    #stats-columns-popover .scb-color-input {
+      position: absolute;
+      inset: 0;
+      width: 100%;
+      height: 100%;
+      opacity: 0;
+      border: 0;
+      padding: 0;
+      cursor: pointer;
+    }
+    #stats-columns-popover .scb-col input[type="checkbox"],
     #stats-columns-popover .scb-group-head input {
       accent-color: var(--accent);
       cursor: pointer;
@@ -1469,6 +1507,57 @@
       localStorage.setItem('statsTableColumns', JSON.stringify([...statsVisibleCols]));
     }
 
+    const STATS_COL_COLOR_FALLBACK = '#8fa3bf';
+
+    function loadStatsColumnColors() {
+      try {
+        const raw = localStorage.getItem('statsColumnColors');
+        if (!raw) return {};
+        const obj = JSON.parse(raw);
+        if (!obj || typeof obj !== 'object' || Array.isArray(obj)) return {};
+        const out = {};
+        for (const [id, hex] of Object.entries(obj)) {
+          if (ALL_STATS_COL_IDS.includes(id) && typeof hex === 'string' && /^#[0-9a-fA-F]{6}$/.test(hex)) {
+            out[id] = hex.toLowerCase();
+          }
+        }
+        return out;
+      } catch {
+        return {};
+      }
+    }
+
+    let statsColumnColors = loadStatsColumnColors();
+
+    function persistStatsColumnColors() {
+      localStorage.setItem('statsColumnColors', JSON.stringify(statsColumnColors));
+    }
+
+    function getStatsColTextColor(colId) {
+      const c = statsColumnColors[colId];
+      return typeof c === 'string' && /^#[0-9a-fA-F]{6}$/.test(c) ? c : null;
+    }
+
+    function setStatsColTextColor(colId, hex) {
+      if (!colId || !ALL_STATS_COL_IDS.includes(colId)) return;
+      if (typeof hex === 'string' && /^#[0-9a-fA-F]{6}$/.test(hex)) {
+        statsColumnColors[colId] = hex.toLowerCase();
+      } else {
+        delete statsColumnColors[colId];
+      }
+      persistStatsColumnColors();
+    }
+
+    function withStatsColTextColor(html, colId) {
+      const color = getStatsColTextColor(colId);
+      if (!color || !html) return html;
+      const safe = escapeHtml(color);
+      if (/\sstyle="/.test(html)) {
+        return html.replace(/\sstyle="/, ` style="color:${safe};`);
+      }
+      return html.replace(/^<(td|th)(\s|>)/, `<$1 style="color:${safe}"$2`);
+    }
+
     function statsVisibleGroups() {
       return STATS_COL_GROUPS
         .map((g) => ({
@@ -1501,7 +1590,9 @@
               const cls = ci === 0 ? ' class="stats-group-start"' : '';
               const tip = c.info || c.title;
               const title = tip ? ` title="${escapeHtml(tip)}"` : '';
-              return `<th${cls}${title}>${escapeHtml(c.label)}</th>`;
+              const color = getStatsColTextColor(c.id);
+              const style = color ? ` style="color:${escapeHtml(color)}"` : '';
+              return `<th${cls}${title}${style}>${escapeHtml(c.label)}</th>`;
             })
             .join(''),
         )
@@ -1597,7 +1688,7 @@
           } else {
             html = html.replace(' class="stats-group-start"', '');
           }
-          parts.push(html);
+          parts.push(withStatsColTextColor(html, c.id));
         });
       }
       return parts.join('');
@@ -3418,12 +3509,20 @@
         const colsHtml = g.cols
           .map((c) => {
             const info = c.info || c.title || c.label;
+            const customColor = getStatsColTextColor(c.id);
+            const pickerValue = customColor || STATS_COL_COLOR_FALLBACK;
+            const colorCls = customColor ? ' scb-color has-custom' : ' scb-color';
+            const colorStyle = customColor ? ` style="color:${escapeHtml(customColor)}"` : '';
             return `<div class="scb-col">
               <label class="scb-col-main">
                 <input type="checkbox" data-scb-col="${escapeHtml(c.id)}" ${draft.has(c.id) ? 'checked' : ''} />
                 <span>${escapeHtml(c.label)}</span>
               </label>
               <button type="button" class="scb-info" data-scb-info="${escapeHtml(c.id)}" title="${escapeHtml(info)}" aria-label="Sobre ${escapeHtml(c.label)}">i</button>
+              <label class="${colorCls.trim()}"${colorStyle} title="Cor do texto (duplo clique = padrão)" aria-label="Cor do texto de ${escapeHtml(c.label)}">
+                <svg viewBox="0 0 16 16" aria-hidden="true"><path fill="currentColor" d="M12.9 1.6a1.8 1.8 0 0 1 0 2.55L6.4 10.65l-2.7.45.45-2.7 6.5-6.5a1.8 1.8 0 0 1 2.25-.3zM2.2 13.1c1.35-.9 2.7-.45 3.15.55-.75.7-2 .9-3.15.45z"/></svg>
+                <input type="color" class="scb-color-input" data-scb-color="${escapeHtml(c.id)}" value="${escapeHtml(pickerValue)}" />
+              </label>
             </div>`;
           })
           .join('');
@@ -3470,6 +3569,29 @@
             escapeHtml(text),
           ]);
           showMercadoTipPopover(infoBtn, `scb-info-${colId}`, tip);
+        });
+      });
+      pop.querySelectorAll('input.scb-color-input').forEach((colorInput) => {
+        const wrap = colorInput.closest('.scb-color');
+        const applyColorUi = (hex) => {
+          const colId = colorInput.getAttribute('data-scb-color');
+          if (!colId) return;
+          setStatsColTextColor(colId, hex);
+          const custom = getStatsColTextColor(colId);
+          if (wrap) {
+            wrap.classList.toggle('has-custom', !!custom);
+            if (custom) wrap.style.color = custom;
+            else wrap.style.removeProperty('color');
+          }
+          colorInput.value = custom || STATS_COL_COLOR_FALLBACK;
+          renderMercado();
+        };
+        colorInput.addEventListener('input', () => applyColorUi(colorInput.value));
+        colorInput.addEventListener('change', () => applyColorUi(colorInput.value));
+        wrap?.addEventListener('dblclick', (e) => {
+          e.preventDefault();
+          e.stopPropagation();
+          applyColorUi(null);
         });
       });
       pop.querySelector('#btn-scb-cancel')?.addEventListener('click', () => {
