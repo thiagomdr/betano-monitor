@@ -670,6 +670,50 @@
       accent-color: var(--accent);
       cursor: pointer;
     }
+    #stats-columns-popover .scb-move {
+      display: inline-flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      gap: 1px;
+      flex: 0 0 auto;
+      margin-left: 0.05rem;
+    }
+    #stats-columns-popover .scb-move-btn {
+      width: 0.95rem;
+      height: 0.7rem;
+      padding: 0;
+      border: 0;
+      border-radius: 2px;
+      background: transparent;
+      color: #9ecfff;
+      cursor: pointer;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      line-height: 0;
+    }
+    #stats-columns-popover .scb-move-btn:hover:not(:disabled) {
+      background: rgba(94, 179, 255, 0.22);
+      color: #fff;
+    }
+    #stats-columns-popover .scb-move-btn:disabled {
+      opacity: 0.28;
+      cursor: default;
+    }
+    #stats-columns-popover .scb-tri {
+      display: block;
+      width: 0;
+      height: 0;
+      border-left: 3.5px solid transparent;
+      border-right: 3.5px solid transparent;
+    }
+    #stats-columns-popover .scb-tri-up {
+      border-bottom: 4.5px solid currentColor;
+    }
+    #stats-columns-popover .scb-tri-down {
+      border-top: 4.5px solid currentColor;
+    }
     #stats-columns-popover .scb-actions {
       display: flex;
       justify-content: flex-end;
@@ -1558,12 +1602,60 @@
       return html.replace(/^<(td|th)(\s|>)/, `<$1 style="color:${safe}"$2`);
     }
 
+    function loadStatsColumnOrder() {
+      try {
+        const raw = localStorage.getItem('statsColumnOrder');
+        if (!raw) return [...ALL_STATS_COL_IDS];
+        const arr = JSON.parse(raw);
+        if (!Array.isArray(arr)) return [...ALL_STATS_COL_IDS];
+        const valid = arr.filter((id) => ALL_STATS_COL_IDS.includes(id));
+        const missing = ALL_STATS_COL_IDS.filter((id) => !valid.includes(id));
+        return [...valid, ...missing];
+      } catch {
+        return [...ALL_STATS_COL_IDS];
+      }
+    }
+
+    let statsColumnOrder = loadStatsColumnOrder();
+
+    function persistStatsColumnOrder() {
+      localStorage.setItem('statsColumnOrder', JSON.stringify(statsColumnOrder));
+    }
+
+    function statsColOrderRank(colId) {
+      const idx = statsColumnOrder.indexOf(colId);
+      return idx >= 0 ? idx : ALL_STATS_COL_IDS.length + 1;
+    }
+
+    function orderedGroupCols(group) {
+      return [...(group?.cols || [])].sort(
+        (a, b) => statsColOrderRank(a.id) - statsColOrderRank(b.id),
+      );
+    }
+
+    function moveStatsColumn(colId, dir) {
+      const group = STATS_COL_GROUPS.find((g) => g.cols.some((c) => c.id === colId));
+      if (!group) return false;
+      const orderedIds = orderedGroupCols(group).map((c) => c.id);
+      const idx = orderedIds.indexOf(colId);
+      const swapIdx = idx + dir;
+      if (idx < 0 || swapIdx < 0 || swapIdx >= orderedIds.length) return false;
+      const otherId = orderedIds[swapIdx];
+      const iGlobal = statsColumnOrder.indexOf(colId);
+      const jGlobal = statsColumnOrder.indexOf(otherId);
+      if (iGlobal < 0 || jGlobal < 0) return false;
+      statsColumnOrder[iGlobal] = otherId;
+      statsColumnOrder[jGlobal] = colId;
+      persistStatsColumnOrder();
+      return true;
+    }
+
     function statsVisibleGroups() {
       return STATS_COL_GROUPS
         .map((g) => ({
           id: g.id,
           label: g.label,
-          cols: g.cols.filter((c) => statsVisibleCols.has(c.id)),
+          cols: orderedGroupCols(g).filter((c) => statsVisibleCols.has(c.id)),
         }))
         .filter((g) => g.cols.length > 0);
     }
@@ -3499,25 +3591,41 @@
       });
     }
 
-    function openStatsColumnsPopover() {
+    function collectStatsBuilderDraft(root) {
+      const draft = new Set();
+      root?.querySelectorAll('input[data-scb-col]:checked').forEach((cb) => {
+        const id = cb.getAttribute('data-scb-col');
+        if (id) draft.add(id);
+      });
+      return draft;
+    }
+
+    function openStatsColumnsPopover(draftCols) {
       const pop = document.getElementById('stats-columns-popover');
       const btn = document.getElementById('btn-stats-montar-tabela');
       if (!pop) return;
       hideMercadoElevatedPopover();
-      const draft = new Set(statsVisibleCols);
+      const draft = draftCols instanceof Set ? draftCols : new Set(statsVisibleCols);
       const groupsHtml = STATS_COL_GROUPS.map((g) => {
-        const colsHtml = g.cols
-          .map((c) => {
+        const cols = orderedGroupCols(g);
+        const colsHtml = cols
+          .map((c, ci) => {
             const info = c.info || c.title || c.label;
             const customColor = getStatsColTextColor(c.id);
             const pickerValue = customColor || STATS_COL_COLOR_FALLBACK;
             const colorCls = customColor ? ' scb-color has-custom' : ' scb-color';
             const colorStyle = customColor ? ` style="color:${escapeHtml(customColor)}"` : '';
+            const upDisabled = ci === 0 ? ' disabled' : '';
+            const downDisabled = ci === cols.length - 1 ? ' disabled' : '';
             return `<div class="scb-col">
               <label class="scb-col-main">
                 <input type="checkbox" data-scb-col="${escapeHtml(c.id)}" ${draft.has(c.id) ? 'checked' : ''} />
                 <span>${escapeHtml(c.label)}</span>
               </label>
+              <span class="scb-move">
+                <button type="button" class="scb-move-btn" data-scb-move="-1" data-scb-col-id="${escapeHtml(c.id)}" title="Mover para cima" aria-label="Mover ${escapeHtml(c.label)} para cima"${upDisabled}><span class="scb-tri scb-tri-up"></span></button>
+                <button type="button" class="scb-move-btn" data-scb-move="1" data-scb-col-id="${escapeHtml(c.id)}" title="Mover para baixo" aria-label="Mover ${escapeHtml(c.label)} para baixo"${downDisabled}><span class="scb-tri scb-tri-down"></span></button>
+              </span>
               <button type="button" class="scb-info" data-scb-info="${escapeHtml(c.id)}" title="${escapeHtml(info)}" aria-label="Sobre ${escapeHtml(c.label)}">i</button>
               <label class="${colorCls.trim()}"${colorStyle} title="Cor do texto (duplo clique = padrão)" aria-label="Cor do texto de ${escapeHtml(c.label)}">
                 <svg viewBox="0 0 16 16" aria-hidden="true"><path fill="currentColor" d="M12.9 1.6a1.8 1.8 0 0 1 0 2.55L6.4 10.65l-2.7.45.45-2.7 6.5-6.5a1.8 1.8 0 0 1 2.25-.3zM2.2 13.1c1.35-.9 2.7-.45 3.15.55-.75.7-2 .9-3.15.45z"/></svg>
@@ -3569,6 +3677,20 @@
             escapeHtml(text),
           ]);
           showMercadoTipPopover(infoBtn, `scb-info-${colId}`, tip);
+        });
+      });
+      pop.querySelectorAll('button.scb-move-btn').forEach((moveBtn) => {
+        moveBtn.addEventListener('click', (e) => {
+          e.preventDefault();
+          e.stopPropagation();
+          if (moveBtn.disabled) return;
+          const colId = moveBtn.getAttribute('data-scb-col-id');
+          const dir = Number(moveBtn.getAttribute('data-scb-move'));
+          if (!colId || !dir) return;
+          const draftNow = collectStatsBuilderDraft(pop);
+          if (!moveStatsColumn(colId, dir)) return;
+          openStatsColumnsPopover(draftNow);
+          renderMercado();
         });
       });
       pop.querySelectorAll('input.scb-color-input').forEach((colorInput) => {
