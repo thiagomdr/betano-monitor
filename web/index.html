@@ -583,12 +583,30 @@
       border-color: rgba(255, 140, 66, 0.45);
       color: #ff8c42;
     }
+    .hctg-pill.atual {
+      background: #fff;
+      border-color: rgba(255, 255, 255, 0.85);
+      color: #0d1520;
+    }
     .favorito-odds-pair {
       display: inline-flex;
       flex-wrap: wrap;
       align-items: center;
       gap: 0.35rem;
     }
+    .favorito-odd-atual-wrap {
+      display: inline-flex;
+      flex-wrap: nowrap;
+      align-items: center;
+      gap: 0.4rem;
+      white-space: nowrap;
+    }
+    .favorito-odd-atual-delta {
+      font-weight: 600;
+      font-size: 0.78rem;
+    }
+    .favorito-odd-atual-delta.up { color: #5eb3ff; }
+    .favorito-odd-atual-delta.down { color: #ff6b6b; }
     .table-scroll-hint {
       margin: 0 0 0.5rem;
       font-size: 0.78rem;
@@ -868,6 +886,7 @@
           <col data-col="placar" />
           <col data-col="odd_ini" />
           <col data-col="odd_max" />
+          <col data-col="odd_atual" />
           <col data-col="delta" />
           <col data-col="resultado" />
           <col data-col="print" />
@@ -880,6 +899,7 @@
             <th data-col="placar">Placar</th>
             <th data-col="odd_ini">Odd ini</th>
             <th data-col="odd_max">Odd máx</th>
+            <th data-col="odd_atual">Odd atual</th>
             <th data-col="delta">Valorização</th>
             <th data-col="resultado">Resultado</th>
             <th data-col="print">Print</th>
@@ -887,7 +907,7 @@
           </tr>
         </thead>
         <tbody id="favorito-tbody">
-          <tr><td colspan="9" class="muted">Carregando…</td></tr>
+          <tr><td colspan="10" class="muted">Carregando…</td></tr>
         </tbody>
       </table>
     </div>
@@ -2126,6 +2146,7 @@
       placar: 56,
       odd_ini: 148,
       odd_max: 96,
+      odd_atual: 120,
       delta: 96,
       resultado: 80,
       print: 118,
@@ -2259,14 +2280,16 @@
         }
         if (!tbody) return;
         if (!list.length) {
-          tbody.innerHTML = '<tr><td colspan="9" class="muted">Nenhum jogo ainda — aguarde o próximo cron da Edge.</td></tr>';
+          tbody.innerHTML = '<tr><td colspan="10" class="muted">Nenhum jogo ainda — aguarde o próximo cron da Edge.</td></tr>';
           initFavoritoColumnResize();
           return;
         }
         tbody.innerHTML = list.map((r) => {
           const ini = Number(r.odd_inicial);
           const max = Number(r.odd_max);
+          const atual = Number(r.odd_atual);
           const delta = Number.isFinite(ini) && Number.isFinite(max) ? (max - ini) : null;
+          const deltaAtual = Number.isFinite(ini) && Number.isFinite(atual) ? (atual - ini) : null;
           const jogo = wrapMatchHtmlWithLink(
             formatMatchHtml(r.home || '?', r.away || '?'),
             r.betano_url,
@@ -2332,12 +2355,28 @@
           const oddMaxCell = Number.isFinite(max)
             ? `<span class="hctg-pill max">${fmtOdd(max)}</span>${minMax ? ` ${minMax}` : ''}`
             : '—';
+          let oddAtualCell = '—';
+          if (Number.isFinite(atual) && atual >= 1.01) {
+            let deltaAtualHtml = '';
+            if (deltaAtual != null) {
+              const sign = deltaAtual >= 0 ? '+' : '';
+              const cls = deltaAtual >= 0 ? 'up' : 'down';
+              deltaAtualHtml =
+                `<span class="favorito-odd-atual-delta ${cls}">${sign}${deltaAtual.toFixed(2)}</span>`;
+            }
+            oddAtualCell =
+              `<span class="favorito-odd-atual-wrap">` +
+              `<span class="hctg-pill atual">${fmtOdd(atual)}</span>` +
+              deltaAtualHtml +
+              `</span>`;
+          }
           return `<tr>
             <td data-label="Jogo">${jogo}</td>
             <td data-label="Tempo">${tempoCell}</td>
             <td data-label="Placar">${placar}</td>
             <td data-label="Odd ini">${oddIniCell}</td>
             <td data-label="Odd máx">${oddMaxCell}</td>
+            <td data-label="Odd atual">${oddAtualCell}</td>
             <td data-label="Valorização">${deltaCell}</td>
             <td data-label="Resultado">${resultado}</td>
             <td data-label="Print">${printCell}</td>
@@ -2347,7 +2386,7 @@
         initFavoritoColumnResize();
       } catch (err) {
         if (tbody) {
-          tbody.innerHTML = `<tr><td colspan="9" class="muted">Erro: ${String(err?.message || err)}</td></tr>`;
+          tbody.innerHTML = `<tr><td colspan="10" class="muted">Erro: ${String(err?.message || err)}</td></tr>`;
         }
         if (favStatus) {
           favStatus.className = 'status error';
