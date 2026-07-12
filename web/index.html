@@ -320,8 +320,18 @@
       opacity: 1;
       color: #ffd166;
     }
+    #stats-table tbody tr.is-ended td {
+      background: #2a323c;
+    }
     #stats-table tbody tr.is-pinned td {
-      background: rgba(255, 209, 102, 0.06);
+      border-top-color: #ffd166;
+      border-bottom-color: #ffd166;
+    }
+    #stats-table tbody tr.is-pinned td:first-child {
+      border-left: 1px solid #ffd166;
+    }
+    #stats-table tbody tr.is-pinned td:last-child {
+      border-right: 1px solid #ffd166;
     }
     .log-detail-line {
       padding: 0.2rem 0;
@@ -3887,8 +3897,11 @@
       }
       tbody.innerHTML = rows
         .map((row, i) => {
-          const pinned = isStatsPinned(row.event_id);
-          return `<tr${pinned ? ' class="is-pinned"' : ''}>${statsRowCellsHtml(row, i)}</tr>`;
+          const classes = [];
+          if (isStatsPinned(row.event_id)) classes.push('is-pinned');
+          if (!row.is_live) classes.push('is-ended');
+          const cls = classes.length ? ` class="${classes.join(' ')}"` : '';
+          return `<tr${cls}>${statsRowCellsHtml(row, i)}</tr>`;
         })
         .join('');
     }
