@@ -1721,9 +1721,22 @@
           return statsPairSortValue(row.home_penalties, row.away_penalties);
         case 'posse':
           // ▼ maior % de um time; ▲ menor % de um time (não a soma ~100%).
-          return statsSort.dir === 'asc'
-            ? statsPairMinSortValue(row.home_possession, row.away_possession)
-            : statsPairMaxSortValue(row.home_possession, row.away_possession);
+          {
+            const home = row.home_possession;
+            const away = row.away_possession;
+            const useMin = statsSort.dir === 'asc';
+            const val = useMin
+              ? statsPairMinSortValue(home, away)
+              : statsPairMaxSortValue(home, away);
+            // #region agent log
+            if (!window.__posseSortLogCount) window.__posseSortLogCount = 0;
+            if (window.__posseSortLogCount < 6) {
+              window.__posseSortLogCount += 1;
+              fetch('http://127.0.0.1:7904/ingest/86615625-6ae5-4e98-a1da-0a5f0f15fc42',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'71820e'},body:JSON.stringify({sessionId:'71820e',runId:'pre-fix',hypothesisId:'B',location:'web/index.html:statsColSortValue:posse',message:'Posse sort key',data:{dir:statsSort.dir,useMin,home,away,homeType:typeof home,awayType:typeof away,val,max:statsPairMaxSortValue(home,away),min:statsPairMinSortValue(home,away),event_id:row.event_id},timestamp:Date.now()})}).catch(()=>{});
+            }
+            // #endregion
+            return val;
+          }
         case 'ataques':
           return statsPairSortValue(row.home_attacks, row.away_attacks);
         case 'ataques_perig':
@@ -1810,6 +1823,9 @@
       } else {
         statsSort = { colId, dir, mode };
       }
+      // #region agent log
+      fetch('http://127.0.0.1:7904/ingest/86615625-6ae5-4e98-a1da-0a5f0f15fc42',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'71820e'},body:JSON.stringify({sessionId:'71820e',runId:'pre-fix',hypothesisId:'A',location:'web/index.html:setStatsSort',message:'Sort state set',data:{colId:statsSort.colId,dir:statsSort.dir,mode:statsSort.mode,cleared:!statsSort.colId},timestamp:Date.now()})}).catch(()=>{});
+      // #endregion
       renderMercado();
     }
 
@@ -1930,6 +1946,9 @@
             showPlacarSortPopover(sortBtn, dir);
             return;
           }
+          // #region agent log
+          fetch('http://127.0.0.1:7904/ingest/86615625-6ae5-4e98-a1da-0a5f0f15fc42',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'71820e'},body:JSON.stringify({sessionId:'71820e',runId:'pre-fix',hypothesisId:'D',location:'web/index.html:sortBtn.click',message:'Sort arrow clicked',data:{colId,dir,btnTitle:sortBtn.getAttribute('title'),activeBefore:statsSort},timestamp:Date.now()})}).catch(()=>{});
+          // #endregion
           setStatsSort(colId, dir);
         });
       });
@@ -3796,6 +3815,21 @@
         if (minB !== minA) return minB - minA;
         return String(mercadoSortKey(b)).localeCompare(String(mercadoSortKey(a)));
       });
+      // #region agent log
+      if (statsSort.colId === 'posse') {
+        window.__posseSortLogCount = 0;
+        const top = rows.slice(0, 5).map((r) => ({
+          event_id: r.event_id,
+          home: r.home_possession,
+          away: r.away_possession,
+          max: statsPairMaxSortValue(r.home_possession, r.away_possession),
+          min: statsPairMinSortValue(r.home_possession, r.away_possession),
+          sortVal: statsColSortValue('posse', r),
+          minute: r.last_minute,
+        }));
+        fetch('http://127.0.0.1:7904/ingest/86615625-6ae5-4e98-a1da-0a5f0f15fc42',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'71820e'},body:JSON.stringify({sessionId:'71820e',runId:'pre-fix',hypothesisId:'C',location:'web/index.html:renderMercado',message:'Posse sort result top rows',data:{dir:statsSort.dir,top},timestamp:Date.now()})}).catch(()=>{});
+      }
+      // #endregion
       if (!statsVisibleColCount()) {
         tbody.innerHTML =
           `<tr><td colspan="${colCount}" class="empty">Nenhuma coluna selecionada. Use Montar Tabela.</td></tr>`;
