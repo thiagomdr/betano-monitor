@@ -385,6 +385,10 @@
       color: var(--warn);
       font-weight: 600;
     }
+    .coleta-countdown .cd-value.off {
+      color: var(--muted);
+      font-weight: 600;
+    }
     .coleta-countdown .cd-hint {
       color: var(--muted);
       font-size: 0.75rem;
@@ -2362,8 +2366,15 @@
           jsonEl.className = `cd-value${jsonCls ? ` ${jsonCls}` : ''}`;
         }
         if (workerEl) {
-          workerEl.textContent = workerText;
-          workerEl.className = `cd-value${workerCls ? ` ${workerCls}` : ''}`;
+          // Mercado: scrape HCTG desligado — nao mostra countdown do worker.
+          const mercadoOff = root.id === 'coleta-countdown-mercado' && sistemaAtivo;
+          if (mercadoOff) {
+            workerEl.textContent = 'Desligado';
+            workerEl.className = 'cd-value off';
+          } else {
+            workerEl.textContent = workerText;
+            workerEl.className = `cd-value${workerCls ? ` ${workerCls}` : ''}`;
+          }
         }
       }
     }
