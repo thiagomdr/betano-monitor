@@ -524,6 +524,11 @@
       border-color: rgba(143, 163, 191, 0.35);
       color: var(--muted);
     }
+    .hctg-pill.max {
+      background: rgba(94, 179, 255, 0.12);
+      border-color: rgba(94, 179, 255, 0.45);
+      color: #5eb3ff;
+    }
     .table-scroll-hint {
       margin: 0 0 0.5rem;
       font-size: 0.78rem;
@@ -2076,8 +2081,8 @@
           return `<tr>
             <td data-label="Jogo">${jogo}${link ? ` · ${link}` : ''}</td>
             <td data-label="Favorito">${fav || '—'}</td>
-            <td data-label="Odd ini">${fmtOdd(ini)}</td>
-            <td data-label="Odd máx">${fmtOdd(max)}</td>
+            <td data-label="Odd ini">${Number.isFinite(ini) ? `<span class="hctg-pill">${fmtOdd(ini)}</span>` : '—'}</td>
+            <td data-label="Odd máx">${Number.isFinite(max) ? `<span class="hctg-pill max">${fmtOdd(max)}</span>` : '—'}</td>
             <td data-label="Δ">${delta == null ? '—' : (delta >= 0 ? '+' : '') + delta.toFixed(2)}</td>
             <td data-label="Min máx">${r.minuto_odd_max != null ? r.minuto_odd_max + "'" : '—'}</td>
             <td data-label="Placar">${placar}</td>
