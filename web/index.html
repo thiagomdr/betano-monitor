@@ -1159,6 +1159,20 @@
       return d.toLocaleString('pt-BR');
     }
 
+    /** Ex.: ( 12/07/2026, 07:58:27 ) */
+    function formatFavoritoStatusDate(iso) {
+      if (!iso) return '';
+      const d = new Date(iso);
+      if (Number.isNaN(d.getTime())) return '';
+      const dd = String(d.getDate()).padStart(2, '0');
+      const mm = String(d.getMonth() + 1).padStart(2, '0');
+      const yyyy = d.getFullYear();
+      const hh = String(d.getHours()).padStart(2, '0');
+      const mi = String(d.getMinutes()).padStart(2, '0');
+      const ss = String(d.getSeconds()).padStart(2, '0');
+      return `( ${dd}/${mm}/${yyyy}, ${hh}:${mi}:${ss} )`;
+    }
+
     function escapeHtml(text) {
       return String(text ?? '')
         .replace(/&/g, '&amp;')
@@ -2525,9 +2539,18 @@
         else if (r.favorito_venceu === false) resultado = '<span style="color:#ff6b6b">Perdeu</span>';
         else resultado = 'Empate';
       }
-      const st = r.status === 'watching'
-        ? 'Ao vivo'
-        : `Finalizado <span class="muted">${formatDate(r.settled_at || r.updated_at)}</span>`;
+      let st;
+      if (r.status === 'watching') {
+        const when = formatFavoritoStatusDate(r.first_seen_at || r.updated_at);
+        st = when
+          ? `Ao vivo <span class="muted">${when}</span>`
+          : 'Ao vivo';
+      } else {
+        const when = formatFavoritoStatusDate(r.settled_at || r.updated_at);
+        st = when
+          ? `Finalizado <span class="muted">${when}</span>`
+          : 'Finalizado';
+      }
       let printCell = '—';
       if (r.screenshot_url) {
         const shotMin = r.screenshot_minuto != null ? r.screenshot_minuto : r.minuto_inicial;
