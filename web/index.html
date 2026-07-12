@@ -532,8 +532,32 @@
     }
     tr:last-child td { border-bottom: none; }
     #mercado-tbody tr:hover td,
-    #favorito-tbody tr:hover td {
+    #favorito-tbody-live tr:hover td,
+    #favorito-tbody-settled tr:hover td {
       background: rgba(232, 238, 247, 0.08);
+    }
+    .favorito-section {
+      padding: 0 1.25rem 1rem;
+    }
+    .favorito-section-title {
+      margin: 0.75rem 0 0.5rem;
+      font-size: 0.85rem;
+      font-weight: 700;
+      letter-spacing: 0.03em;
+      text-transform: uppercase;
+      color: var(--muted);
+    }
+    .favorito-settled-wrap {
+      background: #2a323c;
+      border-radius: 8px;
+      border: 1px solid rgba(255, 255, 255, 0.06);
+      padding: 0.35rem 0.5rem 0.5rem;
+    }
+    .favorito-settled-wrap .mercado-table th {
+      background: #2a323c;
+    }
+    #favorito-tbody-settled tr:hover td {
+      background: rgba(255, 255, 255, 0.05);
     }
     .muted { color: var(--muted); }
     .odd { color: var(--accent); font-weight: 600; }
@@ -740,7 +764,8 @@
       table { font-size: 0.82rem; }
       thead { display: none; }
       #mercado-tbody tr,
-      #favorito-tbody tr {
+      #favorito-tbody-live tr,
+      #favorito-tbody-settled tr {
         display: block;
         margin-bottom: 0.75rem;
         padding: 0.65rem;
@@ -748,10 +773,15 @@
         border-radius: 8px;
         background: var(--panel);
       }
+      #favorito-tbody-settled tr {
+        background: #2a323c;
+      }
       #mercado-tbody tr:hover td,
-      #favorito-tbody tr:hover td { background: transparent; }
+      #favorito-tbody-live tr:hover td,
+      #favorito-tbody-settled tr:hover td { background: transparent; }
       #mercado-tbody td,
-      #favorito-tbody td {
+      #favorito-tbody-live td,
+      #favorito-tbody-settled td {
         display: flex;
         flex-direction: column;
         align-items: flex-start;
@@ -762,9 +792,11 @@
         text-align: left;
       }
       #mercado-tbody td:last-child,
-      #favorito-tbody td:last-child { border-bottom: none; }
+      #favorito-tbody-live td:last-child,
+      #favorito-tbody-settled td:last-child { border-bottom: none; }
       #mercado-tbody td::before,
-      #favorito-tbody td::before {
+      #favorito-tbody-live td::before,
+      #favorito-tbody-settled td::before {
         content: attr(data-label);
         font-weight: 600;
         color: var(--muted);
@@ -773,9 +805,11 @@
         text-align: left;
       }
       #mercado-tbody td[data-label=""]::before,
-      #favorito-tbody td[data-label=""]::before { content: none; }
+      #favorito-tbody-live td[data-label=""]::before,
+      #favorito-tbody-settled td[data-label=""]::before { content: none; }
       #mercado-tbody td.empty,
-      #favorito-tbody td.empty {
+      #favorito-tbody-live td.empty,
+      #favorito-tbody-settled td.empty {
         display: block;
         text-align: center;
       }
@@ -878,37 +912,74 @@
       Análise: odd inicial do favorito → máximo no jogo → vitória?
     </p>
     <p class="status" id="favorito-status" aria-live="polite" style="padding:0 1.25rem"></p>
-    <div class="table-wrap" style="padding:0 1.25rem 1.5rem">
-      <table class="mercado-table" id="favorito-table">
-        <colgroup id="favorito-colgroup">
-          <col data-col="jogo" />
-          <col data-col="tempo" />
-          <col data-col="placar" />
-          <col data-col="odd_ini" />
-          <col data-col="odd_max" />
-          <col data-col="odd_atual" />
-          <col data-col="resultado" />
-          <col data-col="print" />
-          <col data-col="status" />
-        </colgroup>
-        <thead>
-          <tr>
-            <th data-col="jogo">Jogo</th>
-            <th data-col="tempo">Tempo</th>
-            <th data-col="placar">Placar</th>
-            <th data-col="odd_ini">Odd ini</th>
-            <th data-col="odd_max">Odd máx</th>
-            <th data-col="odd_atual">Odd atual</th>
-            <th data-col="resultado">Resultado</th>
-            <th data-col="print">Print</th>
-            <th data-col="status">Status</th>
-          </tr>
-        </thead>
-        <tbody id="favorito-tbody">
-          <tr><td colspan="9" class="muted">Carregando…</td></tr>
-        </tbody>
-      </table>
-    </div>
+    <section class="favorito-section" aria-labelledby="favorito-live-title">
+      <h2 class="favorito-section-title" id="favorito-live-title">Jogos Ao Vivo</h2>
+      <div class="table-wrap">
+        <table class="mercado-table favorito-table" id="favorito-table-live">
+          <colgroup class="favorito-colgroup">
+            <col data-col="jogo" />
+            <col data-col="tempo" />
+            <col data-col="placar" />
+            <col data-col="odd_ini" />
+            <col data-col="odd_max" />
+            <col data-col="odd_atual" />
+            <col data-col="resultado" />
+            <col data-col="print" />
+            <col data-col="status" />
+          </colgroup>
+          <thead>
+            <tr>
+              <th data-col="jogo">Jogo</th>
+              <th data-col="tempo">Tempo</th>
+              <th data-col="placar">Placar</th>
+              <th data-col="odd_ini">Odd ini</th>
+              <th data-col="odd_max">Odd máx</th>
+              <th data-col="odd_atual">Odd atual</th>
+              <th data-col="resultado">Resultado</th>
+              <th data-col="print">Print</th>
+              <th data-col="status">Status</th>
+            </tr>
+          </thead>
+          <tbody id="favorito-tbody-live">
+            <tr><td colspan="9" class="muted">Carregando…</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </section>
+    <section class="favorito-section" aria-labelledby="favorito-settled-title">
+      <h2 class="favorito-section-title" id="favorito-settled-title">Jogos Finalizados</h2>
+      <div class="table-wrap favorito-settled-wrap">
+        <table class="mercado-table favorito-table" id="favorito-table-settled">
+          <colgroup class="favorito-colgroup">
+            <col data-col="jogo" />
+            <col data-col="tempo" />
+            <col data-col="placar" />
+            <col data-col="odd_ini" />
+            <col data-col="odd_max" />
+            <col data-col="odd_atual" />
+            <col data-col="resultado" />
+            <col data-col="print" />
+            <col data-col="status" />
+          </colgroup>
+          <thead>
+            <tr>
+              <th data-col="jogo">Jogo</th>
+              <th data-col="tempo">Tempo</th>
+              <th data-col="placar">Placar</th>
+              <th data-col="odd_ini">Odd ini</th>
+              <th data-col="odd_max">Odd máx</th>
+              <th data-col="odd_atual">Odd atual</th>
+              <th data-col="resultado">Resultado</th>
+              <th data-col="print">Print</th>
+              <th data-col="status">Status</th>
+            </tr>
+          </thead>
+          <tbody id="favorito-tbody-settled">
+            <tr><td colspan="9" class="muted">Carregando…</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </section>
   </main>
   <main id="panel-log" hidden>
     <div class="log-toolbar">
@@ -2172,82 +2243,232 @@
     }
 
     function applyFavoritoColWidths(widths) {
-      const table = document.getElementById('favorito-table');
-      const group = document.getElementById('favorito-colgroup');
-      if (!table || !group) return;
+      const tables = document.querySelectorAll('.favorito-table');
+      if (!tables.length) return;
       let total = 0;
-      for (const col of group.querySelectorAll('col[data-col]')) {
-        const key = col.getAttribute('data-col');
-        const px = Math.max(FAVORITO_COL_MIN, Number(widths[key]) || FAVORITO_COL_DEFAULTS[key] || 80);
-        col.style.width = `${px}px`;
-        total += px;
+      const firstGroup = tables[0].querySelector('.favorito-colgroup');
+      if (firstGroup) {
+        for (const col of firstGroup.querySelectorAll('col[data-col]')) {
+          const key = col.getAttribute('data-col');
+          const px = Math.max(FAVORITO_COL_MIN, Number(widths[key]) || FAVORITO_COL_DEFAULTS[key] || 80);
+          total += px;
+        }
       }
-      table.style.width = `${total}px`;
+      for (const table of tables) {
+        const group = table.querySelector('.favorito-colgroup');
+        if (!group) continue;
+        for (const col of group.querySelectorAll('col[data-col]')) {
+          const key = col.getAttribute('data-col');
+          const px = Math.max(FAVORITO_COL_MIN, Number(widths[key]) || FAVORITO_COL_DEFAULTS[key] || 80);
+          col.style.width = `${px}px`;
+        }
+        table.style.width = `${total}px`;
+      }
     }
 
     function initFavoritoColumnResize() {
-      const table = document.getElementById('favorito-table');
-      if (!table) return;
+      const tables = document.querySelectorAll('.favorito-table');
+      if (!tables.length) return;
       const widths = readFavoritoColWidths();
       applyFavoritoColWidths(widths);
 
       if (favoritoColResizeBound) return;
       favoritoColResizeBound = true;
 
-      const headers = table.querySelectorAll('thead th[data-col]');
-      headers.forEach((th) => {
-        if (th.querySelector('.col-resize')) return;
-        const handle = document.createElement('span');
-        handle.className = 'col-resize';
-        handle.title = 'Arraste para ajustar a largura';
-        th.appendChild(handle);
+      tables.forEach((table) => {
+        const headers = table.querySelectorAll('thead th[data-col]');
+        headers.forEach((th) => {
+          if (th.querySelector('.col-resize')) return;
+          const handle = document.createElement('span');
+          handle.className = 'col-resize';
+          handle.title = 'Arraste para ajustar a largura';
+          th.appendChild(handle);
 
-        handle.addEventListener('mousedown', (ev) => {
-          ev.preventDefault();
-          ev.stopPropagation();
-          const key = th.getAttribute('data-col');
-          if (!key) return;
-          const startX = ev.clientX;
-          const current = readFavoritoColWidths();
-          const startW = Math.max(
-            FAVORITO_COL_MIN,
-            Number(current[key]) || FAVORITO_COL_DEFAULTS[key] || 80,
-          );
-          handle.classList.add('is-dragging');
-          document.body.classList.add('favorito-col-resizing');
+          handle.addEventListener('mousedown', (ev) => {
+            ev.preventDefault();
+            ev.stopPropagation();
+            const key = th.getAttribute('data-col');
+            if (!key) return;
+            const startX = ev.clientX;
+            const current = readFavoritoColWidths();
+            const startW = Math.max(
+              FAVORITO_COL_MIN,
+              Number(current[key]) || FAVORITO_COL_DEFAULTS[key] || 80,
+            );
+            handle.classList.add('is-dragging');
+            document.body.classList.add('favorito-col-resizing');
 
-          const onMove = (e) => {
-            const next = Math.max(FAVORITO_COL_MIN, startW + (e.clientX - startX));
-            current[key] = Math.round(next);
-            applyFavoritoColWidths(current);
-          };
-          const onUp = () => {
-            handle.classList.remove('is-dragging');
-            document.body.classList.remove('favorito-col-resizing');
-            document.removeEventListener('mousemove', onMove);
-            document.removeEventListener('mouseup', onUp);
-            saveFavoritoColWidths(current);
-          };
-          document.addEventListener('mousemove', onMove);
-          document.addEventListener('mouseup', onUp);
+            const onMove = (e) => {
+              const next = Math.max(FAVORITO_COL_MIN, startW + (e.clientX - startX));
+              current[key] = Math.round(next);
+              applyFavoritoColWidths(current);
+            };
+            const onUp = () => {
+              handle.classList.remove('is-dragging');
+              document.body.classList.remove('favorito-col-resizing');
+              document.removeEventListener('mousemove', onMove);
+              document.removeEventListener('mouseup', onUp);
+              saveFavoritoColWidths(current);
+            };
+            document.addEventListener('mousemove', onMove);
+            document.addEventListener('mouseup', onUp);
+          });
         });
       });
     }
 
+    function renderFavoritoRow(r, mercadoMinuteById) {
+      const max = Number(r.odd_max);
+      const atual = Number(r.odd_atual);
+      const jogo = wrapMatchHtmlWithLink(
+        formatMatchHtml(r.home || '?', r.away || '?'),
+        r.betano_url,
+      );
+      const placar = r.placar_final || r.placar_atual || '—';
+      let minutoAtual = r.minuto_atual != null && r.minuto_atual !== ''
+        ? Number(r.minuto_atual)
+        : null;
+      const mercadoMin = mercadoMinuteById[String(r.event_id)];
+      if (Number.isFinite(mercadoMin)) {
+        if (minutoAtual == null || mercadoMin > minutoAtual) minutoAtual = mercadoMin;
+      }
+      const tempoCell = Number.isFinite(minutoAtual)
+        ? `${minutoAtual}'`
+        : '<span class="muted">—</span>';
+      let resultado = '—';
+      if (r.status === 'settled') {
+        if (r.favorito_venceu === true) resultado = '<span style="color:var(--accent)">Venceu</span>';
+        else if (r.favorito_venceu === false) resultado = '<span style="color:#ff6b6b">Perdeu</span>';
+        else resultado = 'Empate';
+      }
+      const st = r.status === 'watching' ? 'Ao vivo' : 'Finalizado';
+      let printCell = '—';
+      if (r.screenshot_url) {
+        const shotMin = r.screenshot_minuto != null ? r.screenshot_minuto : r.minuto_inicial;
+        const label = formatFavoritoPrintLabel(r.screenshot_captured_at, shotMin);
+        printCell = `<a href="${r.screenshot_url}" target="_blank" rel="noopener" style="color:var(--accent)" title="Abrir print">${label}</a>`;
+      } else if (r.status === 'watching') {
+        printCell = '<span class="muted">pendente</span>';
+      }
+      const minIni = formatMinuteGray(r.minuto_inicial);
+      const minMax = formatMinuteGray(r.minuto_odd_max);
+      const parseFavoritoOdd = (v) => {
+        const n = Number(v);
+        return Number.isFinite(n) && n >= 1.01 ? n : null;
+      };
+      let favLado = r.favorito_lado === 'away' ? 'away' : 'home';
+      let homeIni = parseFavoritoOdd(r.ml_home_inicial);
+      let awayIni = parseFavoritoOdd(r.ml_away_inicial);
+      let iniOdd = parseFavoritoOdd(r.odd_inicial);
+      if (homeIni == null && favLado === 'home' && iniOdd != null) homeIni = iniOdd;
+      if (awayIni == null && favLado === 'away' && iniOdd != null) awayIni = iniOdd;
+      let repairedFav = false;
+      if (homeIni != null && awayIni != null) {
+        const lowerLado = awayIni < homeIni ? 'away' : 'home';
+        if (favLado !== lowerLado) {
+          repairedFav = true;
+          favLado = lowerLado;
+          iniOdd = lowerLado === 'home' ? homeIni : awayIni;
+        }
+      }
+      let displayAtual = Number.isFinite(atual) && atual >= 1.01 ? atual : null;
+      let displayMax = Number.isFinite(max) && max >= 1.01 ? max : null;
+      let displayIni = iniOdd;
+      const mlHomeCur = parseFavoritoOdd(r.ml_home_atual);
+      const mlAwayCur = parseFavoritoOdd(r.ml_away_atual);
+      const mercado1x2Aberto = mlHomeCur != null && mlAwayCur != null;
+      if (!mercado1x2Aberto) {
+        displayAtual = null;
+      }
+      if (repairedFav && displayIni != null && mercado1x2Aberto) {
+        const curMl = favLado === 'home' ? mlHomeCur : mlAwayCur;
+        displayAtual = curMl ?? displayIni;
+        displayMax = Math.max(displayIni, displayAtual);
+      }
+      const deltaMax = displayIni != null && displayMax != null ? (displayMax - displayIni) : null;
+      const deltaAtual = displayIni != null && displayAtual != null ? (displayAtual - displayIni) : null;
+      // #region agent log
+      {
+        if (!mercado1x2Aberto && r.status === 'watching') {
+          fetch('http://127.0.0.1:7904/ingest/86615625-6ae5-4e98-a1da-0a5f0f15fc42',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'230425'},body:JSON.stringify({sessionId:'230425',runId:'post-fix',hypothesisId:'H1',location:'web/index.html:loadFavoritoDrift',message:'watching without 1X2 pair',data:{event_id:r.event_id,home:r.home,away:r.away,odd_atual:r.odd_atual,ml_home_atual:r.ml_home_atual,ml_away_atual:r.ml_away_atual,displayAtual,minuto_atual:r.minuto_atual},timestamp:Date.now()})}).catch(()=>{});
+        }
+      }
+      // #endregion
+      let oddIniCell = '—';
+      if (homeIni != null && awayIni != null) {
+        const homeCls = favLado === 'home' ? 'hctg-pill' : 'hctg-pill rival';
+        const awayCls = favLado === 'away' ? 'hctg-pill' : 'hctg-pill rival';
+        oddIniCell =
+          `<span class="favorito-odds-pair">` +
+          `<span class="${homeCls}" title="${escapeHtml(r.home || 'Casa')}">${fmtOdd(homeIni)}</span>` +
+          `<span class="${awayCls}" title="${escapeHtml(r.away || 'Fora')}">${fmtOdd(awayIni)}</span>` +
+          `${minIni ? ` ${minIni}` : ''}` +
+          `</span>`;
+      } else if (displayIni != null) {
+        oddIniCell = `<span class="hctg-pill">${fmtOdd(displayIni)}</span>${minIni ? ` ${minIni}` : ''}`;
+      }
+      let oddMaxCell = '—';
+      if (displayMax != null) {
+        let deltaMaxHtml = '';
+        if (deltaMax != null) {
+          const sign = deltaMax >= 0 ? '+' : '';
+          const cls = deltaMax >= 0 ? 'up' : 'down';
+          deltaMaxHtml =
+            `<span class="favorito-odd-atual-delta ${cls}">${sign}${deltaMax.toFixed(2)}</span>`;
+        }
+        oddMaxCell =
+          `<span class="favorito-odd-atual-wrap">` +
+          `<span class="hctg-pill max">${fmtOdd(displayMax)}</span>` +
+          deltaMaxHtml +
+          `${minMax ? ` ${minMax}` : ''}` +
+          `</span>`;
+      }
+      let oddAtualCell = '—';
+      if (displayAtual != null) {
+        let deltaAtualHtml = '';
+        if (deltaAtual != null) {
+          const sign = deltaAtual >= 0 ? '+' : '';
+          const cls = deltaAtual >= 0 ? 'up' : 'down';
+          deltaAtualHtml =
+            `<span class="favorito-odd-atual-delta ${cls}">${sign}${deltaAtual.toFixed(2)}</span>`;
+        }
+        oddAtualCell =
+          `<span class="favorito-odd-atual-wrap">` +
+          `<span class="hctg-pill atual">${fmtOdd(displayAtual)}</span>` +
+          deltaAtualHtml +
+          `</span>`;
+      } else if (r.status === 'watching') {
+        oddAtualCell = '<span class="muted" title="Mercado Vencedor/1X2 indisponivel na Betano">sem 1X2</span>';
+      }
+      return `<tr>
+        <td data-label="Jogo">${jogo}</td>
+        <td data-label="Tempo">${tempoCell}</td>
+        <td data-label="Placar">${placar}</td>
+        <td data-label="Odd ini">${oddIniCell}</td>
+        <td data-label="Odd máx">${oddMaxCell}</td>
+        <td data-label="Odd atual">${oddAtualCell}</td>
+        <td data-label="Resultado">${resultado}</td>
+        <td data-label="Print">${printCell}</td>
+        <td data-label="Status">${st}</td>
+      </tr>`;
+    }
+
     async function loadFavoritoDrift() {
-      const tbody = document.getElementById('favorito-tbody');
+      const tbodyLive = document.getElementById('favorito-tbody-live');
+      const tbodySettled = document.getElementById('favorito-tbody-settled');
       const favStatus = document.getElementById('favorito-status');
+      const emptyLive = '<tr><td colspan="9" class="muted">Nenhum jogo ao vivo.</td></tr>';
+      const emptySettled = '<tr><td colspan="9" class="muted">Nenhum jogo finalizado ainda.</td></tr>';
+      const emptyAll = '<tr><td colspan="9" class="muted">Nenhum jogo ainda — aguarde o próximo cron da Edge.</td></tr>';
       try {
         await initAppCfg();
         const rows = await supabaseGet(
           'futebol_favorito_drift?select=*&order=updated_at.desc&limit=200',
         );
         const list = Array.isArray(rows) ? rows : [];
-        // Tempo: nunca usar minuto_odd_max (pico da odd). Enriquecer com last_minute do mercado.
-        const liveIds = list
-          .filter((r) => r.status === 'watching')
-          .map((r) => r.event_id)
-          .filter(Boolean);
+        const liveList = list.filter((r) => r.status === 'watching');
+        const settledList = list.filter((r) => r.status !== 'watching');
+        const liveIds = liveList.map((r) => r.event_id).filter(Boolean);
         const mercadoMinuteById = {};
         if (liveIds.length) {
           try {
@@ -2262,12 +2483,12 @@
             }
           } catch (_) { /* mercado opcional para Tempo */ }
         }
-        const watching = list.filter((r) => r.status === 'watching').length;
-        const settled = list.filter((r) => r.status === 'settled').length;
-        const wins = list.filter((r) => r.favorito_venceu === true).length;
-        const losses = list.filter((r) => r.favorito_venceu === false).length;
-        const printOk = list.filter((r) => r.status === 'watching' && r.screenshot_url).length;
-        const printPend = list.filter((r) => r.status === 'watching' && !r.screenshot_url).length;
+        const watching = liveList.length;
+        const settled = settledList.length;
+        const wins = settledList.filter((r) => r.favorito_venceu === true).length;
+        const losses = settledList.filter((r) => r.favorito_venceu === false).length;
+        const printOk = liveList.filter((r) => r.screenshot_url).length;
+        const printPend = liveList.filter((r) => !r.screenshot_url).length;
         if (favStatus) {
           favStatus.className = 'status';
           favStatus.textContent =
@@ -2275,155 +2496,27 @@
             (watching ? ` · print ${printOk} ok / ${printPend} pendente` : '') +
             (settled ? ` · favorito venceu ${wins}/${wins + losses}` : '');
         }
-        if (!tbody) return;
         if (!list.length) {
-          tbody.innerHTML = '<tr><td colspan="9" class="muted">Nenhum jogo ainda — aguarde o próximo cron da Edge.</td></tr>';
+          if (tbodyLive) tbodyLive.innerHTML = emptyAll;
+          if (tbodySettled) tbodySettled.innerHTML = emptySettled;
           initFavoritoColumnResize();
           return;
         }
-        tbody.innerHTML = list.map((r) => {
-          const ini = Number(r.odd_inicial);
-          const max = Number(r.odd_max);
-          const atual = Number(r.odd_atual);
-          const jogo = wrapMatchHtmlWithLink(
-            formatMatchHtml(r.home || '?', r.away || '?'),
-            r.betano_url,
-          );
-          const placar = r.placar_final || r.placar_atual || '—';
-          // Tempo = minuto do jogo (minuto_atual), nunca minuto_odd_max.
-          let minutoAtual = r.minuto_atual != null && r.minuto_atual !== ''
-            ? Number(r.minuto_atual)
-            : null;
-          const mercadoMin = mercadoMinuteById[String(r.event_id)];
-          if (Number.isFinite(mercadoMin)) {
-            if (minutoAtual == null || mercadoMin > minutoAtual) minutoAtual = mercadoMin;
-          }
-          const tempoCell = Number.isFinite(minutoAtual)
-            ? `${minutoAtual}'`
-            : '<span class="muted">—</span>';
-          let resultado = '—';
-          if (r.status === 'settled') {
-            if (r.favorito_venceu === true) resultado = '<span style="color:var(--accent)">Venceu</span>';
-            else if (r.favorito_venceu === false) resultado = '<span style="color:#ff6b6b">Perdeu</span>';
-            else resultado = 'Empate';
-          }
-          const st = r.status === 'watching' ? 'Ao vivo' : 'Finalizado';
-          let printCell = '—';
-          if (r.screenshot_url) {
-            const shotMin = r.screenshot_minuto != null ? r.screenshot_minuto : r.minuto_inicial;
-            const label = formatFavoritoPrintLabel(r.screenshot_captured_at, shotMin);
-            printCell = `<a href="${r.screenshot_url}" target="_blank" rel="noopener" style="color:var(--accent)" title="Abrir print">${label}</a>`;
-          } else if (r.status === 'watching') {
-            printCell = '<span class="muted">pendente</span>';
-          }
-          const minIni = formatMinuteGray(r.minuto_inicial);
-          const minMax = formatMinuteGray(r.minuto_odd_max);
-          const parseFavoritoOdd = (v) => {
-            const n = Number(v);
-            return Number.isFinite(n) && n >= 1.01 ? n : null;
-          };
-          let favLado = r.favorito_lado === 'away' ? 'away' : 'home';
-          let homeIni = parseFavoritoOdd(r.ml_home_inicial);
-          let awayIni = parseFavoritoOdd(r.ml_away_inicial);
-          let iniOdd = parseFavoritoOdd(r.odd_inicial);
-          if (homeIni == null && favLado === 'home' && iniOdd != null) homeIni = iniOdd;
-          if (awayIni == null && favLado === 'away' && iniOdd != null) awayIni = iniOdd;
-          let repairedFav = false;
-          if (homeIni != null && awayIni != null) {
-            const lowerLado = awayIni < homeIni ? 'away' : 'home';
-            if (favLado !== lowerLado) {
-              repairedFav = true;
-              favLado = lowerLado;
-              iniOdd = lowerLado === 'home' ? homeIni : awayIni;
-            }
-          }
-          let displayAtual = Number.isFinite(atual) && atual >= 1.01 ? atual : null;
-          let displayMax = Number.isFinite(max) && max >= 1.01 ? max : null;
-          let displayIni = iniOdd;
-          const mlHomeCur = parseFavoritoOdd(r.ml_home_atual);
-          const mlAwayCur = parseFavoritoOdd(r.ml_away_atual);
-          const mercado1x2Aberto = mlHomeCur != null && mlAwayCur != null;
-          if (!mercado1x2Aberto) {
-            // Sem par 1X2 atual no BD → nao inventar Odd atual.
-            displayAtual = null;
-          }
-          if (repairedFav && displayIni != null && mercado1x2Aberto) {
-            const curMl = favLado === 'home' ? mlHomeCur : mlAwayCur;
-            displayAtual = curMl ?? displayIni;
-            displayMax = Math.max(displayIni, displayAtual);
-          }
-          const deltaMax = displayIni != null && displayMax != null ? (displayMax - displayIni) : null;
-          const deltaAtual = displayIni != null && displayAtual != null ? (displayAtual - displayIni) : null;
-          // #region agent log
-          {
-            if (!mercado1x2Aberto && r.status === 'watching') {
-              fetch('http://127.0.0.1:7904/ingest/86615625-6ae5-4e98-a1da-0a5f0f15fc42',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'230425'},body:JSON.stringify({sessionId:'230425',runId:'post-fix',hypothesisId:'H1',location:'web/index.html:loadFavoritoDrift',message:'watching without 1X2 pair',data:{event_id:r.event_id,home:r.home,away:r.away,odd_atual:r.odd_atual,ml_home_atual:r.ml_home_atual,ml_away_atual:r.ml_away_atual,displayAtual,minuto_atual:r.minuto_atual},timestamp:Date.now()})}).catch(()=>{});
-            }
-          }
-          // #endregion
-          let oddIniCell = '—';
-          if (homeIni != null && awayIni != null) {
-            const homeCls = favLado === 'home' ? 'hctg-pill' : 'hctg-pill rival';
-            const awayCls = favLado === 'away' ? 'hctg-pill' : 'hctg-pill rival';
-            oddIniCell =
-              `<span class="favorito-odds-pair">` +
-              `<span class="${homeCls}" title="${escapeHtml(r.home || 'Casa')}">${fmtOdd(homeIni)}</span>` +
-              `<span class="${awayCls}" title="${escapeHtml(r.away || 'Fora')}">${fmtOdd(awayIni)}</span>` +
-              `${minIni ? ` ${minIni}` : ''}` +
-              `</span>`;
-          } else if (displayIni != null) {
-            oddIniCell = `<span class="hctg-pill">${fmtOdd(displayIni)}</span>${minIni ? ` ${minIni}` : ''}`;
-          }
-          let oddMaxCell = '—';
-          if (displayMax != null) {
-            let deltaMaxHtml = '';
-            if (deltaMax != null) {
-              const sign = deltaMax >= 0 ? '+' : '';
-              const cls = deltaMax >= 0 ? 'up' : 'down';
-              deltaMaxHtml =
-                `<span class="favorito-odd-atual-delta ${cls}">${sign}${deltaMax.toFixed(2)}</span>`;
-            }
-            oddMaxCell =
-              `<span class="favorito-odd-atual-wrap">` +
-              `<span class="hctg-pill max">${fmtOdd(displayMax)}</span>` +
-              deltaMaxHtml +
-              `${minMax ? ` ${minMax}` : ''}` +
-              `</span>`;
-          }
-          let oddAtualCell = '—';
-          if (displayAtual != null) {
-            let deltaAtualHtml = '';
-            if (deltaAtual != null) {
-              const sign = deltaAtual >= 0 ? '+' : '';
-              const cls = deltaAtual >= 0 ? 'up' : 'down';
-              deltaAtualHtml =
-                `<span class="favorito-odd-atual-delta ${cls}">${sign}${deltaAtual.toFixed(2)}</span>`;
-            }
-            oddAtualCell =
-              `<span class="favorito-odd-atual-wrap">` +
-              `<span class="hctg-pill atual">${fmtOdd(displayAtual)}</span>` +
-              deltaAtualHtml +
-              `</span>`;
-          } else if (r.status === 'watching') {
-            oddAtualCell = '<span class="muted" title="Mercado Vencedor/1X2 indisponivel na Betano">sem 1X2</span>';
-          }
-          return `<tr>
-            <td data-label="Jogo">${jogo}</td>
-            <td data-label="Tempo">${tempoCell}</td>
-            <td data-label="Placar">${placar}</td>
-            <td data-label="Odd ini">${oddIniCell}</td>
-            <td data-label="Odd máx">${oddMaxCell}</td>
-            <td data-label="Odd atual">${oddAtualCell}</td>
-            <td data-label="Resultado">${resultado}</td>
-            <td data-label="Print">${printCell}</td>
-            <td data-label="Status">${st}</td>
-          </tr>`;
-        }).join('');
+        if (tbodyLive) {
+          tbodyLive.innerHTML = liveList.length
+            ? liveList.map((r) => renderFavoritoRow(r, mercadoMinuteById)).join('')
+            : emptyLive;
+        }
+        if (tbodySettled) {
+          tbodySettled.innerHTML = settledList.length
+            ? settledList.map((r) => renderFavoritoRow(r, mercadoMinuteById)).join('')
+            : emptySettled;
+        }
         initFavoritoColumnResize();
       } catch (err) {
-        if (tbody) {
-          tbody.innerHTML = `<tr><td colspan="9" class="muted">Erro: ${String(err?.message || err)}</td></tr>`;
-        }
+        const errRow = `<tr><td colspan="9" class="muted">Erro: ${String(err?.message || err)}</td></tr>`;
+        if (tbodyLive) tbodyLive.innerHTML = errRow;
+        if (tbodySettled) tbodySettled.innerHTML = errRow;
         if (favStatus) {
           favStatus.className = 'status error';
           favStatus.textContent = String(err?.message || err);
