@@ -2036,10 +2036,13 @@
         const settled = list.filter((r) => r.status === 'settled').length;
         const wins = list.filter((r) => r.favorito_venceu === true).length;
         const losses = list.filter((r) => r.favorito_venceu === false).length;
+        const printOk = list.filter((r) => r.status === 'watching' && r.screenshot_url).length;
+        const printPend = list.filter((r) => r.status === 'watching' && !r.screenshot_url).length;
         if (favStatus) {
           favStatus.className = 'status';
           favStatus.textContent =
             `${list.length} jogos · ${watching} ao vivo · ${settled} finalizados` +
+            (watching ? ` · print ${printOk} ok / ${printPend} pendente` : '') +
             (settled ? ` · favorito venceu ${wins}/${wins + losses}` : '');
         }
         if (!tbody) return;
@@ -2066,7 +2069,7 @@
             : '';
           let printCell = '—';
           if (r.screenshot_url) {
-            printCell = `<a href="${r.screenshot_url}" target="_blank" rel="noopener">Ver</a>`;
+            printCell = `<a href="${r.screenshot_url}" target="_blank" rel="noopener" style="color:var(--accent)">OK · Ver</a>`;
           } else if (r.status === 'watching') {
             printCell = '<span class="muted">pendente</span>';
           }

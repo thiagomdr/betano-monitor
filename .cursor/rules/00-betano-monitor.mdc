@@ -33,6 +33,7 @@ Projeto vigente: **betano-monitor**. Toda documentação, regras Cursor, scripts
 - Jogos que só aparecem depois dos 5' não entram na amostra.
 - Print (prova): worker Playwright (Kubmix) grava `screenshot_url` enquanto `watching`; Edge apaga no settle.
 - Painel: aba **Favorito 1X2** (coluna Print).
+- Teste: `.\scripts\run-favorito-test.ps1` (checklist / `--capture` / `--coleta on`). Edge secret `FAVORITO_OPEN_MAX_MINUTE` (default 5).
 
 ## HCTG — fonte e proibições
 

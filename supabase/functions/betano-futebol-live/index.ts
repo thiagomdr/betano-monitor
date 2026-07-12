@@ -495,9 +495,14 @@ async function processFavoritoDriftLive(
   if (row?.status === "settled") return "skipped";
 
   if (!row) {
-    // Odd "inicial": so abre se o jogo ainda esta nos primeiros 5 minutos.
+    // Odd "inicial": so abre se o jogo ainda esta nos primeiros N minutos.
     // Sem minuto (kickoff / clock ausente) tambem aceita.
-    if (input.minute != null && input.minute > 5) return "skipped";
+    // Teste: secret FAVORITO_OPEN_MAX_MINUTE=90 (depois voltar para 5).
+    const openMaxMinute = Math.max(
+      0,
+      Number(Deno.env.get("FAVORITO_OPEN_MAX_MINUTE") || "5") || 5,
+    );
+    if (input.minute != null && input.minute > openMaxMinute) return "skipped";
 
     const pick = pickFavoritoLado(ml_home, ml_away);
     const nome = pick.lado === "home" ? input.home : input.away;

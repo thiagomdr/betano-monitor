@@ -158,14 +158,16 @@ export async function runFavoritoScreenshotOnce(eventId) {
   if (error) throw error;
   if (!row) throw new Error(`event ${eventId} nao encontrado`);
 
-  const { browser, context } = await createBetanoBrowser({ headless: false });
+  const headless = (process.env.HCTG_HEADLESS || "0").trim() === "1";
+  const { browser, context } = await createBetanoBrowser({ headless });
   try {
     const page = await context.newPage();
     await setupPageRoutes(page);
     return await captureFavoritoOddScreenshot(page, row);
   } finally {
     try {
-      await clearBrowserCache(await context.pages().then((p) => p[0]), context);
+      const pages = context.pages();
+      if (pages[0]) await clearBrowserCache(pages[0], context);
     } catch {
       /* ignore */
     }
