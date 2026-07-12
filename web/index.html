@@ -946,18 +946,13 @@
             <th>Jogo</th>
             <th title="Minuto do jogo">Tempo</th>
             <th>Placar</th>
-            <th>Total de Gols</th>
-            <th title="Estratégia e resultado (Monitorando / Aposta / GREEN / RED)">Estrategia</th>
             <th>Liga</th>
-            <th>Gol GREEN</th>
-            <th>Validação</th>
-            <th>Lucro 1u</th>
             <th title="Ao Vivo ou Finalizado — clique para datas">Status</th>
             <th>Link</th>
           </tr>
         </thead>
         <tbody id="mercado-tbody">
-          <tr><td colspan="13" class="empty">Carregando…</td></tr>
+          <tr><td colspan="8" class="empty">Carregando…</td></tr>
         </tbody>
       </table>
     </div>
@@ -2245,8 +2240,8 @@
       }
       if (!rows.length) {
         tbody.innerHTML = mercadoFilterValidadosOnly
-          ? '<tr><td colspan="13" class="empty">Nenhum jogo validado no Telegram ainda.</td></tr>'
-          : '<tr><td colspan="13" class="empty">Nenhum jogo monitorado ainda. Novos jogos serao registrados automaticamente.</td></tr>';
+          ? '<tr><td colspan="8" class="empty">Nenhum jogo validado no Telegram ainda.</td></tr>'
+          : '<tr><td colspan="8" class="empty">Nenhum jogo monitorado ainda. Novos jogos serao registrados automaticamente.</td></tr>';
         syncMercadoSelectionUi();
         return;
       }
@@ -2271,12 +2266,7 @@
           <td data-label="Jogo">${matchHtml}</td>
           <td data-label="Tempo">${mercadoTempoLabel(row)}</td>
           <td data-label="Placar">${mercadoPlacarLabel(row)}</td>
-          <td data-label="Total de Gols">${formatMercadoTotalGolsCell(row)}</td>
-          <td data-label="Estrategia">${mercadoEstrategiaLabel(row)}</td>
           <td data-label="Liga">${league}</td>
-          <td data-label="Gol GREEN">${formatMercadoGolGreen(row)}</td>
-          <td data-label="Validação">${mercadoValidacaoLabel(row)}</td>
-          <td data-label="Lucro 1u">${formatMercadoProfitCell(row)}</td>
           <td data-label="Status">${mercadoStatusLabel(row)}</td>
           <td data-label="Link">${link}</td>
         </tr>`;
@@ -2870,7 +2860,7 @@
           }
           if (tbody) {
             tbody.innerHTML =
-              `<tr><td colspan="13" class="empty">${msg}</td></tr>`;
+              `<tr><td colspan="8" class="empty">${msg}</td></tr>`;
           }
         }
       } finally {
