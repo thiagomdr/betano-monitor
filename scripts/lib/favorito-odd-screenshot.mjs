@@ -233,16 +233,18 @@ export async function dismissBetslip(page) {
 
 /**
  * Print da viewport inteira (sem clip/recorte).
+ * Sempre sobe a rolagem ao topo — scroll no meio cortava as odds 1X2.
  */
 async function screenshot1x2Block(page) {
   try {
     await page.evaluate(() => {
-      const markers = Array.from(document.querySelectorAll("h1, h2, h3, div, span")).filter((el) => {
-        const t = (el.textContent || "").trim();
-        return /resultado|1\s*[xX]\s*2|casa|empate|fora/i.test(t) && t.length < 40;
-      });
-      const el = markers[0];
-      if (el) el.scrollIntoView({ block: "center", behavior: "instant" });
+      window.scrollTo(0, 0);
+      document.documentElement.scrollTop = 0;
+      document.body.scrollTop = 0;
+      // Containers scrollaveis internos (SPA Betano)
+      for (const el of document.querySelectorAll("div, main, section, aside")) {
+        if (el.scrollTop > 0) el.scrollTop = 0;
+      }
     });
   } catch {
     /* ignore */
