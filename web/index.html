@@ -550,10 +550,45 @@
     #stats-columns-popover .scb-col {
       display: flex;
       align-items: center;
-      gap: 0.35rem;
-      cursor: pointer;
+      gap: 0.3rem;
       color: var(--muted);
       user-select: none;
+      min-width: 0;
+    }
+    #stats-columns-popover .scb-col-main {
+      display: inline-flex;
+      align-items: center;
+      gap: 0.35rem;
+      cursor: pointer;
+      min-width: 0;
+      flex: 1;
+    }
+    #stats-columns-popover .scb-col-main span {
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+    #stats-columns-popover .scb-info {
+      flex: 0 0 auto;
+      width: 1.15rem;
+      height: 1.15rem;
+      padding: 0;
+      border-radius: 50%;
+      border: 1px solid rgba(94, 179, 255, 0.45);
+      background: rgba(94, 179, 255, 0.12);
+      color: #9ecfff;
+      font-size: 0.68rem;
+      font-weight: 800;
+      font-style: italic;
+      line-height: 1;
+      cursor: help;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+    }
+    #stats-columns-popover .scb-info:hover {
+      background: rgba(94, 179, 255, 0.28);
+      color: #fff;
     }
     #stats-columns-popover .scb-col input,
     #stats-columns-popover .scb-group-head input {
@@ -1263,74 +1298,74 @@
         id: 'ident',
         label: 'Identificação do jogo',
         cols: [
-          { id: 'num', label: '#', title: '' },
-          { id: 'jogo', label: 'Jogo', title: '' },
-          { id: 'tempo', label: 'Tempo', title: 'Minuto do jogo (+acréscimos quando anunciados)' },
-          { id: 'placar', label: 'Placar', title: 'Clique para minutos dos gols' },
-          { id: 'liga', label: 'Liga', title: '' },
-          { id: 'status', label: 'Status', title: 'Ao Vivo ou Finalizado' },
+          { id: 'num', label: '#', title: 'Ordem na lista', info: 'Número de ordem do jogo na tabela filtrada.' },
+          { id: 'jogo', label: 'Jogo', title: 'Times', info: 'Nomes dos times: casa (azul) × fora (vermelho).' },
+          { id: 'tempo', label: 'Tempo', title: 'Minuto do jogo (+acréscimos)', info: 'Minuto atual do jogo. Quando houver acréscimos anunciados, aparece como 45\'+3.' },
+          { id: 'placar', label: 'Placar', title: 'Clique para minutos dos gols', info: 'Placar casa–fora. Clique para ver os minutos dos gols.' },
+          { id: 'liga', label: 'Liga', title: 'Competição', info: 'País e competição do jogo (fonte Betano).' },
+          { id: 'status', label: 'Status', title: 'Ao Vivo ou Finalizado', info: 'Indica se o jogo ainda está ao vivo na coleta ou já foi finalizado.' },
         ],
       },
       {
         id: 'finalizacao',
         label: 'Finalização',
         cols: [
-          { id: 'sot', label: 'Chutes a gol', title: 'Clique para minutos dos chutes a gol' },
-          { id: 'soff', label: 'Chutes fora', title: 'Clique para minutos dos chutes para fora' },
-          { id: 'blocked', label: 'Bloqueados', title: 'Clique para minutos dos chutes bloqueados' },
-          { id: 'shots', label: 'Chutes', title: 'Clique para minutos dos chutes (a gol, fora e bloqueados)' },
-          { id: 'saves', label: 'Defesas', title: 'Clique para minutos das defesas' },
-          { id: 'pens', label: 'Pênaltis', title: 'Pênaltis (contador)' },
+          { id: 'sot', label: 'Chutes a gol', title: 'Clique para minutos', info: 'Chutes no alvo (casa × fora). Clique para a lista com minutos.' },
+          { id: 'soff', label: 'Chutes fora', title: 'Clique para minutos', info: 'Chutes para fora do gol. Clique para minutos.' },
+          { id: 'blocked', label: 'Bloqueados', title: 'Clique para minutos', info: 'Chutes bloqueados pela defesa. Clique para minutos.' },
+          { id: 'shots', label: 'Chutes', title: 'Total de finalizações', info: 'Total de chutes (a gol + fora + bloqueados). Clique para minutos.' },
+          { id: 'saves', label: 'Defesas', title: 'Clique para minutos', info: 'Defesas do goleiro. Clique para minutos.' },
+          { id: 'pens', label: 'Pênaltis', title: 'Contador', info: 'Pênaltis cobrados no jogo (contador Sportradar; sem timeline individual).' },
         ],
       },
       {
         id: 'dominio',
         label: 'Domínio / pressão',
         cols: [
-          { id: 'posse', label: 'Posse', title: 'Clique para ver posse por time' },
-          { id: 'ataques', label: 'Ataques', title: 'Clique para ver ataques por time' },
-          { id: 'ataques_perig', label: 'At. perigosos', title: 'Clique para ver ataques perigosos por time' },
-          { id: 'bola_segura', label: 'Bola segura', title: 'Clique para ver bola segura por time' },
+          { id: 'posse', label: 'Posse', title: 'Posse de bola %', info: 'Posse de bola em % (casa × fora). Clique para ver o valor de cada time. Sem minutos na timeline.' },
+          { id: 'ataques', label: 'Ataques', title: 'Contador de ataques', info: 'Ataques registrados pelo scout. Clique para valor por time. Sem minutos na timeline.' },
+          { id: 'ataques_perig', label: 'At. perigosos', title: 'Ataques perigosos', info: 'Ataques perigosos (entrada na área). Clique para valor por time. Sem minutos na timeline.' },
+          { id: 'bola_segura', label: 'Bola segura', title: 'Ball safe', info: 'Momentos com bola em zona segura. Clique para valor por time. Sem minutos na timeline.' },
         ],
       },
       {
         id: 'parada',
         label: 'Bola parada',
         cols: [
-          { id: 'escanteios', label: 'Escanteios', title: 'Clique para minutos dos escanteios' },
-          { id: 'faltas', label: 'Faltas', title: 'Clique para minutos das faltas (cobranças)' },
-          { id: 'livres', label: 'Livres', title: 'Clique para minutos dos livres' },
-          { id: 'impedimentos', label: 'Impedimentos', title: 'Clique para minutos dos impedimentos' },
-          { id: 'laterais', label: 'Laterais', title: 'Clique para minutos dos laterais' },
-          { id: 'tiros_meta', label: 'Tiros de meta', title: 'Clique para minutos dos tiros de meta' },
+          { id: 'escanteios', label: 'Escanteios', title: 'Clique para minutos', info: 'Escanteios casa × fora. Clique para minutos de cada cobrança.' },
+          { id: 'faltas', label: 'Faltas', title: 'Clique para minutos', info: 'Faltas cometidas (via cobranças na timeline). Clique para minutos.' },
+          { id: 'livres', label: 'Livres', title: 'Tiros livres', info: 'Tiros livres. Clique para minutos.' },
+          { id: 'impedimentos', label: 'Impedimentos', title: 'Clique para minutos', info: 'Impedimentos marcados. Clique para minutos.' },
+          { id: 'laterais', label: 'Laterais', title: 'Arremessos laterais', info: 'Laterais cobrados. Clique para minutos.' },
+          { id: 'tiros_meta', label: 'Tiros de meta', title: 'Clique para minutos', info: 'Tiros de meta. Clique para minutos.' },
         ],
       },
       {
         id: 'disciplina',
         label: 'Disciplina',
         cols: [
-          { id: 'amarelos', label: 'Amarelos', title: 'Clique para minutos dos cartões amarelos' },
-          { id: 'vermelhos', label: 'Vermelhos', title: 'Clique para minutos dos cartões vermelhos' },
-          { id: 'av', label: 'A/V', title: 'Clique para minutos amarelo/vermelho' },
+          { id: 'amarelos', label: 'Amarelos', title: 'Clique para minutos', info: 'Cartões amarelos. Clique para minutos e jogador quando disponível.' },
+          { id: 'vermelhos', label: 'Vermelhos', title: 'Clique para minutos', info: 'Cartões vermelhos. Clique para minutos.' },
+          { id: 'av', label: 'A/V', title: 'Amarelo/vermelho', info: 'Segundo amarelo resultando em vermelho. Clique para minutos.' },
         ],
       },
       {
         id: 'elenco',
         label: 'Elenco',
         cols: [
-          { id: 'subs', label: 'Subs', title: 'Clique para minutos das substituições' },
-          { id: 'lesoes', label: 'Lesões', title: 'Clique para minutos das lesões' },
+          { id: 'subs', label: 'Subs', title: 'Substituições', info: 'Substituições feitas. Clique para minutos.' },
+          { id: 'lesoes', label: 'Lesões', title: 'Lesões / interrupções', info: 'Lesões (e retornos) na timeline. Clique para minutos; jogador quando o feed informar.' },
         ],
       },
       {
         id: 'contexto',
         label: 'Contexto',
         cols: [
-          { id: 'estadio', label: 'Estádio', title: 'Estádio Sportradar (match_info)' },
-          { id: 'arbitro', label: 'Árbitro', title: 'Árbitro' },
-          { id: 'tecnicos', label: 'Técnicos', title: 'Técnicos casa / fora' },
-          { id: 'clima', label: 'Clima', title: 'Clima (Bom/Médio/Ruim) + temperatura se houver' },
-          { id: 'gramado', label: 'Gramado', title: 'Condição do gramado' },
+          { id: 'estadio', label: 'Estádio', title: 'Local', info: 'Nome do estádio e cidade/país (Sportradar match_info).' },
+          { id: 'arbitro', label: 'Árbitro', title: 'Árbitro principal', info: 'Nome do árbitro principal do jogo.' },
+          { id: 'tecnicos', label: 'Técnicos', title: 'Treinadores', info: 'Técnicos casa / fora.' },
+          { id: 'clima', label: 'Clima', title: 'Condição climática', info: 'Condição climática (Bom/Médio/Ruim etc.) e temperatura/vento quando disponíveis.' },
+          { id: 'gramado', label: 'Gramado', title: 'Condição do gramado', info: 'Condição do gramado (Bom/Médio/Ruim), segundo o Sportradar.' },
         ],
       },
     ];
@@ -1385,7 +1420,8 @@
           g.cols
             .map((c, ci) => {
               const cls = ci === 0 ? ' class="stats-group-start"' : '';
-              const title = c.title ? ` title="${escapeHtml(c.title)}"` : '';
+              const tip = c.info || c.title;
+              const title = tip ? ` title="${escapeHtml(tip)}"` : '';
               return `<th${cls}${title}>${escapeHtml(c.label)}</th>`;
             })
             .join(''),
@@ -3241,6 +3277,7 @@
     function closeStatsColumnsPopover() {
       const pop = document.getElementById('stats-columns-popover');
       const btn = document.getElementById('btn-stats-montar-tabela');
+      hideMercadoElevatedPopover();
       if (pop) {
         pop.classList.remove('open');
         pop.hidden = true;
@@ -3269,12 +3306,16 @@
       const draft = new Set(statsVisibleCols);
       const groupsHtml = STATS_COL_GROUPS.map((g) => {
         const colsHtml = g.cols
-          .map(
-            (c) => `<label class="scb-col">
-              <input type="checkbox" data-scb-col="${escapeHtml(c.id)}" ${draft.has(c.id) ? 'checked' : ''} />
-              <span>${escapeHtml(c.label)}</span>
-            </label>`,
-          )
+          .map((c) => {
+            const info = c.info || c.title || c.label;
+            return `<div class="scb-col">
+              <label class="scb-col-main">
+                <input type="checkbox" data-scb-col="${escapeHtml(c.id)}" ${draft.has(c.id) ? 'checked' : ''} />
+                <span>${escapeHtml(c.label)}</span>
+              </label>
+              <button type="button" class="scb-info" data-scb-info="${escapeHtml(c.id)}" title="${escapeHtml(info)}" aria-label="Sobre ${escapeHtml(c.label)}">i</button>
+            </div>`;
+          })
           .join('');
         return `<div class="scb-group" data-group-id="${escapeHtml(g.id)}">
           <label class="scb-group-head">
@@ -3306,6 +3347,20 @@
       });
       pop.querySelectorAll('input[data-scb-col]').forEach((colCb) => {
         colCb.addEventListener('change', () => syncStatsBuilderGroupChecks(pop));
+      });
+      pop.querySelectorAll('button.scb-info').forEach((infoBtn) => {
+        infoBtn.addEventListener('click', (e) => {
+          e.preventDefault();
+          e.stopPropagation();
+          const colId = infoBtn.getAttribute('data-scb-info');
+          const col = STATS_COL_GROUPS.flatMap((g) => g.cols).find((c) => c.id === colId);
+          const text = col?.info || col?.title || col?.label || '—';
+          const tip = tipLinesHtml([
+            `<strong>${escapeHtml(col?.label || 'Coluna')}</strong>`,
+            escapeHtml(text),
+          ]);
+          showMercadoTipPopover(infoBtn, `scb-info-${colId}`, tip);
+        });
       });
       pop.querySelector('#btn-scb-cancel')?.addEventListener('click', () => {
         closeStatsColumnsPopover();
