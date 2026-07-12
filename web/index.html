@@ -612,7 +612,7 @@
       padding: 0;
       border-radius: 50%;
       border: 1px solid rgba(94, 179, 255, 0.45);
-      background: rgba(94, 179, 255, 0.12);
+      background: transparent;
       color: #9ecfff;
       font-size: 0.68rem;
       font-weight: 800;
@@ -624,7 +624,8 @@
       justify-content: center;
     }
     #stats-columns-popover .scb-info:hover {
-      background: rgba(94, 179, 255, 0.28);
+      background: transparent;
+      border-color: rgba(94, 179, 255, 0.85);
       color: #fff;
     }
     #stats-columns-popover .scb-color {
@@ -633,9 +634,9 @@
       width: 1.15rem;
       height: 1.15rem;
       padding: 0;
-      border-radius: 50%;
+      border-radius: 3px;
       border: 1px solid rgba(94, 179, 255, 0.45);
-      background: rgba(94, 179, 255, 0.12);
+      background: transparent;
       color: #9ecfff;
       cursor: pointer;
       display: inline-flex;
@@ -644,15 +645,16 @@
       overflow: hidden;
     }
     #stats-columns-popover .scb-color:hover {
-      background: rgba(94, 179, 255, 0.28);
+      background: transparent;
+      border-color: rgba(94, 179, 255, 0.85);
       color: #fff;
     }
     #stats-columns-popover .scb-color.has-custom {
       border-color: currentColor;
     }
     #stats-columns-popover .scb-color svg {
-      width: 0.72rem;
-      height: 0.72rem;
+      width: 0.78rem;
+      height: 0.78rem;
       pointer-events: none;
     }
     #stats-columns-popover .scb-color-input {
@@ -3910,11 +3912,11 @@
                 <input type="checkbox" data-scb-col="${escapeHtml(c.id)}" ${draft.has(c.id) ? 'checked' : ''} />
                 <span>${escapeHtml(c.label)}</span>
               </label>
-              <button type="button" class="scb-info" data-scb-info="${escapeHtml(c.id)}" title="${escapeHtml(info)}" aria-label="Sobre ${escapeHtml(c.label)}">i</button>
               <label class="${colorCls.trim()}"${colorStyle} title="Cor do texto (duplo clique = padrão)" aria-label="Cor do texto de ${escapeHtml(c.label)}">
-                <svg viewBox="0 0 16 16" aria-hidden="true"><path fill="currentColor" d="M12.9 1.6a1.8 1.8 0 0 1 0 2.55L6.4 10.65l-2.7.45.45-2.7 6.5-6.5a1.8 1.8 0 0 1 2.25-.3zM2.2 13.1c1.35-.9 2.7-.45 3.15.55-.75.7-2 .9-3.15.45z"/></svg>
+                <svg viewBox="0 0 24 24" aria-hidden="true"><path fill="currentColor" d="M20.71 5.63a1 1 0 0 0 0-1.41l-2.34-2.34a1 1 0 0 0-1.41 0l-3.12 3.12-1.32-1.32a1 1 0 0 0-1.41 1.41l.47.47-8.9 8.9A3.5 3.5 0 0 0 4 21.5c.5 0 1.85-.15 2.9-1.2l8.9-8.9.47.47a1 1 0 1 0 1.41-1.41l-1.32-1.32 3.35-3.51zM6.7 18.9A2.2 2.2 0 0 1 5.4 19.5a2.2 2.2 0 0 1 .6-1.3l8.2-8.2 1.3 1.3z"/></svg>
                 <input type="color" class="scb-color-input" data-scb-color="${escapeHtml(c.id)}" value="${escapeHtml(pickerValue)}" />
               </label>
+              <button type="button" class="scb-info" data-scb-info="${escapeHtml(c.id)}" title="${escapeHtml(info)}" aria-label="Sobre ${escapeHtml(c.label)}">i</button>
             </div>`;
           })
           .join('');
