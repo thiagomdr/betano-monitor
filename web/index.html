@@ -210,6 +210,17 @@
       cursor: pointer;
     }
     .btn-secondary:hover { border-color: var(--muted); }
+    .btn-primary {
+      padding: 0.4rem 0.75rem;
+      border-radius: 6px;
+      border: 1px solid var(--accent, #5eb3ff);
+      background: rgba(94, 179, 255, 0.18);
+      color: #fff;
+      font-size: 0.8rem;
+      cursor: pointer;
+      font-weight: 600;
+    }
+    .btn-primary:hover { background: rgba(94, 179, 255, 0.28); }
     .btn-danger {
       border-color: #8b3a3a;
       color: #ff8a8a;
@@ -478,13 +489,91 @@
     }
     .stats-filters .filter-validados {
       align-self: center;
-      margin-top: 0.85rem;
     }
     .stats-filters .btn-secondary {
       align-self: center;
-      margin-top: 0.85rem;
       font-size: 0.8rem;
       padding: 0.35rem 0.65rem;
+    }
+    .stats-col-builder-wrap {
+      position: relative;
+      align-self: center;
+    }
+    #stats-columns-popover {
+      display: none;
+      position: absolute;
+      z-index: 1100;
+      top: calc(100% + 0.4rem);
+      left: 0;
+      width: min(420px, 92vw);
+      max-height: min(70vh, 520px);
+      overflow: auto;
+      padding: 0.75rem 0.85rem 0.85rem;
+      background: #1a2332;
+      border: 1px solid rgba(94, 179, 255, 0.35);
+      border-radius: 8px;
+      box-shadow: 0 10px 28px rgba(0, 0, 0, 0.5);
+      font-size: 0.8rem;
+    }
+    #stats-columns-popover.open { display: block; }
+    #stats-columns-popover .scb-title {
+      margin: 0 0 0.65rem;
+      font-size: 0.88rem;
+      color: #fff;
+      font-weight: 700;
+    }
+    #stats-columns-popover .scb-group {
+      margin-bottom: 0.65rem;
+      padding-bottom: 0.55rem;
+      border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+    }
+    #stats-columns-popover .scb-group:last-of-type {
+      border-bottom: none;
+      margin-bottom: 0.4rem;
+    }
+    #stats-columns-popover .scb-group-head {
+      display: flex;
+      align-items: center;
+      gap: 0.4rem;
+      font-weight: 700;
+      color: #e8eef7;
+      margin-bottom: 0.35rem;
+      cursor: pointer;
+      user-select: none;
+    }
+    #stats-columns-popover .scb-cols {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 0.2rem 0.75rem;
+      padding-left: 1.25rem;
+    }
+    #stats-columns-popover .scb-col {
+      display: flex;
+      align-items: center;
+      gap: 0.35rem;
+      cursor: pointer;
+      color: var(--muted);
+      user-select: none;
+    }
+    #stats-columns-popover .scb-col input,
+    #stats-columns-popover .scb-group-head input {
+      accent-color: var(--accent);
+      cursor: pointer;
+    }
+    #stats-columns-popover .scb-actions {
+      display: flex;
+      justify-content: flex-end;
+      gap: 0.5rem;
+      margin-top: 0.5rem;
+      padding-top: 0.55rem;
+      border-top: 1px solid rgba(255, 255, 255, 0.1);
+      position: sticky;
+      bottom: 0;
+      background: #1a2332;
+    }
+    #stats-columns-popover .scb-actions .btn-primary {
+      font-size: 0.82rem;
+      padding: 0.4rem 0.85rem;
     }
     .filter-validados {
       display: inline-flex;
@@ -979,62 +1068,24 @@
         <input type="checkbox" id="filtro-stats-live" checked />
         Somente ao vivo
       </label>
+      <div class="stats-col-builder-wrap">
+        <button type="button" class="btn-secondary" id="btn-stats-montar-tabela" aria-haspopup="dialog" aria-expanded="false">
+          Montar tabela
+        </button>
+        <div id="stats-columns-popover" role="dialog" aria-label="Montar colunas da tabela" hidden></div>
+      </div>
     </div>
     <div class="coleta-countdown" id="coleta-countdown-mercado" aria-live="polite">
       <span class="cd-item"><span class="cd-label">JSON</span><span class="cd-value" data-cd="json">—</span></span>
       <span class="cd-item"><span class="cd-label">Worker</span><span class="cd-value" data-cd="worker">—</span></span>
       <span class="cd-hint">próxima atualização</span>
     </div>
-    <p class="table-scroll-hint">Dica: role a tabela horizontalmente para ver todas as colunas.</p>
+    <p class="table-scroll-hint">Dica: role a tabela horizontalmente para ver todas as colunas. Use Montar tabela para escolher grupos e colunas.</p>
     <div class="table-wrap">
       <table id="stats-table">
-        <thead>
-          <tr class="stats-group-row">
-            <th colspan="6">Identificação do jogo</th>
-            <th colspan="6">Finalização</th>
-            <th colspan="4">Domínio / pressão</th>
-            <th colspan="6">Bola parada</th>
-            <th colspan="3">Disciplina</th>
-            <th colspan="2">Elenco</th>
-            <th colspan="5">Contexto</th>
-          </tr>
-          <tr class="stats-col-row">
-            <th class="stats-group-start">#</th>
-            <th>Jogo</th>
-            <th title="Minuto do jogo (+acréscimos quando anunciados)">Tempo</th>
-            <th title="Clique para minutos dos gols">Placar</th>
-            <th>Liga</th>
-            <th title="Ao Vivo ou Finalizado">Status</th>
-            <th class="stats-group-start" title="Clique para minutos dos chutes a gol">Chutes a gol</th>
-            <th title="Clique para minutos dos chutes para fora">Chutes fora</th>
-            <th title="Clique para minutos dos chutes bloqueados">Bloqueados</th>
-            <th title="Clique para minutos dos chutes (a gol, fora e bloqueados)">Chutes</th>
-            <th title="Clique para minutos das defesas">Defesas</th>
-            <th title="Pênaltis (contador)">Pênaltis</th>
-            <th class="stats-group-start" title="Clique para ver posse por time">Posse</th>
-            <th title="Clique para ver ataques por time">Ataques</th>
-            <th title="Clique para ver ataques perigosos por time">At. perigosos</th>
-            <th title="Clique para ver bola segura por time">Bola segura</th>
-            <th class="stats-group-start" title="Clique para minutos dos escanteios">Escanteios</th>
-            <th title="Clique para minutos das faltas (cobranças)">Faltas</th>
-            <th title="Clique para minutos dos livres">Livres</th>
-            <th title="Clique para minutos dos impedimentos">Impedimentos</th>
-            <th title="Clique para minutos dos laterais">Laterais</th>
-            <th title="Clique para minutos dos tiros de meta">Tiros de meta</th>
-            <th class="stats-group-start" title="Clique para minutos dos cartões amarelos">Amarelos</th>
-            <th title="Clique para minutos dos cartões vermelhos">Vermelhos</th>
-            <th title="Clique para minutos amarelo/vermelho">A/V</th>
-            <th class="stats-group-start" title="Clique para minutos das substituições">Subs</th>
-            <th title="Clique para minutos das lesões">Lesões</th>
-            <th class="stats-group-start" title="Estádio Sportradar (match_info)">Estádio</th>
-            <th title="Árbitro">Árbitro</th>
-            <th title="Técnicos casa / fora">Técnicos</th>
-            <th title="Clima (Bom/Médio/Ruim) + temperatura se houver">Clima</th>
-            <th title="Condição do gramado">Gramado</th>
-          </tr>
-        </thead>
+        <thead id="stats-thead"></thead>
         <tbody id="mercado-tbody">
-          <tr><td colspan="32" class="empty">Carregando…</td></tr>
+          <tr><td class="empty">Carregando…</td></tr>
         </tbody>
       </table>
     </div>
@@ -1206,6 +1257,237 @@
     let mercadoLoading = false;
     let mercadoFilterLiveOnly = localStorage.getItem('statsFilterLiveOnly') !== '0';
     let mercadoMetaCache = null;
+
+    const STATS_COL_GROUPS = [
+      {
+        id: 'ident',
+        label: 'Identificação do jogo',
+        cols: [
+          { id: 'num', label: '#', title: '' },
+          { id: 'jogo', label: 'Jogo', title: '' },
+          { id: 'tempo', label: 'Tempo', title: 'Minuto do jogo (+acréscimos quando anunciados)' },
+          { id: 'placar', label: 'Placar', title: 'Clique para minutos dos gols' },
+          { id: 'liga', label: 'Liga', title: '' },
+          { id: 'status', label: 'Status', title: 'Ao Vivo ou Finalizado' },
+        ],
+      },
+      {
+        id: 'finalizacao',
+        label: 'Finalização',
+        cols: [
+          { id: 'sot', label: 'Chutes a gol', title: 'Clique para minutos dos chutes a gol' },
+          { id: 'soff', label: 'Chutes fora', title: 'Clique para minutos dos chutes para fora' },
+          { id: 'blocked', label: 'Bloqueados', title: 'Clique para minutos dos chutes bloqueados' },
+          { id: 'shots', label: 'Chutes', title: 'Clique para minutos dos chutes (a gol, fora e bloqueados)' },
+          { id: 'saves', label: 'Defesas', title: 'Clique para minutos das defesas' },
+          { id: 'pens', label: 'Pênaltis', title: 'Pênaltis (contador)' },
+        ],
+      },
+      {
+        id: 'dominio',
+        label: 'Domínio / pressão',
+        cols: [
+          { id: 'posse', label: 'Posse', title: 'Clique para ver posse por time' },
+          { id: 'ataques', label: 'Ataques', title: 'Clique para ver ataques por time' },
+          { id: 'ataques_perig', label: 'At. perigosos', title: 'Clique para ver ataques perigosos por time' },
+          { id: 'bola_segura', label: 'Bola segura', title: 'Clique para ver bola segura por time' },
+        ],
+      },
+      {
+        id: 'parada',
+        label: 'Bola parada',
+        cols: [
+          { id: 'escanteios', label: 'Escanteios', title: 'Clique para minutos dos escanteios' },
+          { id: 'faltas', label: 'Faltas', title: 'Clique para minutos das faltas (cobranças)' },
+          { id: 'livres', label: 'Livres', title: 'Clique para minutos dos livres' },
+          { id: 'impedimentos', label: 'Impedimentos', title: 'Clique para minutos dos impedimentos' },
+          { id: 'laterais', label: 'Laterais', title: 'Clique para minutos dos laterais' },
+          { id: 'tiros_meta', label: 'Tiros de meta', title: 'Clique para minutos dos tiros de meta' },
+        ],
+      },
+      {
+        id: 'disciplina',
+        label: 'Disciplina',
+        cols: [
+          { id: 'amarelos', label: 'Amarelos', title: 'Clique para minutos dos cartões amarelos' },
+          { id: 'vermelhos', label: 'Vermelhos', title: 'Clique para minutos dos cartões vermelhos' },
+          { id: 'av', label: 'A/V', title: 'Clique para minutos amarelo/vermelho' },
+        ],
+      },
+      {
+        id: 'elenco',
+        label: 'Elenco',
+        cols: [
+          { id: 'subs', label: 'Subs', title: 'Clique para minutos das substituições' },
+          { id: 'lesoes', label: 'Lesões', title: 'Clique para minutos das lesões' },
+        ],
+      },
+      {
+        id: 'contexto',
+        label: 'Contexto',
+        cols: [
+          { id: 'estadio', label: 'Estádio', title: 'Estádio Sportradar (match_info)' },
+          { id: 'arbitro', label: 'Árbitro', title: 'Árbitro' },
+          { id: 'tecnicos', label: 'Técnicos', title: 'Técnicos casa / fora' },
+          { id: 'clima', label: 'Clima', title: 'Clima (Bom/Médio/Ruim) + temperatura se houver' },
+          { id: 'gramado', label: 'Gramado', title: 'Condição do gramado' },
+        ],
+      },
+    ];
+    const ALL_STATS_COL_IDS = STATS_COL_GROUPS.flatMap((g) => g.cols.map((c) => c.id));
+
+    function loadStatsVisibleCols() {
+      try {
+        const raw = localStorage.getItem('statsTableColumns');
+        if (!raw) return new Set(ALL_STATS_COL_IDS);
+        const arr = JSON.parse(raw);
+        if (!Array.isArray(arr)) return new Set(ALL_STATS_COL_IDS);
+        const valid = arr.filter((id) => ALL_STATS_COL_IDS.includes(id));
+        return valid.length ? new Set(valid) : new Set(ALL_STATS_COL_IDS);
+      } catch {
+        return new Set(ALL_STATS_COL_IDS);
+      }
+    }
+
+    let statsVisibleCols = loadStatsVisibleCols();
+
+    function persistStatsVisibleCols() {
+      localStorage.setItem('statsTableColumns', JSON.stringify([...statsVisibleCols]));
+    }
+
+    function statsVisibleGroups() {
+      return STATS_COL_GROUPS
+        .map((g) => ({
+          id: g.id,
+          label: g.label,
+          cols: g.cols.filter((c) => statsVisibleCols.has(c.id)),
+        }))
+        .filter((g) => g.cols.length > 0);
+    }
+
+    function statsVisibleColCount() {
+      return [...statsVisibleCols].filter((id) => ALL_STATS_COL_IDS.includes(id)).length;
+    }
+
+    function renderStatsThead() {
+      const thead = document.getElementById('stats-thead');
+      if (!thead) return;
+      const groups = statsVisibleGroups();
+      if (!groups.length) {
+        thead.innerHTML = '';
+        return;
+      }
+      const groupRow = groups
+        .map((g) => `<th colspan="${g.cols.length}">${escapeHtml(g.label)}</th>`)
+        .join('');
+      const colRow = groups
+        .map((g) =>
+          g.cols
+            .map((c, ci) => {
+              const cls = ci === 0 ? ' class="stats-group-start"' : '';
+              const title = c.title ? ` title="${escapeHtml(c.title)}"` : '';
+              return `<th${cls}${title}>${escapeHtml(c.label)}</th>`;
+            })
+            .join(''),
+        )
+        .join('');
+      thead.innerHTML =
+        `<tr class="stats-group-row">${groupRow}</tr>` +
+        `<tr class="stats-col-row">${colRow}</tr>`;
+    }
+
+    function statsCellHtml(colId, row, i) {
+      const league = [row.country, row.league].filter(Boolean).join(' · ') || '—';
+      switch (colId) {
+        case 'num':
+          return `<td class="stats-group-start" data-label="#">${i + 1}</td>`;
+        case 'jogo':
+          return `<td data-label="Jogo">${formatMatchHtml(row.home, row.away)}</td>`;
+        case 'tempo':
+          return `<td data-label="Tempo">${mercadoTempoLabel(row)}</td>`;
+        case 'placar':
+          return `<td data-label="Placar">${mercadoPlacarLabel(row)}</td>`;
+        case 'liga':
+          return `<td data-label="Liga">${league}</td>`;
+        case 'status':
+          return `<td data-label="Status">${mercadoStatusLabel(row)}</td>`;
+        case 'sot':
+          return `<td class="stats-group-start" data-label="Chutes a gol">${mercadoSotLabel(row)}</td>`;
+        case 'soff':
+          return `<td data-label="Chutes fora">${mercadoChutesForaLabel(row)}</td>`;
+        case 'blocked':
+          return `<td data-label="Bloqueados">${mercadoBloqueadosLabel(row)}</td>`;
+        case 'shots':
+          return `<td data-label="Chutes">${mercadoChutesTotalLabel(row)}</td>`;
+        case 'saves':
+          return `<td data-label="Defesas">${mercadoDefesasLabel(row)}</td>`;
+        case 'pens':
+          return `<td data-label="Pênaltis">${mercadoPenaltisLabel(row)}</td>`;
+        case 'posse':
+          return `<td class="stats-group-start" data-label="Posse">${mercadoPosseLabel(row)}</td>`;
+        case 'ataques':
+          return `<td data-label="Ataques">${mercadoAtaquesLabel(row)}</td>`;
+        case 'ataques_perig':
+          return `<td data-label="At. perigosos">${mercadoAtaquesPerigososLabel(row)}</td>`;
+        case 'bola_segura':
+          return `<td data-label="Bola segura">${mercadoBolaSeguraLabel(row)}</td>`;
+        case 'escanteios':
+          return `<td class="stats-group-start" data-label="Escanteios">${mercadoEscanteiosLabel(row)}</td>`;
+        case 'faltas':
+          return `<td data-label="Faltas">${mercadoFaltasLabel(row)}</td>`;
+        case 'livres':
+          return `<td data-label="Livres">${mercadoLivresLabel(row)}</td>`;
+        case 'impedimentos':
+          return `<td data-label="Impedimentos">${mercadoImpedimentosLabel(row)}</td>`;
+        case 'laterais':
+          return `<td data-label="Laterais">${mercadoLateraisLabel(row)}</td>`;
+        case 'tiros_meta':
+          return `<td data-label="Tiros de meta">${mercadoTirosMetaLabel(row)}</td>`;
+        case 'amarelos':
+          return `<td class="stats-group-start" data-label="Amarelos">${mercadoAmarelosLabel(row)}</td>`;
+        case 'vermelhos':
+          return `<td data-label="Vermelhos">${mercadoVermelhosLabel(row)}</td>`;
+        case 'av':
+          return `<td data-label="A/V">${mercadoAmareloVermelhoLabel(row)}</td>`;
+        case 'subs':
+          return `<td class="stats-group-start" data-label="Subs">${mercadoSubsLabel(row)}</td>`;
+        case 'lesoes':
+          return `<td data-label="Lesões">${mercadoLesoesLabel(row)}</td>`;
+        case 'estadio':
+          return `<td class="stats-group-start" data-label="Estádio">${mercadoEstadioLabel(row)}</td>`;
+        case 'arbitro':
+          return `<td data-label="Árbitro">${mercadoArbitroLabel(row)}</td>`;
+        case 'tecnicos':
+          return `<td data-label="Técnicos">${mercadoTecnicosLabel(row)}</td>`;
+        case 'clima':
+          return `<td data-label="Clima">${mercadoClimaLabel(row)}</td>`;
+        case 'gramado':
+          return `<td data-label="Gramado">${mercadoGramadoLabel(row)}</td>`;
+        default:
+          return '';
+      }
+    }
+
+    /** Primeira coluna de cada grupo visível recebe borda de grupo. */
+    function statsRowCellsHtml(row, i) {
+      const groups = statsVisibleGroups();
+      const parts = [];
+      for (const g of groups) {
+        g.cols.forEach((c, ci) => {
+          let html = statsCellHtml(c.id, row, i);
+          if (ci === 0) {
+            if (!html.includes('stats-group-start')) {
+              html = html.replace('<td ', '<td class="stats-group-start" ');
+            }
+          } else {
+            html = html.replace(' class="stats-group-start"', '');
+          }
+          parts.push(html);
+        });
+      }
+      return parts.join('');
+    }
+
     const mercadoSelectedIds = new Set();
     let mercadoDeleteBusy = false;
     let logPollTimer = null;
@@ -2925,6 +3207,8 @@
     function renderMercado() {
       const tbody = document.getElementById('mercado-tbody');
       if (!tbody) return;
+      renderStatsThead();
+      const colCount = Math.max(1, statsVisibleColCount());
       const rows = mercadoDisplayRows(mercadoCache).slice().sort((a, b) => {
         const liveA = a.is_live ? 1 : 0;
         const liveB = b.is_live ? 1 : 0;
@@ -2934,49 +3218,118 @@
         if (minB !== minA) return minB - minA;
         return String(mercadoSortKey(b)).localeCompare(String(mercadoSortKey(a)));
       });
-      if (!rows.length) {
-        tbody.innerHTML = '<tr><td colspan="32" class="empty">Nenhum jogo com esses filtros.</td></tr>';
+      if (!statsVisibleColCount()) {
+        tbody.innerHTML =
+          `<tr><td colspan="${colCount}" class="empty">Nenhuma coluna selecionada. Use Montar tabela.</td></tr>`;
         return;
       }
-      tbody.innerHTML = rows.map((row, i) => {
-        const matchHtml = formatMatchHtml(row.home, row.away);
-        const league = [row.country, row.league].filter(Boolean).join(' · ') || '—';
-        const poss = mercadoPosseLabel(row);
-        return `<tr>
-          <td class="stats-group-start" data-label="#">${i + 1}</td>
-          <td data-label="Jogo">${matchHtml}</td>
-          <td data-label="Tempo">${mercadoTempoLabel(row)}</td>
-          <td data-label="Placar">${mercadoPlacarLabel(row)}</td>
-          <td data-label="Liga">${league}</td>
-          <td data-label="Status">${mercadoStatusLabel(row)}</td>
-          <td class="stats-group-start" data-label="Chutes a gol">${mercadoSotLabel(row)}</td>
-          <td data-label="Chutes fora">${mercadoChutesForaLabel(row)}</td>
-          <td data-label="Bloqueados">${mercadoBloqueadosLabel(row)}</td>
-          <td data-label="Chutes">${mercadoChutesTotalLabel(row)}</td>
-          <td data-label="Defesas">${mercadoDefesasLabel(row)}</td>
-          <td data-label="Pênaltis">${mercadoPenaltisLabel(row)}</td>
-          <td class="stats-group-start" data-label="Posse">${poss}</td>
-          <td data-label="Ataques">${mercadoAtaquesLabel(row)}</td>
-          <td data-label="At. perigosos">${mercadoAtaquesPerigososLabel(row)}</td>
-          <td data-label="Bola segura">${mercadoBolaSeguraLabel(row)}</td>
-          <td class="stats-group-start" data-label="Escanteios">${mercadoEscanteiosLabel(row)}</td>
-          <td data-label="Faltas">${mercadoFaltasLabel(row)}</td>
-          <td data-label="Livres">${mercadoLivresLabel(row)}</td>
-          <td data-label="Impedimentos">${mercadoImpedimentosLabel(row)}</td>
-          <td data-label="Laterais">${mercadoLateraisLabel(row)}</td>
-          <td data-label="Tiros de meta">${mercadoTirosMetaLabel(row)}</td>
-          <td class="stats-group-start" data-label="Amarelos">${mercadoAmarelosLabel(row)}</td>
-          <td data-label="Vermelhos">${mercadoVermelhosLabel(row)}</td>
-          <td data-label="A/V">${mercadoAmareloVermelhoLabel(row)}</td>
-          <td class="stats-group-start" data-label="Subs">${mercadoSubsLabel(row)}</td>
-          <td data-label="Lesões">${mercadoLesoesLabel(row)}</td>
-          <td class="stats-group-start" data-label="Estádio">${mercadoEstadioLabel(row)}</td>
-          <td data-label="Árbitro">${mercadoArbitroLabel(row)}</td>
-          <td data-label="Técnicos">${mercadoTecnicosLabel(row)}</td>
-          <td data-label="Clima">${mercadoClimaLabel(row)}</td>
-          <td data-label="Gramado">${mercadoGramadoLabel(row)}</td>
-        </tr>`;
+      if (!rows.length) {
+        tbody.innerHTML =
+          `<tr><td colspan="${colCount}" class="empty">Nenhum jogo com esses filtros.</td></tr>`;
+        return;
+      }
+      tbody.innerHTML = rows
+        .map((row, i) => `<tr>${statsRowCellsHtml(row, i)}</tr>`)
+        .join('');
+    }
+
+    function isStatsColumnsPopoverOpen() {
+      const pop = document.getElementById('stats-columns-popover');
+      return !!(pop && pop.classList.contains('open'));
+    }
+
+    function closeStatsColumnsPopover() {
+      const pop = document.getElementById('stats-columns-popover');
+      const btn = document.getElementById('btn-stats-montar-tabela');
+      if (pop) {
+        pop.classList.remove('open');
+        pop.hidden = true;
+        pop.innerHTML = '';
+      }
+      if (btn) btn.setAttribute('aria-expanded', 'false');
+    }
+
+    function syncStatsBuilderGroupChecks(root) {
+      if (!root) return;
+      root.querySelectorAll('.scb-group').forEach((groupEl) => {
+        const groupCb = groupEl.querySelector('input[data-scb-group]');
+        const colCbs = [...groupEl.querySelectorAll('input[data-scb-col]')];
+        if (!groupCb || !colCbs.length) return;
+        const checked = colCbs.filter((c) => c.checked).length;
+        groupCb.checked = checked === colCbs.length;
+        groupCb.indeterminate = checked > 0 && checked < colCbs.length;
+      });
+    }
+
+    function openStatsColumnsPopover() {
+      const pop = document.getElementById('stats-columns-popover');
+      const btn = document.getElementById('btn-stats-montar-tabela');
+      if (!pop) return;
+      hideMercadoElevatedPopover();
+      const draft = new Set(statsVisibleCols);
+      const groupsHtml = STATS_COL_GROUPS.map((g) => {
+        const colsHtml = g.cols
+          .map(
+            (c) => `<label class="scb-col">
+              <input type="checkbox" data-scb-col="${escapeHtml(c.id)}" ${draft.has(c.id) ? 'checked' : ''} />
+              <span>${escapeHtml(c.label)}</span>
+            </label>`,
+          )
+          .join('');
+        return `<div class="scb-group" data-group-id="${escapeHtml(g.id)}">
+          <label class="scb-group-head">
+            <input type="checkbox" data-scb-group="${escapeHtml(g.id)}" />
+            <span>${escapeHtml(g.label)}</span>
+          </label>
+          <div class="scb-cols">${colsHtml}</div>
+        </div>`;
       }).join('');
+      pop.innerHTML =
+        `<h3 class="scb-title">Montar tabela</h3>${groupsHtml}` +
+        `<div class="scb-actions">
+          <button type="button" class="btn-secondary" id="btn-scb-cancel">Cancelar</button>
+          <button type="button" class="btn-primary" id="btn-scb-apply">Aplicar</button>
+        </div>`;
+      pop.hidden = false;
+      pop.classList.add('open');
+      if (btn) btn.setAttribute('aria-expanded', 'true');
+      syncStatsBuilderGroupChecks(pop);
+
+      pop.querySelectorAll('input[data-scb-group]').forEach((groupCb) => {
+        groupCb.addEventListener('change', () => {
+          const groupEl = groupCb.closest('.scb-group');
+          groupEl?.querySelectorAll('input[data-scb-col]').forEach((colCb) => {
+            colCb.checked = groupCb.checked;
+          });
+          groupCb.indeterminate = false;
+        });
+      });
+      pop.querySelectorAll('input[data-scb-col]').forEach((colCb) => {
+        colCb.addEventListener('change', () => syncStatsBuilderGroupChecks(pop));
+      });
+      pop.querySelector('#btn-scb-cancel')?.addEventListener('click', () => {
+        closeStatsColumnsPopover();
+      });
+      pop.querySelector('#btn-scb-apply')?.addEventListener('click', () => {
+        const next = new Set();
+        pop.querySelectorAll('input[data-scb-col]:checked').forEach((cb) => {
+          const id = cb.getAttribute('data-scb-col');
+          if (id) next.add(id);
+        });
+        if (!next.size) {
+          window.alert('Selecione ao menos uma coluna.');
+          return;
+        }
+        statsVisibleCols = next;
+        persistStatsVisibleCols();
+        closeStatsColumnsPopover();
+        refreshStatsFilterView();
+      });
+    }
+
+    function toggleStatsColumnsPopover() {
+      if (isStatsColumnsPopoverOpen()) closeStatsColumnsPopover();
+      else openStatsColumnsPopover();
     }
 
     function updateMercadoStatus(meta, visibleCount, displayCount) {
@@ -3561,7 +3914,7 @@
           }
           if (tbody) {
             tbody.innerHTML =
-              `<tr><td colspan="32" class="empty">${msg}</td></tr>`;
+              `<tr><td colspan="${Math.max(1, statsVisibleColCount())}" class="empty">${msg}</td></tr>`;
           }
         }
       } finally {
@@ -3592,6 +3945,28 @@
       persistStatsFilters();
       refreshStatsFilterView();
     });
+
+    document.getElementById('btn-stats-montar-tabela')?.addEventListener('click', (e) => {
+      e.preventDefault();
+      e.stopPropagation();
+      toggleStatsColumnsPopover();
+    });
+
+    document.getElementById('stats-columns-popover')?.addEventListener('click', (e) => {
+      e.stopPropagation();
+    });
+
+    document.addEventListener('click', (e) => {
+      if (!isStatsColumnsPopoverOpen()) return;
+      if (e.target.closest('.stats-col-builder-wrap')) return;
+      closeStatsColumnsPopover();
+    });
+
+    document.addEventListener('keydown', (e) => {
+      if (e.key === 'Escape' && isStatsColumnsPopoverOpen()) closeStatsColumnsPopover();
+    });
+
+    renderStatsThead();
 
     document.getElementById('mercado-select-all')?.addEventListener('change', (e) => {
       const on = e.target.checked;
