@@ -1660,15 +1660,63 @@
     /** @type {{ colId: string|null, dir: 'asc'|'desc'|null, mode: string|null }} */
     let statsSort = { colId: null, dir: null, mode: null };
 
-    function statsPairSortValue(home, away) {
-      if (home == null && away == null) return null;
-      return (Number(home) || 0) + (Number(away) || 0);
-    }
-
-    /** For % pairs that sum ~100 (posse), sort by balance |casa − fora|. */
+    /** Pair stats: sort by balance |casa − fora| (= equilibrado / ≠ diferenciado). */
     function statsPairAbsDiffSortValue(home, away) {
       if (home == null && away == null) return null;
       return Math.abs((Number(home) || 0) - (Number(away) || 0));
+    }
+
+    /** Colunas com ordenação = / ≠. gender: a=feminino, o=masculino. */
+    const STATS_BALANCE_SORT = {
+      sot: { home: 'home_shots_on_target', away: 'away_shots_on_target', label: 'Chutes a Gol', gender: 'o' },
+      soff: { home: 'home_shots_off_target', away: 'away_shots_off_target', label: 'Chutes Fora', gender: 'o' },
+      blocked: { home: 'home_shots_blocked', away: 'away_shots_blocked', label: 'Bloqueados', gender: 'o' },
+      shots: { home: 'home_shots_total', away: 'away_shots_total', label: 'Chutes', gender: 'o' },
+      saves: { home: 'home_saves', away: 'away_saves', label: 'Defesas', gender: 'a' },
+      pens: { home: 'home_penalties', away: 'away_penalties', label: 'Pênaltis', gender: 'o' },
+      posse: { home: 'home_possession', away: 'away_possession', label: 'Posse', gender: 'a' },
+      ataques: { home: 'home_attacks', away: 'away_attacks', label: 'Ataques', gender: 'o' },
+      ataques_perig: { home: 'home_dangerous_attacks', away: 'away_dangerous_attacks', label: 'Ataques perigosos', gender: 'o' },
+      bola_segura: { home: 'home_ball_safe', away: 'away_ball_safe', label: 'Bola segura', gender: 'a' },
+      escanteios: { home: 'home_corners', away: 'away_corners', label: 'Escanteios', gender: 'o' },
+      faltas: { home: 'home_fouls', away: 'away_fouls', label: 'Faltas', gender: 'a' },
+      livres: { home: 'home_free_kicks', away: 'away_free_kicks', label: 'Livres', gender: 'o' },
+      impedimentos: { home: 'home_offsides', away: 'away_offsides', label: 'Impedimentos', gender: 'o' },
+      laterais: { home: 'home_throw_ins', away: 'away_throw_ins', label: 'Laterais', gender: 'o' },
+      tiros_meta: { home: 'home_goal_kicks', away: 'away_goal_kicks', label: 'Tiros de Meta', gender: 'o' },
+      amarelos: { home: 'home_yellow_cards', away: 'away_yellow_cards', label: 'Amarelos', gender: 'o' },
+      vermelhos: { home: 'home_red_cards', away: 'away_red_cards', label: 'Vermelhos', gender: 'o' },
+      av: { home: 'home_yellow_red_cards', away: 'away_yellow_red_cards', label: 'A/V', gender: 'o' },
+      subs: { home: 'home_substitutions', away: 'away_substitutions', label: 'Subs', gender: 'a' },
+      lesoes: { home: 'home_injuries', away: 'away_injuries', label: 'Lesões', gender: 'a' },
+    };
+
+    function isStatsBalanceSortCol(colId) {
+      return Object.prototype.hasOwnProperty.call(STATS_BALANCE_SORT, colId);
+    }
+
+    function statsBalancePair(row, colId) {
+      const cfg = STATS_BALANCE_SORT[colId];
+      if (!cfg || !row) return { home: null, away: null };
+      return { home: row[cfg.home], away: row[cfg.away] };
+    }
+
+    function statsBalanceSortValue(row, colId) {
+      const { home, away } = statsBalancePair(row, colId);
+      return statsPairAbsDiffSortValue(home, away);
+    }
+
+    function statsBalanceSortTitles(colId) {
+      const cfg = STATS_BALANCE_SORT[colId];
+      if (!cfg) return null;
+      const eq = cfg.gender === 'a' ? 'equilibrada' : 'equilibrados';
+      const dif = cfg.gender === 'a' ? 'diferenciada' : 'diferenciados';
+      return {
+        ascTitle: `${cfg.label} mais ${eq} (=)`,
+        descTitle: `${cfg.label} mais ${dif} (≠)`,
+        ascAria: `Ordenar por ${cfg.label} mais ${eq}`,
+        descAria: `Ordenar por ${cfg.label} mais ${dif}`,
+      };
     }
 
     function statsPlacarParts(row) {
@@ -1710,100 +1758,6 @@
         }
         case 'status':
           return row.is_live ? 1 : 0;
-        case 'sot':
-          return statsPairSortValue(row.home_shots_on_target, row.away_shots_on_target);
-        case 'soff':
-          return statsPairSortValue(row.home_shots_off_target, row.away_shots_off_target);
-        case 'blocked':
-          return statsPairSortValue(row.home_shots_blocked, row.away_shots_blocked);
-        case 'shots':
-          return statsPairSortValue(row.home_shots_total, row.away_shots_total);
-        case 'saves':
-          return statsPairSortValue(row.home_saves, row.away_saves);
-        case 'pens':
-          return statsPairSortValue(row.home_penalties, row.away_penalties);
-        case 'posse':
-          // = equilibrada (menor |diff|); ≠ diferenciada (maior |diff|).
-          {
-            const home = row.home_possession;
-            const away = row.away_possession;
-            const val = statsPairAbsDiffSortValue(home, away);
-            // #region agent log
-            if (!window.__posseSortLogCount) window.__posseSortLogCount = 0;
-            if (window.__posseSortLogCount < 6) {
-              window.__posseSortLogCount += 1;
-              fetch('http://127.0.0.1:7904/ingest/86615625-6ae5-4e98-a1da-0a5f0f15fc42',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'71820e'},body:JSON.stringify({sessionId:'71820e',runId:'post-fix',hypothesisId:'H',location:'web/index.html:statsColSortValue:posse',message:'Posse balance sort key',data:{dir:statsSort.dir,home,away,absDiff:val,event_id:row.event_id},timestamp:Date.now()})}).catch(()=>{});
-            }
-            // #endregion
-            return val;
-          }
-        case 'ataques':
-          // = equilibrados (menor |diff|); ≠ diferenciados (maior |diff|).
-          {
-            const home = row.home_attacks;
-            const away = row.away_attacks;
-            const val = statsPairAbsDiffSortValue(home, away);
-            // #region agent log
-            if (!window.__ataquesSortLogCount) window.__ataquesSortLogCount = 0;
-            if (window.__ataquesSortLogCount < 6) {
-              window.__ataquesSortLogCount += 1;
-              fetch('http://127.0.0.1:7904/ingest/86615625-6ae5-4e98-a1da-0a5f0f15fc42',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'71820e'},body:JSON.stringify({sessionId:'71820e',runId:'post-fix',hypothesisId:'I',location:'web/index.html:statsColSortValue:ataques',message:'Ataques balance sort key',data:{dir:statsSort.dir,home,away,absDiff:val,event_id:row.event_id},timestamp:Date.now()})}).catch(()=>{});
-            }
-            // #endregion
-            return val;
-          }
-        case 'ataques_perig':
-          // = equilibrados (menor |diff|); ≠ diferenciados (maior |diff|).
-          {
-            const home = row.home_dangerous_attacks;
-            const away = row.away_dangerous_attacks;
-            const val = statsPairAbsDiffSortValue(home, away);
-            // #region agent log
-            if (!window.__ataquesPerigSortLogCount) window.__ataquesPerigSortLogCount = 0;
-            if (window.__ataquesPerigSortLogCount < 6) {
-              window.__ataquesPerigSortLogCount += 1;
-              fetch('http://127.0.0.1:7904/ingest/86615625-6ae5-4e98-a1da-0a5f0f15fc42',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'71820e'},body:JSON.stringify({sessionId:'71820e',runId:'post-fix',hypothesisId:'J',location:'web/index.html:statsColSortValue:ataques_perig',message:'Ataques perigosos balance sort key',data:{dir:statsSort.dir,home,away,absDiff:val,event_id:row.event_id},timestamp:Date.now()})}).catch(()=>{});
-            }
-            // #endregion
-            return val;
-          }
-        case 'bola_segura':
-          // = equilibrada (menor |diff|); ≠ diferenciada (maior |diff|).
-          {
-            const home = row.home_ball_safe;
-            const away = row.away_ball_safe;
-            const val = statsPairAbsDiffSortValue(home, away);
-            // #region agent log
-            if (!window.__bolaSeguraSortLogCount) window.__bolaSeguraSortLogCount = 0;
-            if (window.__bolaSeguraSortLogCount < 6) {
-              window.__bolaSeguraSortLogCount += 1;
-              fetch('http://127.0.0.1:7904/ingest/86615625-6ae5-4e98-a1da-0a5f0f15fc42',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'71820e'},body:JSON.stringify({sessionId:'71820e',runId:'post-fix',hypothesisId:'K',location:'web/index.html:statsColSortValue:bola_segura',message:'Bola segura balance sort key',data:{dir:statsSort.dir,home,away,absDiff:val,event_id:row.event_id},timestamp:Date.now()})}).catch(()=>{});
-            }
-            // #endregion
-            return val;
-          }
-        case 'escanteios':
-          return statsPairSortValue(row.home_corners, row.away_corners);
-        case 'faltas':
-          return statsPairSortValue(row.home_fouls, row.away_fouls);
-        case 'livres':
-          return statsPairSortValue(row.home_free_kicks, row.away_free_kicks);
-        case 'impedimentos':
-          return statsPairSortValue(row.home_offsides, row.away_offsides);
-        case 'laterais':
-          return statsPairSortValue(row.home_throw_ins, row.away_throw_ins);
-        case 'tiros_meta':
-          return statsPairSortValue(row.home_goal_kicks, row.away_goal_kicks);
-        case 'amarelos':
-          return statsPairSortValue(row.home_yellow_cards, row.away_yellow_cards);
-        case 'vermelhos':
-          return statsPairSortValue(row.home_red_cards, row.away_red_cards);
-        case 'av':
-          return statsPairSortValue(row.home_yellow_red_cards, row.away_yellow_red_cards);
-        case 'subs':
-          return statsPairSortValue(row.home_substitutions, row.away_substitutions);
-        case 'lesoes':
-          return statsPairSortValue(row.home_injuries, row.away_injuries);
         case 'estadio':
           return [row.stadium_name, row.stadium_city, row.stadium_country].filter(Boolean).join(' ').toLowerCase() || null;
         case 'arbitro':
@@ -1815,6 +1769,18 @@
         case 'gramado':
           return row.pitch ? String(row.pitch).toLowerCase() : null;
         default:
+          if (isStatsBalanceSortCol(colId)) {
+            const val = statsBalanceSortValue(row, colId);
+            // #region agent log
+            if (!window.__balanceSortLogCount) window.__balanceSortLogCount = 0;
+            if (window.__balanceSortLogCount < 8) {
+              window.__balanceSortLogCount += 1;
+              const pair = statsBalancePair(row, colId);
+              fetch('http://127.0.0.1:7904/ingest/86615625-6ae5-4e98-a1da-0a5f0f15fc42',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'71820e'},body:JSON.stringify({sessionId:'71820e',runId:'post-fix',hypothesisId:'L',location:'web/index.html:statsColSortValue:balance',message:'Balance sort key',data:{colId,dir:statsSort.dir,home:pair.home,away:pair.away,absDiff:val,event_id:row.event_id},timestamp:Date.now()})}).catch(()=>{});
+            }
+            // #endregion
+            return val;
+          }
           return null;
       }
     }
@@ -1964,33 +1930,12 @@
                 descTitle = 'Opções: maior placar';
                 ascAria = `Opções de ordenação menor para ${c.label}`;
                 descAria = `Opções de ordenação maior para ${c.label}`;
-              } else if (
-                c.id === 'posse' ||
-                c.id === 'ataques' ||
-                c.id === 'ataques_perig' ||
-                c.id === 'bola_segura'
-              ) {
-                if (c.id === 'posse') {
-                  ascTitle = 'Posse mais equilibrada (=)';
-                  descTitle = 'Posse mais diferenciada (≠)';
-                  ascAria = 'Ordenar por posse mais equilibrada';
-                  descAria = 'Ordenar por posse mais diferenciada';
-                } else if (c.id === 'ataques') {
-                  ascTitle = 'Ataques mais equilibrados (=)';
-                  descTitle = 'Ataques mais diferenciados (≠)';
-                  ascAria = 'Ordenar por ataques mais equilibrados';
-                  descAria = 'Ordenar por ataques mais diferenciados';
-                } else if (c.id === 'ataques_perig') {
-                  ascTitle = 'Ataques perigosos mais equilibrados (=)';
-                  descTitle = 'Ataques perigosos mais diferenciados (≠)';
-                  ascAria = 'Ordenar por ataques perigosos mais equilibrados';
-                  descAria = 'Ordenar por ataques perigosos mais diferenciados';
-                } else {
-                  ascTitle = 'Bola segura mais equilibrada (=)';
-                  descTitle = 'Bola segura mais diferenciada (≠)';
-                  ascAria = 'Ordenar por bola segura mais equilibrada';
-                  descAria = 'Ordenar por bola segura mais diferenciada';
-                }
+              } else if (isStatsBalanceSortCol(c.id)) {
+                const bal = statsBalanceSortTitles(c.id);
+                ascTitle = bal.ascTitle;
+                descTitle = bal.descTitle;
+                ascAria = bal.ascAria;
+                descAria = bal.descAria;
                 ascInner = '=';
                 descInner = '≠';
                 ascBtnClass += ' stats-sort-sym';
@@ -3885,42 +3830,20 @@
         return String(mercadoSortKey(b)).localeCompare(String(mercadoSortKey(a)));
       });
       // #region agent log
-      if (
-        statsSort.colId === 'posse' ||
-        statsSort.colId === 'ataques' ||
-        statsSort.colId === 'ataques_perig' ||
-        statsSort.colId === 'bola_segura'
-      ) {
-        window.__posseSortLogCount = 0;
-        window.__ataquesSortLogCount = 0;
-        window.__ataquesPerigSortLogCount = 0;
-        window.__bolaSeguraSortLogCount = 0;
+      if (isStatsBalanceSortCol(statsSort.colId)) {
+        window.__balanceSortLogCount = 0;
         const top = rows.slice(0, 5).map((r) => {
-          let home;
-          let away;
-          if (statsSort.colId === 'posse') {
-            home = r.home_possession;
-            away = r.away_possession;
-          } else if (statsSort.colId === 'ataques') {
-            home = r.home_attacks;
-            away = r.away_attacks;
-          } else if (statsSort.colId === 'ataques_perig') {
-            home = r.home_dangerous_attacks;
-            away = r.away_dangerous_attacks;
-          } else {
-            home = r.home_ball_safe;
-            away = r.away_ball_safe;
-          }
+          const pair = statsBalancePair(r, statsSort.colId);
           return {
             event_id: r.event_id,
-            home,
-            away,
-            absDiff: statsPairAbsDiffSortValue(home, away),
+            home: pair.home,
+            away: pair.away,
+            absDiff: statsPairAbsDiffSortValue(pair.home, pair.away),
             sortVal: statsColSortValue(statsSort.colId, r),
             minute: r.last_minute,
           };
         });
-        fetch('http://127.0.0.1:7904/ingest/86615625-6ae5-4e98-a1da-0a5f0f15fc42',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'71820e'},body:JSON.stringify({sessionId:'71820e',runId:'post-fix',hypothesisId:'K',location:'web/index.html:renderMercado',message:'Balance sort result top rows',data:{colId:statsSort.colId,dir:statsSort.dir,meaning:statsSort.dir==='asc'?'equilibrada':'diferenciada',top},timestamp:Date.now()})}).catch(()=>{});
+        fetch('http://127.0.0.1:7904/ingest/86615625-6ae5-4e98-a1da-0a5f0f15fc42',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'71820e'},body:JSON.stringify({sessionId:'71820e',runId:'post-fix',hypothesisId:'L',location:'web/index.html:renderMercado',message:'Balance sort result top rows',data:{colId:statsSort.colId,dir:statsSort.dir,meaning:statsSort.dir==='asc'?'equilibrada':'diferenciada',top},timestamp:Date.now()})}).catch(()=>{});
       }
       // #endregion
       if (!statsVisibleColCount()) {
