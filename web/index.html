@@ -1643,7 +1643,10 @@
     function moveStatsColumn(colId, dir) {
       const group = STATS_COL_GROUPS.find((g) => g.cols.some((c) => c.id === colId));
       if (!group) return false;
-      const orderedIds = orderedGroupCols(group).map((c) => c.id);
+      // Only adjacent VISIBLE columns — matches thead arrows (hidden cols must not be swap targets).
+      const orderedIds = orderedGroupCols(group)
+        .filter((c) => statsVisibleCols.has(c.id))
+        .map((c) => c.id);
       const idx = orderedIds.indexOf(colId);
       const swapIdx = idx + dir;
       if (idx < 0 || swapIdx < 0 || swapIdx >= orderedIds.length) return false;
@@ -1651,9 +1654,16 @@
       const iGlobal = statsColumnOrder.indexOf(colId);
       const jGlobal = statsColumnOrder.indexOf(otherId);
       if (iGlobal < 0 || jGlobal < 0) return false;
+      const beforeVisible = orderedIds.slice();
       statsColumnOrder[iGlobal] = otherId;
       statsColumnOrder[jGlobal] = colId;
       persistStatsColumnOrder();
+      const afterVisible = orderedGroupCols(group)
+        .filter((c) => statsVisibleCols.has(c.id))
+        .map((c) => c.id);
+      // #region agent log
+      fetch('http://127.0.0.1:7904/ingest/86615625-6ae5-4e98-a1da-0a5f0f15fc42',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'71820e'},body:JSON.stringify({sessionId:'71820e',runId:'post-fix',hypothesisId:'E',location:'web/index.html:moveStatsColumn',message:'Column move applied (visible neighbors only)',data:{colId,dir,otherId,beforeVisible,afterVisible,groupId:group.id,buildMarker:'thead-move-v2'},timestamp:Date.now()})}).catch(()=>{});
+      // #endregion
       return true;
     }
 
