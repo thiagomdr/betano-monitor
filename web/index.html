@@ -742,6 +742,7 @@
       background: rgba(232, 238, 247, 0.06);
       top: 0;
       z-index: 3;
+      text-transform: none;
     }
     #stats-table thead tr.stats-group-row th:first-child {
       border-left: none;
@@ -750,6 +751,10 @@
       top: 1.85rem;
       z-index: 2;
       border-left: 1px solid transparent;
+      border-bottom: 1px solid var(--border);
+      background: var(--panel);
+      box-shadow: inset 0 -1px 0 var(--border);
+      text-transform: none;
     }
     #stats-table thead tr.stats-col-row th.stats-group-start {
       border-left: 1px solid var(--border);
@@ -3327,7 +3332,7 @@
         </div>`;
       }).join('');
       pop.innerHTML =
-        `<h3 class="scb-title">Montar tabela</h3>${groupsHtml}` +
+        `<h3 class="scb-title">Montar Tabela</h3>${groupsHtml}` +
         `<div class="scb-actions">
           <button type="button" class="btn-secondary" id="btn-scb-cancel">Cancelar</button>
           <button type="button" class="btn-primary" id="btn-scb-apply">Aplicar</button>
