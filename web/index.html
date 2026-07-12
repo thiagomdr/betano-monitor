@@ -758,6 +758,7 @@
     }
     #stats-table tbody td {
       background: var(--panel);
+      border-left: 1px solid var(--border);
     }
     #stats-table thead tr.stats-col-row th.stats-group-start {
       border-left: 1px solid var(--border);
@@ -765,11 +766,12 @@
     #stats-table thead tr.stats-col-row th.stats-group-start:first-child {
       border-left: none;
     }
-    #stats-table tbody td.stats-group-start {
-      border-left: 1px solid var(--border);
-    }
+    #stats-table tbody td:first-child,
     #stats-table tbody td.stats-group-start:first-child {
       border-left: none;
+    }
+    #stats-table tbody td.stats-group-start {
+      border-left: 1px solid var(--border);
     }
     tr:last-child td { border-bottom: none; }
     #mercado-tbody tr:hover td,
