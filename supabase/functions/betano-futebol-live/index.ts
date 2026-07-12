@@ -2523,11 +2523,13 @@ async function fetchGoalsTimeline(
         else if (side === "away" || side.includes("away")) teamSide = "away";
       }
 
-      const player = rec.player != null
-        ? String(asRecord(rec.player)?.name ?? rec.player)
+      const playerRaw = rec.player != null
+        ? (asRecord(rec.player)?.name ?? rec.player)
         : rec.scorer != null
-        ? String(asRecord(rec.scorer)?.name ?? rec.scorer)
+        ? (asRecord(rec.scorer)?.name ?? rec.scorer)
         : null;
+      const playerName = playerRaw != null ? String(playerRaw).trim() : "";
+      const player = playerName ? playerName : null;
 
       const teamName = teamSide === "home"
         ? homeName
