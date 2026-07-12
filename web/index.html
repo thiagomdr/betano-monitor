@@ -1837,7 +1837,7 @@
       const metric = cfg.metric;
       if (arrowDir === 'desc') {
         const opts = [
-          { mode: 'team_max', label: statsSortTitleCase(`Maior ${amount} de 1 Time`) },
+          { mode: 'team_max', label: statsSortTitleCase(`Maior ${amount} de um Time`) },
         ];
         if (cfg.unit !== 'pct') {
           opts.push({ mode: 'sum', label: statsSortTitleCase(`Maior Soma de ${metric}`) });
@@ -1846,7 +1846,7 @@
         return opts;
       }
       const opts = [
-        { mode: 'team_min', label: statsSortTitleCase(`Menor ${amount} de 1 Time`) },
+        { mode: 'team_min', label: statsSortTitleCase(`Menor ${amount} de um Time`) },
       ];
       if (cfg.unit !== 'pct') {
         opts.push({ mode: 'sum', label: statsSortTitleCase(`Menor Soma de ${metric}`) });
