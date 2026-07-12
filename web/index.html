@@ -1628,6 +1628,12 @@
       return (Number(home) || 0) + (Number(away) || 0);
     }
 
+    /** For % pairs that sum ~100 (posse), sort by the larger side. */
+    function statsPairMaxSortValue(home, away) {
+      if (home == null && away == null) return null;
+      return Math.max(Number(home) || 0, Number(away) || 0);
+    }
+
     function statsColSortValue(colId, row) {
       switch (colId) {
         case 'num':
@@ -1664,7 +1670,7 @@
         case 'pens':
           return statsPairSortValue(row.home_penalties, row.away_penalties);
         case 'posse':
-          return statsPairSortValue(row.home_possession, row.away_possession);
+          return statsPairMaxSortValue(row.home_possession, row.away_possession);
         case 'ataques':
           return statsPairSortValue(row.home_attacks, row.away_attacks);
         case 'ataques_perig':
@@ -1728,7 +1734,13 @@
         statsSort = { colId, dir };
       }
       // #region agent log
-      fetch('http://127.0.0.1:7904/ingest/86615625-6ae5-4e98-a1da-0a5f0f15fc42',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'71820e'},body:JSON.stringify({sessionId:'71820e',runId:'post-fix',hypothesisId:'F',location:'web/index.html:setStatsSort',message:'Row sort by column',data:{colId:statsSort.colId,dir:statsSort.dir,buildMarker:'row-sort-v1'},timestamp:Date.now()})}).catch(()=>{});
+      const sample = (mercadoCache || []).slice(0, 8).map((r) => ({
+        event_id: r.event_id,
+        sortVal: statsSort.colId ? statsColSortValue(statsSort.colId, r) : null,
+        posse: [r.home_possession, r.away_possession],
+        minute: r.last_minute,
+      }));
+      fetch('http://127.0.0.1:7904/ingest/86615625-6ae5-4e98-a1da-0a5f0f15fc42',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'71820e'},body:JSON.stringify({sessionId:'71820e',runId:'post-fix',hypothesisId:'G',location:'web/index.html:setStatsSort',message:'Row sort by column',data:{colId:statsSort.colId,dir:statsSort.dir,sample,buildMarker:'posse-max-sort-v1'},timestamp:Date.now()})}).catch(()=>{});
       // #endregion
       renderMercado();
     }
