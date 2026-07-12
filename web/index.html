@@ -276,20 +276,6 @@
       color: var(--muted);
       font-weight: 500;
     }
-    a.match-link {
-      color: inherit;
-      text-decoration: none;
-      cursor: pointer;
-    }
-    a.match-link:hover {
-      text-decoration: underline;
-      text-underline-offset: 2px;
-    }
-    a.match-link .team-home,
-    a.match-link .team-away,
-    a.match-link .match-vs {
-      /* mantem cores dos times dentro do link */
-    }
     .log-detail-line {
       padding: 0.2rem 0;
       border-bottom: 1px solid rgba(255, 255, 255, 0.06);
@@ -844,34 +830,6 @@
       border-bottom: 1px solid rgba(255, 255, 255, 0.06);
     }
     .mercado-elevated-popover li:last-child { border-bottom: none; }
-    .mercado-elevated-popover .lastx-section {
-      margin-top: 0.55rem;
-    }
-    .mercado-elevated-popover .lastx-section:first-child {
-      margin-top: 0;
-    }
-    .mercado-elevated-popover .lastx-title {
-      font-weight: 700;
-      color: #e8eef7;
-      margin-bottom: 0.25rem;
-    }
-    .lastx-outcome {
-      display: inline-block;
-      min-width: 1.1rem;
-      font-weight: 800;
-      text-align: center;
-      margin-right: 0.3rem;
-    }
-    .lastx-outcome.W { color: #3dd68c; }
-    .lastx-outcome.D { color: #ffd166; }
-    .lastx-outcome.L { color: #ff6b6b; }
-    .lastx-outcome.q { color: var(--muted); }
-    button.table-tip-btn.match-tip {
-      text-align: left;
-      font-weight: inherit;
-      text-decoration: underline dotted rgba(94, 179, 255, 0.35);
-      max-width: 100%;
-    }
     .mercado-delete-btn {
       background: transparent;
       border: none;
@@ -1014,7 +972,7 @@
   </header>
   <main id="panel-mercado">
     <p class="hint">
-      Estatísticas Sportradar por jogo (inclui estádio, árbitro, clima via match_info). Clique no jogo para últimos resultados; nos contadores para balões de minutos.
+      Estatísticas Sportradar por jogo (inclui estádio, árbitro, clima via match_info). Clique nos contadores (placar, escanteios, chutes, defesas, faltas…) para o balão de minutos.
     </p>
     <div class="stats-filters" id="stats-filters">
       <label class="filter-validados">
@@ -1032,7 +990,7 @@
       <table id="stats-table">
         <thead>
           <tr class="stats-group-row">
-            <th colspan="7">Identificação do jogo</th>
+            <th colspan="6">Identificação do jogo</th>
             <th colspan="6">Finalização</th>
             <th colspan="4">Domínio / pressão</th>
             <th colspan="6">Bola parada</th>
@@ -1042,12 +1000,11 @@
           </tr>
           <tr class="stats-col-row">
             <th class="stats-group-start">#</th>
-            <th title="Clique para últimos resultados dos times">Jogo</th>
+            <th>Jogo</th>
             <th title="Minuto do jogo (+acréscimos quando anunciados)">Tempo</th>
             <th title="Clique para minutos dos gols">Placar</th>
             <th>Liga</th>
             <th title="Ao Vivo ou Finalizado">Status</th>
-            <th>Link</th>
             <th class="stats-group-start" title="Clique para minutos dos chutes a gol">Chutes a gol</th>
             <th title="Clique para minutos dos chutes para fora">Chutes fora</th>
             <th title="Clique para minutos dos chutes bloqueados">Bloqueados</th>
@@ -1077,7 +1034,7 @@
           </tr>
         </thead>
         <tbody id="mercado-tbody">
-          <tr><td colspan="33" class="empty">Carregando…</td></tr>
+          <tr><td colspan="32" class="empty">Carregando…</td></tr>
         </tbody>
       </table>
     </div>
@@ -1340,67 +1297,13 @@
       return `<span class="team-home">${h}</span> <span class="match-vs">x</span> <span class="team-away">${a}</span>`;
     }
 
-    function parseLastxList(raw) {
-      if (Array.isArray(raw)) return raw;
-      if (typeof raw === 'string') {
-        try {
-          const parsed = JSON.parse(raw);
-          return Array.isArray(parsed) ? parsed : [];
-        } catch {
-          return [];
-        }
-      }
-      return [];
-    }
-
-    function formatLastxListHtml(teamName, list) {
-      const rows = parseLastxList(list);
-      const title = escapeHtml(teamName || 'Time');
-      if (!rows.length) {
-        return `<div class="lastx-section"><div class="lastx-title">${title}</div><div class="muted">Sem histórico recente</div></div>`;
-      }
-      const items = rows.map((m) => {
-        const outcome = String(m.outcome || '?');
-        const ocClass = outcome === 'W' || outcome === 'D' || outcome === 'L' ? outcome : 'q';
-        const date = m.date ? escapeHtml(String(m.date)) : '—';
-        const score = m.score ? escapeHtml(String(m.score)) : '—';
-        const home = escapeHtml(m.home || '?');
-        const away = escapeHtml(m.away || '?');
-        return `<li><span class="lastx-outcome ${ocClass}">${escapeHtml(outcome)}</span>${date} · ${home} ${score} ${away}</li>`;
-      }).join('');
-      return `<div class="lastx-section"><div class="lastx-title">${title}</div><ul>${items}</ul></div>`;
-    }
-
-    function mercadoJogoLastxLabel(row) {
-      const matchHtml = formatMatchHtml(row.home, row.away);
-      const homeList = parseLastxList(row.home_lastx_json);
-      const awayList = parseLastxList(row.away_lastx_json);
-      if (!homeList.length && !awayList.length) {
-        return wrapMatchHtmlWithLink(matchHtml, row.betano_url);
-      }
-      const tip = [
-        formatLastxListHtml(row.home, homeList),
-        formatLastxListHtml(row.away, awayList),
-      ].join('');
-      return `<button type="button" class="table-tip-btn match-tip" data-table-tip="lastx-${row.event_id}" data-tip-html="${encodeURIComponent(tip)}" title="Últimos resultados dos times">${matchHtml}</button>`;
-    }
-
-    function wrapMatchHtmlWithLink(matchHtml, url) {
-      const href = String(url || '').trim();
-      if (!href || !/^https?:\/\//i.test(href)) return matchHtml;
-      return `<a class="match-link" href="${escapeHtml(href)}" target="_blank" rel="noopener noreferrer" title="Abrir na Betano">${matchHtml}</a>`;
-    }
-
-    function formatMatchLabelHtml(label, url) {
+    function formatMatchLabelHtml(label) {
       if (!label) return '';
       const parts = String(label).split(/\s+x\s+/i);
-      let html;
       if (parts.length >= 2) {
-        html = formatMatchHtml(parts[0].trim(), parts.slice(1).join(' x ').trim());
-      } else {
-        html = `<strong>${escapeHtml(label)}</strong>`;
+        return formatMatchHtml(parts[0].trim(), parts.slice(1).join(' x ').trim());
       }
-      return wrapMatchHtmlWithLink(html, url);
+      return `<strong>${escapeHtml(label)}</strong>`;
     }
 
     function formatTimeOnly(iso) {
@@ -3032,15 +2935,12 @@
         return String(mercadoSortKey(b)).localeCompare(String(mercadoSortKey(a)));
       });
       if (!rows.length) {
-        tbody.innerHTML = '<tr><td colspan="33" class="empty">Nenhum jogo com esses filtros.</td></tr>';
+        tbody.innerHTML = '<tr><td colspan="32" class="empty">Nenhum jogo com esses filtros.</td></tr>';
         return;
       }
       tbody.innerHTML = rows.map((row, i) => {
-        const matchHtml = mercadoJogoLastxLabel(row);
+        const matchHtml = formatMatchHtml(row.home, row.away);
         const league = [row.country, row.league].filter(Boolean).join(' · ') || '—';
-        const link = row.betano_url
-          ? `<a href="${row.betano_url}" target="_blank" rel="noopener">abrir</a>`
-          : '—';
         const poss = mercadoPosseLabel(row);
         return `<tr>
           <td class="stats-group-start" data-label="#">${i + 1}</td>
@@ -3049,7 +2949,6 @@
           <td data-label="Placar">${mercadoPlacarLabel(row)}</td>
           <td data-label="Liga">${league}</td>
           <td data-label="Status">${mercadoStatusLabel(row)}</td>
-          <td data-label="Link">${link}</td>
           <td class="stats-group-start" data-label="Chutes a gol">${mercadoSotLabel(row)}</td>
           <td data-label="Chutes fora">${mercadoChutesForaLabel(row)}</td>
           <td data-label="Bloqueados">${mercadoBloqueadosLabel(row)}</td>
@@ -3393,10 +3292,7 @@
     function renderFavoritoRow(r, mercadoMinuteById, rowIndex) {
       const max = Number(r.odd_max);
       const atual = Number(r.odd_atual);
-      const jogo = wrapMatchHtmlWithLink(
-        formatMatchHtml(r.home || '?', r.away || '?'),
-        r.betano_url,
-      );
+      const jogo = formatMatchHtml(r.home || '?', r.away || '?');
       const placar = favoritoPlacarLabel(r);
       let minutoAtual = r.minuto_atual != null && r.minuto_atual !== ''
         ? Number(r.minuto_atual)
@@ -3665,7 +3561,7 @@
           }
           if (tbody) {
             tbody.innerHTML =
-              `<tr><td colspan="33" class="empty">${msg}</td></tr>`;
+              `<tr><td colspan="32" class="empty">${msg}</td></tr>`;
           }
         }
       } finally {
@@ -4123,7 +4019,7 @@
     }
 
     function formatWorkerQueueMatchPrefixHtml(g) {
-      const label = formatMatchLabelHtml(g.label || '—', g.betano_url);
+      const label = formatMatchLabelHtml(g.label || '—');
       const minute =
         g.last_minute != null && g.last_minute !== ''
           ? `${g.last_minute}'`
