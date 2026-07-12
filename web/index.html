@@ -2356,10 +2356,8 @@
           const deltaAtual = displayIni != null && displayAtual != null ? (displayAtual - displayIni) : null;
           // #region agent log
           {
-            const label = `${r.home || ''} x ${r.away || ''}`;
-            if (/Bulls|Illawarra|88720263/i.test(label) || String(r.event_id) === '88720263') {
-              const upd = r.updated_at ? Date.parse(r.updated_at) : NaN;
-              fetch('http://127.0.0.1:7904/ingest/86615625-6ae5-4e98-a1da-0a5f0f15fc42',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'230425'},body:JSON.stringify({sessionId:'230425',runId:'post-fix',hypothesisId:'H1',location:'web/index.html:loadFavoritoDrift',message:'Bulls favorito odds snapshot',data:{event_id:r.event_id,home:r.home,away:r.away,status:r.status,favorito_lado:r.favorito_lado,odd_inicial:r.odd_inicial,odd_max:r.odd_max,odd_atual:r.odd_atual,ml_home_atual:r.ml_home_atual,ml_away_atual:r.ml_away_atual,mercado1x2Aberto,displayAtual,displayMax,updated_at:r.updated_at,updatedAgeSec:Number.isFinite(upd)?Math.round((Date.now()-upd)/1000):null},timestamp:Date.now()})}).catch(()=>{});
+            if (!mercado1x2Aberto && r.status === 'watching') {
+              fetch('http://127.0.0.1:7904/ingest/86615625-6ae5-4e98-a1da-0a5f0f15fc42',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'230425'},body:JSON.stringify({sessionId:'230425',runId:'post-fix',hypothesisId:'H1',location:'web/index.html:loadFavoritoDrift',message:'watching without 1X2 pair',data:{event_id:r.event_id,home:r.home,away:r.away,odd_atual:r.odd_atual,ml_home_atual:r.ml_home_atual,ml_away_atual:r.ml_away_atual,displayAtual,minuto_atual:r.minuto_atual},timestamp:Date.now()})}).catch(()=>{});
             }
           }
           // #endregion
@@ -2406,6 +2404,8 @@
               `<span class="hctg-pill atual">${fmtOdd(displayAtual)}</span>` +
               deltaAtualHtml +
               `</span>`;
+          } else if (r.status === 'watching') {
+            oddAtualCell = '<span class="muted" title="Mercado Vencedor/1X2 indisponivel na Betano">sem 1X2</span>';
           }
           return `<tr>
             <td data-label="Jogo">${jogo}</td>

@@ -415,6 +415,19 @@ function extractMlOdds(
       typeId === "1" ||
       typeId === "100";
     if (!is1x2) continue;
+    // Mercado suspenso/fechado no overview → tratar como ausente (nao reaproveitar preco fantasma).
+    const mStatus = String(market.status ?? market.tradingStatus ?? market.marketStatus ?? "")
+      .toLowerCase();
+    if (
+      market.suspended === true ||
+      market.isSuspended === true ||
+      mStatus.includes("suspend") ||
+      mStatus === "closed" ||
+      mStatus === "settled" ||
+      mStatus === "deactivated"
+    ) {
+      continue;
+    }
 
     const selIds = Array.isArray(market.selectionIdList)
       ? market.selectionIdList.map(String)
@@ -429,7 +442,18 @@ function extractMlOdds(
     for (const sid of selIds) {
       const sel = asRecord(selections[sid]);
       if (!sel) continue;
+      const sStatus = String(sel.status ?? sel.tradingStatus ?? "").toLowerCase();
+      if (
+        sel.suspended === true ||
+        sel.isSuspended === true ||
+        sStatus.includes("suspend") ||
+        sStatus === "closed" ||
+        sStatus === "settled"
+      ) {
+        continue;
+      }
       const price = toNum(sel.price ?? sel.odds ?? sel.decimalOdds);
+      if (price == null || !(price >= 1.001)) continue;
       const sname = String(sel.name ?? sel.shortName ?? "").toLowerCase();
       const stype = String(sel.type ?? sel.outcomeType ?? "").toLowerCase();
       // Nao usar isHome===false: marca draw/outros e inverte casa/fora.
@@ -447,7 +471,8 @@ function extractMlOdds(
         sel.isAway === true
       ) away = price;
     }
-    if (home != null || draw != null || away != null) {
+    // Exige casa+fora: 1X2 incompleto = mercado inutilizavel.
+    if (home != null && away != null) {
       return {
         home,
         draw,
