@@ -2058,7 +2058,10 @@
           const ini = Number(r.odd_inicial);
           const max = Number(r.odd_max);
           const delta = Number.isFinite(ini) && Number.isFinite(max) ? (max - ini) : null;
-          const jogo = `${r.home || '?'} x ${r.away || '?'}`;
+          const jogo = wrapMatchHtmlWithLink(
+            formatMatchHtml(r.home || '?', r.away || '?'),
+            r.betano_url,
+          );
           const fav = r.favorito_nome || (r.favorito_lado === 'away' ? r.away : r.home) || r.favorito_lado;
           const placar = r.placar_final || r.placar_atual || '—';
           let resultado = '—';
@@ -2068,9 +2071,6 @@
             else resultado = 'Empate';
           }
           const st = r.status === 'watching' ? 'Ao vivo' : 'Finalizado';
-          const link = r.betano_url
-            ? `<a href="${r.betano_url}" target="_blank" rel="noopener">Betano</a>`
-            : '';
           let printCell = '—';
           if (r.screenshot_url) {
             printCell = `<a href="${r.screenshot_url}" target="_blank" rel="noopener" style="color:var(--accent)">OK · Ver</a>`;
@@ -2086,13 +2086,13 @@
           const minIni = formatMinuteGray(r.minuto_inicial);
           const minMax = formatMinuteGray(r.minuto_odd_max);
           const oddIniCell = Number.isFinite(ini)
-            ? `${minIni ? `${minIni} ` : ''}<span class="hctg-pill">${fmtOdd(ini)}</span>`
+            ? `<span class="hctg-pill">${fmtOdd(ini)}</span>${minIni ? ` ${minIni}` : ''}`
             : '—';
           const oddMaxCell = Number.isFinite(max)
-            ? `${minMax ? `${minMax} ` : ''}<span class="hctg-pill max">${fmtOdd(max)}</span>`
+            ? `<span class="hctg-pill max">${fmtOdd(max)}</span>${minMax ? ` ${minMax}` : ''}`
             : '—';
           return `<tr>
-            <td data-label="Jogo">${jogo}${link ? ` · ${link}` : ''}</td>
+            <td data-label="Jogo">${jogo}</td>
             <td data-label="Favorito">${fav || '—'}</td>
             <td data-label="Odd ini">${oddIniCell}</td>
             <td data-label="Odd máx">${oddMaxCell}</td>
