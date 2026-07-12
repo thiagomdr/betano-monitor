@@ -872,6 +872,15 @@
       background: rgba(94, 179, 255, 0.35);
       color: #fff;
     }
+    #stats-table thead tr.stats-col-row th .stats-col-move-btn.stats-sort-sym {
+      width: auto;
+      min-width: 0.95rem;
+      height: 0.95rem;
+      padding: 0 0.12rem;
+      font-size: 0.72rem;
+      font-weight: 800;
+      line-height: 1;
+    }
     #stats-table thead tr.stats-col-row th .stats-tri {
       display: block;
       width: 0;
@@ -1656,16 +1665,10 @@
       return (Number(home) || 0) + (Number(away) || 0);
     }
 
-    /** For % pairs that sum ~100 (posse), sort by the larger side. */
-    function statsPairMaxSortValue(home, away) {
+    /** For % pairs that sum ~100 (posse), sort by balance |casa − fora|. */
+    function statsPairAbsDiffSortValue(home, away) {
       if (home == null && away == null) return null;
-      return Math.max(Number(home) || 0, Number(away) || 0);
-    }
-
-    /** Menor percentual individual de um dos times. */
-    function statsPairMinSortValue(home, away) {
-      if (home == null && away == null) return null;
-      return Math.min(Number(home) || 0, Number(away) || 0);
+      return Math.abs((Number(home) || 0) - (Number(away) || 0));
     }
 
     function statsPlacarParts(row) {
@@ -1720,19 +1723,16 @@
         case 'pens':
           return statsPairSortValue(row.home_penalties, row.away_penalties);
         case 'posse':
-          // ▼ maior % de um time; ▲ menor % de um time (não a soma ~100%).
+          // = equilibrada (menor |diff|); ≠ diferenciada (maior |diff|).
           {
             const home = row.home_possession;
             const away = row.away_possession;
-            const useMin = statsSort.dir === 'asc';
-            const val = useMin
-              ? statsPairMinSortValue(home, away)
-              : statsPairMaxSortValue(home, away);
+            const val = statsPairAbsDiffSortValue(home, away);
             // #region agent log
             if (!window.__posseSortLogCount) window.__posseSortLogCount = 0;
             if (window.__posseSortLogCount < 6) {
               window.__posseSortLogCount += 1;
-              fetch('http://127.0.0.1:7904/ingest/86615625-6ae5-4e98-a1da-0a5f0f15fc42',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'71820e'},body:JSON.stringify({sessionId:'71820e',runId:'pre-fix',hypothesisId:'B',location:'web/index.html:statsColSortValue:posse',message:'Posse sort key',data:{dir:statsSort.dir,useMin,home,away,homeType:typeof home,awayType:typeof away,val,max:statsPairMaxSortValue(home,away),min:statsPairMinSortValue(home,away),event_id:row.event_id},timestamp:Date.now()})}).catch(()=>{});
+              fetch('http://127.0.0.1:7904/ingest/86615625-6ae5-4e98-a1da-0a5f0f15fc42',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'71820e'},body:JSON.stringify({sessionId:'71820e',runId:'post-fix',hypothesisId:'H',location:'web/index.html:statsColSortValue:posse',message:'Posse balance sort key',data:{dir:statsSort.dir,home,away,absDiff:val,event_id:row.event_id},timestamp:Date.now()})}).catch(()=>{});
             }
             // #endregion
             return val;
@@ -1824,7 +1824,7 @@
         statsSort = { colId, dir, mode };
       }
       // #region agent log
-      fetch('http://127.0.0.1:7904/ingest/86615625-6ae5-4e98-a1da-0a5f0f15fc42',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'71820e'},body:JSON.stringify({sessionId:'71820e',runId:'pre-fix',hypothesisId:'A',location:'web/index.html:setStatsSort',message:'Sort state set',data:{colId:statsSort.colId,dir:statsSort.dir,mode:statsSort.mode,cleared:!statsSort.colId},timestamp:Date.now()})}).catch(()=>{});
+      fetch('http://127.0.0.1:7904/ingest/86615625-6ae5-4e98-a1da-0a5f0f15fc42',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'71820e'},body:JSON.stringify({sessionId:'71820e',runId:'post-fix',hypothesisId:'H',location:'web/index.html:setStatsSort',message:'Sort state set',data:{colId:statsSort.colId,dir:statsSort.dir,mode:statsSort.mode,cleared:!statsSort.colId},timestamp:Date.now()})}).catch(()=>{});
       // #endregion
       renderMercado();
     }
@@ -1916,18 +1916,26 @@
               let descTitle = 'Ordenar do maior para o menor';
               let ascAria = `Ordenar ${c.label} do menor para o maior`;
               let descAria = `Ordenar ${c.label} do maior para o menor`;
+              let ascInner = '<span class="stats-tri stats-tri-up"></span>';
+              let descInner = '<span class="stats-tri stats-tri-down"></span>';
+              let ascBtnClass = `stats-col-move-btn${ascActive}`;
+              let descBtnClass = `stats-col-move-btn${descActive}`;
               if (c.id === 'placar') {
                 ascTitle = 'Opções: menor placar';
                 descTitle = 'Opções: maior placar';
                 ascAria = `Opções de ordenação menor para ${c.label}`;
                 descAria = `Opções de ordenação maior para ${c.label}`;
               } else if (c.id === 'posse') {
-                ascTitle = 'Menor percentual de um dos times';
-                descTitle = 'Maior percentual de um dos times';
-                ascAria = `Ordenar posse pelo menor percentual de um time`;
-                descAria = `Ordenar posse pelo maior percentual de um time`;
+                ascTitle = 'Posse mais equilibrada (=)';
+                descTitle = 'Posse mais diferenciada (≠)';
+                ascAria = 'Ordenar por posse mais equilibrada';
+                descAria = 'Ordenar por posse mais diferenciada';
+                ascInner = '=';
+                descInner = '≠';
+                ascBtnClass += ' stats-sort-sym';
+                descBtnClass += ' stats-sort-sym';
               }
-              return `<th${cls}${title}${style} data-stats-col="${escapeHtml(c.id)}"><span class="stats-th-inner"><span class="stats-th-label">${escapeHtml(c.label)}</span><span class="stats-col-move"><button type="button" class="stats-col-move-btn${ascActive}" data-stats-sort="asc" data-stats-col-id="${escapeHtml(c.id)}" title="${escapeHtml(ascTitle)}" aria-label="${escapeHtml(ascAria)}"><span class="stats-tri stats-tri-up"></span></button><button type="button" class="stats-col-move-btn${descActive}" data-stats-sort="desc" data-stats-col-id="${escapeHtml(c.id)}" title="${escapeHtml(descTitle)}" aria-label="${escapeHtml(descAria)}"><span class="stats-tri stats-tri-down"></span></button></span></span></th>`;
+              return `<th${cls}${title}${style} data-stats-col="${escapeHtml(c.id)}"><span class="stats-th-inner"><span class="stats-th-label">${escapeHtml(c.label)}</span><span class="stats-col-move"><button type="button" class="${ascBtnClass}" data-stats-sort="asc" data-stats-col-id="${escapeHtml(c.id)}" title="${escapeHtml(ascTitle)}" aria-label="${escapeHtml(ascAria)}">${ascInner}</button><button type="button" class="${descBtnClass}" data-stats-sort="desc" data-stats-col-id="${escapeHtml(c.id)}" title="${escapeHtml(descTitle)}" aria-label="${escapeHtml(descAria)}">${descInner}</button></span></span></th>`;
             })
             .join(''),
         )
@@ -3822,12 +3830,11 @@
           event_id: r.event_id,
           home: r.home_possession,
           away: r.away_possession,
-          max: statsPairMaxSortValue(r.home_possession, r.away_possession),
-          min: statsPairMinSortValue(r.home_possession, r.away_possession),
+          absDiff: statsPairAbsDiffSortValue(r.home_possession, r.away_possession),
           sortVal: statsColSortValue('posse', r),
           minute: r.last_minute,
         }));
-        fetch('http://127.0.0.1:7904/ingest/86615625-6ae5-4e98-a1da-0a5f0f15fc42',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'71820e'},body:JSON.stringify({sessionId:'71820e',runId:'pre-fix',hypothesisId:'C',location:'web/index.html:renderMercado',message:'Posse sort result top rows',data:{dir:statsSort.dir,top},timestamp:Date.now()})}).catch(()=>{});
+        fetch('http://127.0.0.1:7904/ingest/86615625-6ae5-4e98-a1da-0a5f0f15fc42',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'71820e'},body:JSON.stringify({sessionId:'71820e',runId:'post-fix',hypothesisId:'H',location:'web/index.html:renderMercado',message:'Posse balance sort result top rows',data:{dir:statsSort.dir,meaning:statsSort.dir==='asc'?'equilibrada':'diferenciada',top},timestamp:Date.now()})}).catch(()=>{});
       }
       // #endregion
       if (!statsVisibleColCount()) {
