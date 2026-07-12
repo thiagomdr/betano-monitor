@@ -530,6 +530,17 @@
       border-color: rgba(94, 179, 255, 0.45);
       color: #5eb3ff;
     }
+    .hctg-pill.rival {
+      background: rgba(255, 140, 66, 0.12);
+      border-color: rgba(255, 140, 66, 0.45);
+      color: #ff8c42;
+    }
+    .favorito-odds-pair {
+      display: inline-flex;
+      flex-wrap: wrap;
+      align-items: center;
+      gap: 0.35rem;
+    }
     .table-scroll-hint {
       margin: 0 0 0.5rem;
       font-size: 0.78rem;
@@ -2096,9 +2107,23 @@
           }
           const minIni = formatMinuteGray(r.minuto_inicial);
           const minMax = formatMinuteGray(r.minuto_odd_max);
-          const oddIniCell = Number.isFinite(ini)
-            ? `<span class="hctg-pill">${fmtOdd(ini)}</span>${minIni ? ` ${minIni}` : ''}`
-            : '—';
+          const homeIni = Number(r.ml_home_inicial);
+          const awayIni = Number(r.ml_away_inicial);
+          const favLado = r.favorito_lado === 'away' ? 'away' : 'home';
+          let oddIniCell = '—';
+          if (Number.isFinite(homeIni) && Number.isFinite(awayIni)) {
+            const homeCls = favLado === 'home' ? 'hctg-pill' : 'hctg-pill rival';
+            const awayCls = favLado === 'away' ? 'hctg-pill' : 'hctg-pill rival';
+            oddIniCell =
+              `<span class="favorito-odds-pair">` +
+              `<span class="${homeCls}" title="${escapeHtml(r.home || 'Casa')}">${fmtOdd(homeIni)}</span>` +
+              `<span class="${awayCls}" title="${escapeHtml(r.away || 'Fora')}">${fmtOdd(awayIni)}</span>` +
+              `${minIni ? ` ${minIni}` : ''}` +
+              `</span>`;
+          } else if (Number.isFinite(ini)) {
+            // Linhas antigas sem ml_*_inicial: so odd do favorito
+            oddIniCell = `<span class="hctg-pill">${fmtOdd(ini)}</span>${minIni ? ` ${minIni}` : ''}`;
+          }
           const oddMaxCell = Number.isFinite(max)
             ? `<span class="hctg-pill max">${fmtOdd(max)}</span>${minMax ? ` ${minMax}` : ''}`
             : '—';

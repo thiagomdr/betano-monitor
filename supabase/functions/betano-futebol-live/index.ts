@@ -521,6 +521,8 @@ async function processFavoritoDriftLive(
       odd_atual: pick.odd,
       odd_max: pick.odd,
       minuto_odd_max: input.minute,
+      ml_home_inicial: ml_home,
+      ml_away_inicial: ml_away,
       ml_home_atual: ml_home,
       ml_draw_atual: input.ml_draw,
       ml_away_atual: ml_away,
