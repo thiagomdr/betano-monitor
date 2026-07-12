@@ -348,6 +348,47 @@
       font-size: 0.85rem;
       margin: 0 0 0.75rem;
     }
+    .coleta-countdown {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 0.75rem 1.25rem;
+      align-items: baseline;
+      margin: 0 0 0.75rem;
+      padding: 0.55rem 0.75rem;
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      background: rgba(18, 26, 36, 0.9);
+      font-size: 0.85rem;
+      font-variant-numeric: tabular-nums;
+    }
+    #panel-favorito .coleta-countdown {
+      margin: 0.5rem 1.25rem 0.75rem;
+    }
+    .coleta-countdown .cd-item {
+      color: var(--text);
+    }
+    .coleta-countdown .cd-label {
+      color: var(--muted);
+      font-size: 0.72rem;
+      text-transform: uppercase;
+      letter-spacing: 0.04em;
+      margin-right: 0.35rem;
+    }
+    .coleta-countdown .cd-value {
+      font-weight: 700;
+      color: #5eb3ff;
+    }
+    .coleta-countdown .cd-value.due {
+      color: var(--accent);
+    }
+    .coleta-countdown .cd-value.paused {
+      color: var(--warn);
+      font-weight: 600;
+    }
+    .coleta-countdown .cd-hint {
+      color: var(--muted);
+      font-size: 0.75rem;
+    }
     .summary-card {
       border: 1px solid var(--border);
       border-radius: 8px;
@@ -879,6 +920,11 @@
       </div>
     </div>
     <section class="mercado-summary" id="mercado-summary" aria-live="polite"></section>
+    <div class="coleta-countdown" id="coleta-countdown-mercado" aria-live="polite">
+      <span class="cd-item"><span class="cd-label">JSON</span><span class="cd-value" data-cd="json">—</span></span>
+      <span class="cd-item"><span class="cd-label">Worker</span><span class="cd-value" data-cd="worker">—</span></span>
+      <span class="cd-hint">próxima atualização</span>
+    </div>
     <p class="table-scroll-hint">Dica: role a tabela horizontalmente para ver todas as colunas.</p>
     <div class="table-wrap">
       <table>
@@ -911,6 +957,11 @@
     <p class="page-subtitle" style="padding:0 1.25rem;margin:0.75rem 0 0.25rem">
       Análise: odd inicial do favorito → máximo no jogo → vitória?
     </p>
+    <div class="coleta-countdown" id="coleta-countdown-favorito" aria-live="polite">
+      <span class="cd-item"><span class="cd-label">JSON</span><span class="cd-value" data-cd="json">—</span></span>
+      <span class="cd-item"><span class="cd-label">Worker</span><span class="cd-value" data-cd="worker">—</span></span>
+      <span class="cd-hint">próxima atualização</span>
+    </div>
     <p class="status" id="favorito-status" aria-live="polite" style="padding:0 1.25rem"></p>
     <section class="favorito-section" aria-labelledby="favorito-live-title">
       <h2 class="favorito-section-title" id="favorito-live-title">Jogos Ao Vivo</h2>
@@ -1036,6 +1087,10 @@
     let appCfg = null;
     let supabaseClient = null;
     let mercadoPollTimer = null;
+    let coletaCountdownTickTimer = null;
+    let coletaCountdownSourceTimer = null;
+    const EDGE_CRON_PERIOD_MS = 120000;
+    const WORKER_IDLE_POLL_SEC = 5;
     let mercadoCache = [];
     let favoritoCache = [];
     let mercadoGoalsCache = {};
@@ -2202,6 +2257,122 @@
       status.textContent = `${listLabel} · atualizado ${when} · fonte ${source}`;
     }
 
+    function formatCountdownMmSs(totalSec) {
+      const s = Math.max(0, Math.floor(Number(totalSec) || 0));
+      const m = Math.floor(s / 60);
+      const r = s % 60;
+      return `${m}:${String(r).padStart(2, '0')}`;
+    }
+
+    /** Segundos ate o proximo tick do cron Edge (a cada 2 min, minuto par). */
+    function secondsUntilNextEdgeCron(nowMs = Date.now()) {
+      const d = new Date(nowMs);
+      const msIntoCycle =
+        ((d.getMinutes() % 2) * 60 + d.getSeconds()) * 1000 + d.getMilliseconds();
+      const remainMs = EDGE_CRON_PERIOD_MS - msIntoCycle;
+      return Math.max(0, Math.ceil((remainMs <= 0 ? EDGE_CRON_PERIOD_MS : remainMs) / 1000));
+    }
+
+    /** Segundos ate o proximo ciclo esperado do worker (idle 5s apos ultima fila). */
+    function secondsUntilNextWorker(nowMs = Date.now()) {
+      const created = workerQueueCache?.created_at;
+      if (!created) return null;
+      const lastMs = new Date(created).getTime();
+      if (Number.isNaN(lastMs)) return null;
+      const payload = workerQueueCache?.payload || {};
+      if (payload.paused === true) return 'paused';
+      if (Array.isArray(payload.games) && payload.games.some((g) => g?.checking)) {
+        return 'busy';
+      }
+      const nextMs = lastMs + WORKER_IDLE_POLL_SEC * 1000;
+      return Math.max(0, Math.ceil((nextMs - nowMs) / 1000));
+    }
+
+    function renderColetaCountdowns() {
+      const nodes = document.querySelectorAll('.coleta-countdown');
+      if (!nodes.length) return;
+      const now = Date.now();
+      let jsonText = '—';
+      let jsonCls = '';
+      let workerText = '—';
+      let workerCls = '';
+
+      if (!sistemaAtivo) {
+        jsonText = 'pausado';
+        jsonCls = 'paused';
+        workerText = 'pausado';
+        workerCls = 'paused';
+      } else {
+        const jsonSec = secondsUntilNextEdgeCron(now);
+        jsonText = formatCountdownMmSs(jsonSec);
+        if (jsonSec <= 0) jsonCls = 'due';
+
+        const workerRemain = secondsUntilNextWorker(now);
+        if (workerRemain === 'paused') {
+          workerText = 'pausado';
+          workerCls = 'paused';
+        } else if (workerRemain === 'busy') {
+          workerText = 'em andamento';
+          workerCls = 'due';
+        } else if (workerRemain == null) {
+          workerText = '—';
+        } else {
+          workerText = formatCountdownMmSs(workerRemain);
+          if (workerRemain <= 0) workerCls = 'due';
+        }
+      }
+
+      for (const root of nodes) {
+        const jsonEl = root.querySelector('[data-cd="json"]');
+        const workerEl = root.querySelector('[data-cd="worker"]');
+        if (jsonEl) {
+          jsonEl.textContent = jsonText;
+          jsonEl.className = `cd-value${jsonCls ? ` ${jsonCls}` : ''}`;
+        }
+        if (workerEl) {
+          workerEl.textContent = workerText;
+          workerEl.className = `cd-value${workerCls ? ` ${workerCls}` : ''}`;
+        }
+      }
+    }
+
+    async function refreshColetaCountdownSources() {
+      try {
+        await initAppCfg();
+        const [metaRows, queueRows] = await Promise.all([
+          supabaseGet('futebol_live_meta?id=eq.1&select=fetched_at,source,last_error'),
+          supabaseGet(
+            `futebol_sistema_log?select=${LOG_QUEUE_COLUMNS}&action=eq.hctg_worker_fila&order=created_at.desc&limit=1`,
+          ),
+        ]);
+        if (metaRows?.[0]) mercadoMetaCache = metaRows[0];
+        if (queueRows?.[0]) workerQueueCache = queueRows[0];
+      } catch {
+        /* mantem cache */
+      }
+      renderColetaCountdowns();
+    }
+
+    function startColetaCountdownTimers() {
+      if (coletaCountdownTickTimer) clearInterval(coletaCountdownTickTimer);
+      if (coletaCountdownSourceTimer) clearInterval(coletaCountdownSourceTimer);
+      renderColetaCountdowns();
+      coletaCountdownTickTimer = setInterval(renderColetaCountdowns, 1000);
+      refreshColetaCountdownSources();
+      coletaCountdownSourceTimer = setInterval(refreshColetaCountdownSources, WORKER_QUEUE_POLL_MS);
+    }
+
+    function stopColetaCountdownTimers() {
+      if (coletaCountdownTickTimer) {
+        clearInterval(coletaCountdownTickTimer);
+        coletaCountdownTickTimer = null;
+      }
+      if (coletaCountdownSourceTimer) {
+        clearInterval(coletaCountdownSourceTimer);
+        coletaCountdownSourceTimer = null;
+      }
+    }
+
     function fmtOdd(n) {
       const v = Number(n);
       return Number.isFinite(v) ? v.toFixed(2) : '—';
@@ -2558,6 +2729,7 @@
         const display = mercadoDisplayRows(mercadoCache);
         updateMercadoStatus(mercadoMetaCache, visible.length, display.length);
         renderMercado();
+        renderColetaCountdowns();
       } catch (err) {
         const msg = err.message || String(err);
         // #region agent log
@@ -2714,6 +2886,7 @@
 
     async function startMercadoPolling() {
       await loadMercado();
+      startColetaCountdownTimers();
       if (mercadoPollTimer) clearInterval(mercadoPollTimer);
       mercadoPollTimer = setInterval(() => {
         if (activeTab === 'mercado') loadMercado();
@@ -3275,6 +3448,7 @@
         }
         // #endregion
         renderWorkerQueuePinned();
+        renderColetaCountdowns();
       } catch {
         /* mantem cache anterior */
       }
@@ -3441,11 +3615,14 @@
         clearInterval(workerQueuePollTimer);
         workerQueuePollTimer = null;
       }
+      stopColetaCountdownTimers();
       if (isMercado) {
         loadMercado();
+        startColetaCountdownTimers();
       } else if (isFavorito) {
         initFavoritoColumnResize();
         loadFavoritoDrift();
+        startColetaCountdownTimers();
       } else {
         loadSistemaLog();
         logPollTimer = setInterval(loadSistemaLog, 30000);
@@ -3488,6 +3665,7 @@
         sistemaAtivo = false;
       }
       renderSistemaToggle();
+      renderColetaCountdowns();
     }
 
     async function toggleSistemaAtivo() {
@@ -3511,6 +3689,7 @@
       } finally {
         sistemaToggleBusy = false;
         renderSistemaToggle();
+        renderColetaCountdowns();
       }
     }
 
