@@ -433,6 +433,179 @@ function extractMlOdds(
   return { home: null, draw: null, away: null };
 }
 
+/** Analise favorito 1X2: odd inicial → máximo → vitória? */
+type FavoritoDriftRow = {
+  event_id: string;
+  favorito_lado: "home" | "away";
+  odd_inicial: number;
+  odd_max: number;
+  status: string;
+};
+
+function pickFavoritoLado(
+  mlHome: number,
+  mlAway: number,
+): { lado: "home" | "away"; odd: number } {
+  // Empate de odd → home (lado fixo na abertura).
+  if (mlAway < mlHome) return { lado: "away", odd: mlAway };
+  return { lado: "home", odd: mlHome };
+}
+
+function favoritoVenceuFromScore(
+  lado: "home" | "away",
+  homeScore: number | null,
+  awayScore: number | null,
+): boolean | null {
+  if (homeScore == null || awayScore == null) return null;
+  if (homeScore === awayScore) return null; // empate
+  const homeWin = homeScore > awayScore;
+  return lado === "home" ? homeWin : !homeWin;
+}
+
+async function processFavoritoDriftLive(
+  supabase: ReturnType<typeof createClient>,
+  input: {
+    event_id: string;
+    home: string | null;
+    away: string | null;
+    league: string | null;
+    country: string | null;
+    betano_url: string | null;
+    minute: number | null;
+    home_score: number | null;
+    away_score: number | null;
+    score_text: string | null;
+    ml_home: number | null;
+    ml_draw: number | null;
+    ml_away: number | null;
+  },
+): Promise<"opened" | "updated" | "skipped"> {
+  const { ml_home, ml_away } = input;
+  if (ml_home == null || ml_away == null) return "skipped";
+  if (!(ml_home >= 1.01) || !(ml_away >= 1.01)) return "skipped";
+
+  const nowIso = new Date().toISOString();
+  const { data: prev } = await supabase
+    .from("futebol_favorito_drift")
+    .select("event_id,favorito_lado,odd_inicial,odd_max,status")
+    .eq("event_id", input.event_id)
+    .maybeSingle();
+
+  const row = prev as FavoritoDriftRow | null;
+  if (row?.status === "settled") return "skipped";
+
+  if (!row) {
+    const pick = pickFavoritoLado(ml_home, ml_away);
+    const nome = pick.lado === "home" ? input.home : input.away;
+    await supabase.from("futebol_favorito_drift").insert({
+      event_id: input.event_id,
+      home: input.home,
+      away: input.away,
+      league: input.league,
+      country: input.country,
+      betano_url: input.betano_url,
+      favorito_lado: pick.lado,
+      favorito_nome: nome,
+      odd_inicial: pick.odd,
+      minuto_inicial: input.minute,
+      odd_atual: pick.odd,
+      odd_max: pick.odd,
+      minuto_odd_max: input.minute,
+      ml_home_atual: ml_home,
+      ml_draw_atual: input.ml_draw,
+      ml_away_atual: ml_away,
+      placar_atual: input.score_text,
+      home_score: input.home_score,
+      away_score: input.away_score,
+      status: "watching",
+      first_seen_at: nowIso,
+      updated_at: nowIso,
+    });
+    return "opened";
+  }
+
+  const lado = row.favorito_lado === "away" ? "away" : "home";
+  const oddAtual = lado === "home" ? ml_home : ml_away;
+  let oddMax = Number(row.odd_max);
+  let minutoMax: number | null | undefined = undefined;
+  if (oddAtual > oddMax + 0.001) {
+    oddMax = oddAtual;
+    minutoMax = input.minute;
+  }
+
+  const patch: Record<string, unknown> = {
+    home: input.home,
+    away: input.away,
+    league: input.league,
+    country: input.country,
+    betano_url: input.betano_url,
+    odd_atual: oddAtual,
+    odd_max: oddMax,
+    ml_home_atual: ml_home,
+    ml_draw_atual: input.ml_draw,
+    ml_away_atual: ml_away,
+    placar_atual: input.score_text,
+    home_score: input.home_score,
+    away_score: input.away_score,
+    updated_at: nowIso,
+  };
+  if (minutoMax !== undefined) patch.minuto_odd_max = minutoMax;
+
+  await supabase.from("futebol_favorito_drift").update(patch).eq("event_id", input.event_id);
+  return "updated";
+}
+
+async function finalizeFavoritoDriftOffLive(
+  supabase: ReturnType<typeof createClient>,
+  liveIds: string[],
+): Promise<{ settled: number }> {
+  const liveSet = new Set(liveIds.map(String));
+  const { data: watching } = await supabase
+    .from("futebol_favorito_drift")
+    .select(
+      "event_id,favorito_lado,home_score,away_score,placar_atual",
+    )
+    .eq("status", "watching");
+
+  let settled = 0;
+  const nowIso = new Date().toISOString();
+  for (const row of watching ?? []) {
+    const eventId = String(row.event_id);
+    if (liveSet.has(eventId)) continue;
+
+    // Placar final: historico se disponivel, senao ultimo placar visto
+    const { data: hist } = await supabase
+      .from("futebol_historico_jogos")
+      .select("home_score,away_score,score,is_live,last_seen_at")
+      .eq("event_id", eventId)
+      .maybeSingle();
+
+    // Grace: so settle se historico ja nao esta live (ou sumiu do overview ha tempo)
+    if (hist?.is_live === true) continue;
+
+    const homeScore = hist?.home_score ?? row.home_score ?? null;
+    const awayScore = hist?.away_score ?? row.away_score ?? null;
+    const placar =
+      hist?.score ??
+      row.placar_atual ??
+      (homeScore != null && awayScore != null ? `${homeScore}-${awayScore}` : null);
+    const lado = row.favorito_lado === "away" ? "away" : "home";
+    const venceu = favoritoVenceuFromScore(lado, homeScore, awayScore);
+
+    await supabase.from("futebol_favorito_drift").update({
+      status: "settled",
+      placar_final: placar,
+      home_score: homeScore,
+      away_score: awayScore,
+      favorito_venceu: venceu,
+      settled_at: nowIso,
+      updated_at: nowIso,
+    }).eq("event_id", eventId);
+    settled += 1;
+  }
+  return { settled };
+}
+
 /** Totais Under/Over: slot 0/1/2 = +0.5 / +1.5 / +2.5 gols a partir do placar atual. */
 type TotalsOdds = {
   under_0_line: number | null;
@@ -2936,7 +3109,8 @@ Deno.serve(async (req) => {
     "Stats: Sportradar match_details (chutes a gol, escanteios, tiros de meta).",
     "Sinal 'manter placar' so a partir dos 85'; antes disso: em estudo.",
     "Mercado +0,5: Estrategia +0,5 (1a oportunidade, monitora odd ate gol); GREEN ao gol apos captura.",
-    "Odds HCTG (Total de Gols): worker OddsPapi WebSocket (ou HTML legado); Edge so le do BD.",
+    "Analise favorito 1X2: odd inicial (JSON live) → odd máxima + minuto → se o favorito venceu.",
+    "Odds HCTG (Total de Gols): worker OddsPapi/HTML (ou Kubmix); Edge so le do BD.",
     "Historico: jogos monitorados + gols com minuto (filtro por gol a partir de X').",
   ];
 
@@ -2970,6 +3144,8 @@ Deno.serve(async (req) => {
     let mercadoWins = 0;
     let hctgWithLines = 0;
     let hctgEmpty = 0;
+    let favoritoOpened = 0;
+    let favoritoUpdated = 0;
     const liveIds: string[] = [];
     const jsonById = new Map<string, { home: string | null; away: string | null }>();
     const greensAgora: ConferenceMatchLine[] = [];
@@ -3019,8 +3195,8 @@ Deno.serve(async (req) => {
       const league = extractLeague(event, leagues);
       const minute = extractMinute(event);
       const injury = extractInjuryTime(event);
-      // 1X2 do JSON desativado — unica fonte de odds = Worker HCTG.
-      const ml = { home: null as number | null, draw: null as number | null, away: null as number | null };
+      // 1X2 do overview JSON — base da analise favorito (odd inicial → máximo).
+      const ml = extractMlOdds(eventId, overview);
       const goalsTotal = (score.home ?? 0) + (score.away ?? 0);
       const mercadoResultado = mercadoResultadoByEvent.get(eventId) ?? null;
       const url = betanoUrl(eventId, teams.home, teams.away);
@@ -3155,6 +3331,24 @@ Deno.serve(async (req) => {
         last_seen_at: nowIso,
         updated_at: nowIso,
       }, { onConflict: "event_id" });
+
+      const favAction = await processFavoritoDriftLive(supabase, {
+        event_id: eventId,
+        home: teams.home,
+        away: teams.away,
+        league: league.league,
+        country: league.country,
+        betano_url: url,
+        minute,
+        home_score: score.home,
+        away_score: score.away,
+        score_text: score.text,
+        ml_home: ml.home,
+        ml_draw: ml.draw,
+        ml_away: ml.away,
+      });
+      if (favAction === "opened") favoritoOpened += 1;
+      if (favAction === "updated") favoritoUpdated += 1;
 
       const timelineResult = await fetchGoalsTimeline(
         eventId,
@@ -3382,6 +3576,8 @@ Deno.serve(async (req) => {
         .lt("last_seen_at", graceCutoff);
     }
 
+    const favoritoFinalize = await finalizeFavoritoDriftOffLive(supabase, liveIds);
+
     rows.sort((a, b) => (b.minute ?? 0) - (a.minute ?? 0));
 
     await supabase.from("futebol_live_meta").upsert({
@@ -3411,6 +3607,7 @@ Deno.serve(async (req) => {
             ? ` encerrados=${mercadoFinalize.reconcile.finalized.length}`
             : "") +
           ".",
+        `Favorito 1X2: ${favoritoOpened} abertura(s), ${favoritoUpdated} update(s), ${favoritoFinalize.settled} settle(s) nesta rodada.`,
         `HCTG odds: worker OddsPapi/HTML (${hctgWithLines} com linhas, ${hctgEmpty} sem linha no BD).`,
         `Gols timeline ok: ${goalsTimelineOk}, timeline vazia c/ placar: ${goalsTimelineEmpty}, inferidos: ${goalsInferred}, sem gols c/ placar: ${goalsMissing}.`,
         `Reconciliacao: ${reconcile.scanned} analisados, ${reconcile.fixed} ok, ${reconcile.backfilled} parcial/missing.`,
@@ -3437,11 +3634,15 @@ Deno.serve(async (req) => {
       hctg_source: "oddspapi-or-db",
       hctg_with_lines: hctgWithLines,
       hctg_empty: hctgEmpty,
+      favorito_opened: favoritoOpened,
+      favorito_updated: favoritoUpdated,
+      favorito_settled: favoritoFinalize.settled,
       sample: rows.slice(0, 5).map((r) => ({
         home: r.home,
         away: r.away,
         minute: r.minute,
         score: r.score,
+        ml: `${r.ml_home ?? "-"} / ${r.ml_draw ?? "-"} / ${r.ml_away ?? "-"}`,
         sot: `${r.home_shots_on_target}-${r.away_shots_on_target}`,
         corners: `${r.home_corners}-${r.away_corners}`,
         goal_kicks: `${r.home_goal_kicks}-${r.away_goal_kicks}`,

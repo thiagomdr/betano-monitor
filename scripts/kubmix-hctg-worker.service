@@ -1,0 +1,26 @@
+[Unit]
+Description=Betano HCTG worker (Kubmix sa-east-1)
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=admin
+WorkingDirectory=/home/admin/betano-monitor/scripts
+Environment=NODE_ENV=production
+Environment=HCTG_WORKER_SOURCE=kubmix-worker
+Environment=HCTG_HTML_SOURCE=html-dom-kubmix
+Environment=HCTG_HEADLESS=0
+Environment=HCTG_CHROME_PROFILE=/home/admin/betano-monitor/.chrome-hctg-profile
+Environment=HCTG_POLL_SEC=90
+Environment=HCTG_MAX_PER_CYCLE=4
+Environment=HCTG_BROWSER_RESTART_MIN=30
+EnvironmentFile=-/home/admin/betano-monitor/.env
+# Headed via xvfb — melhor com modal +18 / splash. Em micro use HCTG_HEADLESS=1.
+ExecStart=/usr/bin/xvfb-run -a -s "-screen 0 1920x1080x24" /usr/bin/node hctg-worker.mjs
+Restart=always
+RestartSec=20
+TimeoutStartSec=120
+
+[Install]
+WantedBy=multi-user.target

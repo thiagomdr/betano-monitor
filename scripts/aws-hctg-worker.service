@@ -1,0 +1,25 @@
+[Unit]
+Description=Betano HCTG worker (AWS Lightsail)
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=ubuntu
+WorkingDirectory=/home/ubuntu/betano-monitor/scripts
+Environment=NODE_ENV=production
+Environment=HCTG_WORKER_SOURCE=aws-worker
+Environment=HCTG_HTML_SOURCE=html-dom-aws
+Environment=HCTG_HEADLESS=1
+Environment=HCTG_CHROME_PROFILE=/home/ubuntu/betano-monitor/.chrome-hctg-profile
+Environment=HCTG_POLL_SEC=90
+Environment=HCTG_MAX_PER_CYCLE=4
+EnvironmentFile=-/home/ubuntu/betano-monitor/.env
+# Headless: sem xvfb — bem mais leve na t3.micro (1GB). Se Betano exigir headed, volte HCTG_HEADLESS=0 + xvfb-run.
+ExecStart=/usr/bin/node hctg-worker.mjs
+Restart=always
+RestartSec=20
+TimeoutStartSec=120
+
+[Install]
+WantedBy=multi-user.target

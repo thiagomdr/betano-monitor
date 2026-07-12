@@ -1,5 +1,5 @@
 ---
-description: Monitor Betano — mercado Gols +0,5, Supabase + HCTG HTML local (BD-first)
+description: Monitor Betano — mercado Gols +0,5, Supabase + HCTG HTML na Kubmix (BD-first)
 alwaysApply: true
 ---
 
@@ -10,36 +10,49 @@ Projeto vigente: **betano-monitor**. Toda documentação, regras Cursor, scripts
 ## Legado e nomenclatura
 
 - **Não** usar nomes de projetos anteriores (ex.: CasinoScores, Sic Bo, Lightning Storm) em código novo, regras, scripts ou UI.
-- Pastas legadas **removidas**: `scripts/oracle/`, ScrapingBee em produção, deploy VPS HostGator/Lightsail.
+- Pastas legadas **removidas**: `scripts/oracle/`, ScrapingBee em produção, deploy VPS HostGator.
 - Migrations `20260710`–`20260716` = histórico; reset futebol: `20260719000000_futebol_reset_vps_hctg.sql`.
-- **HCTG produção:** worker HTML no **PC local** (IP residencial) via `scripts/run-local-hctg-worker.ps1`.
+- **HCTG produção:** worker HTML na **Kubmix VPS (São Paulo, sa-east-1)** via systemd `kubmix-hctg-worker` (`scripts/deploy-kubmix-hctg-worker.ps1`).
+- AWS Lightsail (`18.231.33.148`) = legado / fallback; HostGator VPS = IP bloqueado na Betano (não usar).
 - **Não** usar JSON Betano (`overview` / `markets-offers`) para gravar `hctg_lines` — gerou odds erradas.
 - OddsPapi = opcional (REST limitado; WS exige B2B).
 
 ## Princípio
 
 - **Fonte da verdade = PostgreSQL (Supabase)**. Painel só lê tabelas.
-- **Odds Total de Gols (HCTG)** = scrape DOM Playwright → `hctg_lines`, `hctg_source = html-dom-local`.
-- Edge `betano-futebol-live`: placar, lista, mercado +0,5 — **lê** `hctg_lines` do BD; **não** gera odds HCTG.
+- **Odds Total de Gols (HCTG)** = scrape DOM Playwright → `hctg_lines` (worker Kubmix; análise legada).
+- **Análise favorito 1X2 (fase atual):** Edge lê `ml_home`/`ml_away` do overview JSON → tabela `futebol_favorito_drift` (odd inicial → máximo + minuto → se o favorito venceu). Sem Playwright.
+- Edge `betano-futebol-live`: placar, lista, mercado +0,5, **favorito drift**; **não** gera odds HCTG.
+
+## Análise favorito 1X2 (fase atual)
+
+- Fonte: overview JSON Betano na Edge (`extractMlOdds`) — lote, sem worker.
+- Tabela: `futebol_favorito_drift`.
+- Favorito = menor odd Casa/Fora na 1ª leitura; rastreia **odd_max** + minuto; no fim `favorito_venceu`.
+- Painel: aba **Favorito 1X2**.
+- Fase 2 (não feita): print do odd inicial via worker Playwright.
 
 ## HCTG — fonte e proibições
 
-**Fonte de produção:** Playwright HTML no PC local (IP casa) → aba Gols → Total de Gols.
+**Fonte de produção:** Playwright HTML na Kubmix (IP `189.45.251.202`, sa-east-1) → aba Gols → Total de Gols.  
+`HCTG_WORKER_SOURCE=kubmix-worker`, `HCTG_HTML_SOURCE=html-dom-kubmix`, headed via `xvfb-run` (`HCTG_HEADLESS=0`).
 
 **Proibido para odds HCTG em produção:**
 - Extrair/gravar HCTG a partir de `overview/latest`, `overview?eventId=`, `markets-offers` da Betano (mistura mercados).
 - `extractMatchTotalGoalsLines` / harvest loose / monotonicidade como fonte primária.
 - ScrapingBee / heurísticas não validadas.
-- Worker HCTG em VPS (removido).
+- Worker HCTG na HostGator / `hctg_source=html-dom-vps` (legado bloqueado no BD).
 
 **Permitido (não é odds HCTG):** overview JSON Betano na Edge para lista live, minuto, placar, `betradarMatchId`, ML 1X2.
+
+**Fallback:** AWS Lightsail (`.\scripts\deploy-aws-hctg-worker.ps1`) ou local `.\scripts\run-local-hctg-worker.ps1` (`html-dom-local`).
 
 ## Coleta
 
 | Componente | Função |
 |------------|--------|
 | `betano-futebol-live` (cron */2) | Jogos live, placar, gols, mercado +0,5; lê `hctg_lines` do BD |
-| `run-local-hctg-worker.ps1` | PC casa → DOM HCTG → grava `hctg_lines` |
+| `kubmix-hctg-worker` (Kubmix) | DOM HCTG → grava `hctg_lines` (`html-dom-kubmix`) |
 | Painel `web/index.html` | Login Supabase Auth; leitura só com JWT |
 
 ## Mercado +0,5
@@ -51,18 +64,21 @@ Projeto vigente: **betano-monitor**. Toda documentação, regras Cursor, scripts
 ## Secrets
 
 - Edge: secrets Supabase; Telegram opcional
-- Worker local: `SUPABASE_URL`, `SUPABASE_SERVICE_ROLE_KEY` no `.env`
+- Worker Kubmix: `SUPABASE_URL`, `SUPABASE_SERVICE_ROLE_KEY` em `/home/admin/betano-monitor/.env`
+- SSH: `$env:USERPROFILE\.ssh\kubmix-hctg.pem` → `admin@189.45.251.202`
+- Legacy AWS: `$env:USERPROFILE\.ssh\lightsail-sa-east-1.pem` → `ubuntu@18.231.33.148`
 - **Não** usar `SCRAPINGBEE_API_KEY` em produção
 
 ## Fluxo
 
 1. `supabase functions deploy betano-futebol-live`
-2. Smoke IP: `cd scripts; npm run local-ip-test` → `BETANO_OK`
-3. Worker: `.\scripts\run-local-hctg-worker.ps1` (deixar rodando)
-4. Painel: `scripts/serve-monitor.ps1`
+2. Deploy worker: `.\scripts\deploy-kubmix-hctg-worker.ps1` (opcional `-StopAws` para desligar Lightsail)
+3. Painel: GitHub Pages ou `scripts/serve-monitor.ps1`
 
 ## Código
 
 - Edge: `supabase/functions/betano-futebol-live/`
 - HCTG HTML: `scripts/hctg-worker.mjs`, `scripts/lib/betano-hctg-playwright.mjs`
-- Launcher local: `scripts/run-local-hctg-worker.ps1`, `scripts/test-local-betano-ip.mjs`
+- Kubmix: `scripts/kubmix-hctg-worker.service`, `scripts/deploy-kubmix-hctg-worker.ps1`
+- Legacy AWS: `scripts/aws-hctg-worker.service`, `scripts/deploy-aws-hctg-worker.ps1`
+- Fallback local: `scripts/run-local-hctg-worker.ps1`

@@ -341,6 +341,7 @@
     }
     #panel-log[hidden] { display: none; }
     #panel-mercado[hidden] { display: none; }
+    #panel-favorito[hidden] { display: none; }
     main { padding: 1rem 1.25rem 2rem; }
     .hint {
       color: var(--muted);
@@ -732,6 +733,7 @@
     </div>
     <nav class="app-tabs" role="tablist" aria-label="Navegacao principal">
       <button type="button" class="app-tab active" id="tab-mercado" data-tab="mercado" role="tab" aria-selected="true">Mercado</button>
+      <button type="button" class="app-tab" id="tab-favorito" data-tab="favorito" role="tab" aria-selected="false">Favorito 1X2</button>
       <button type="button" class="app-tab" id="tab-log" data-tab="log" role="tab" aria-selected="false">Log do Sistema</button>
     </nav>
     <div class="status" id="status">Carregando…</div>
@@ -777,6 +779,32 @@
         </thead>
         <tbody id="mercado-tbody">
           <tr><td colspan="13" class="empty">Carregando…</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </main>
+  <main id="panel-favorito" hidden>
+    <p class="page-subtitle" style="padding:0 1.25rem;margin:0.75rem 0 0.25rem">
+      Análise: odd inicial do favorito → máximo no jogo → vitória?
+    </p>
+    <p class="status" id="favorito-status" aria-live="polite" style="padding:0 1.25rem"></p>
+    <div class="table-wrap" style="padding:0 1.25rem 1.5rem">
+      <table class="mercado-table">
+        <thead>
+          <tr>
+            <th>Jogo</th>
+            <th>Favorito</th>
+            <th>Odd ini</th>
+            <th>Odd máx</th>
+            <th>Δ</th>
+            <th>Min máx</th>
+            <th>Placar</th>
+            <th>Resultado</th>
+            <th>Status</th>
+          </tr>
+        </thead>
+        <tbody id="favorito-tbody">
+          <tr><td colspan="9" class="muted">Carregando…</td></tr>
         </tbody>
       </table>
     </div>
@@ -1989,6 +2017,75 @@
       status.textContent = `${listLabel} · atualizado ${when} · fonte ${source}`;
     }
 
+    function fmtOdd(n) {
+      const v = Number(n);
+      return Number.isFinite(v) ? v.toFixed(2) : '—';
+    }
+
+    async function loadFavoritoDrift() {
+      const tbody = document.getElementById('favorito-tbody');
+      const favStatus = document.getElementById('favorito-status');
+      try {
+        await initAppCfg();
+        const rows = await supabaseGet(
+          'futebol_favorito_drift?select=*&order=updated_at.desc&limit=200',
+        );
+        const list = Array.isArray(rows) ? rows : [];
+        const watching = list.filter((r) => r.status === 'watching').length;
+        const settled = list.filter((r) => r.status === 'settled').length;
+        const wins = list.filter((r) => r.favorito_venceu === true).length;
+        const losses = list.filter((r) => r.favorito_venceu === false).length;
+        if (favStatus) {
+          favStatus.className = 'status';
+          favStatus.textContent =
+            `${list.length} jogos · ${watching} ao vivo · ${settled} finalizados` +
+            (settled ? ` · favorito venceu ${wins}/${wins + losses}` : '');
+        }
+        if (!tbody) return;
+        if (!list.length) {
+          tbody.innerHTML = '<tr><td colspan="9" class="muted">Nenhum jogo ainda — aguarde o próximo cron da Edge.</td></tr>';
+          return;
+        }
+        tbody.innerHTML = list.map((r) => {
+          const ini = Number(r.odd_inicial);
+          const max = Number(r.odd_max);
+          const delta = Number.isFinite(ini) && Number.isFinite(max) ? (max - ini) : null;
+          const jogo = `${r.home || '?'} x ${r.away || '?'}`;
+          const fav = r.favorito_nome || (r.favorito_lado === 'away' ? r.away : r.home) || r.favorito_lado;
+          const placar = r.placar_final || r.placar_atual || '—';
+          let resultado = '—';
+          if (r.status === 'settled') {
+            if (r.favorito_venceu === true) resultado = '<span style="color:var(--accent)">Venceu</span>';
+            else if (r.favorito_venceu === false) resultado = '<span style="color:#ff6b6b">Perdeu</span>';
+            else resultado = 'Empate';
+          }
+          const st = r.status === 'watching' ? 'Ao vivo' : 'Finalizado';
+          const link = r.betano_url
+            ? `<a href="${r.betano_url}" target="_blank" rel="noopener">Betano</a>`
+            : '';
+          return `<tr>
+            <td data-label="Jogo">${jogo}${link ? ` · ${link}` : ''}</td>
+            <td data-label="Favorito">${fav || '—'}</td>
+            <td data-label="Odd ini">${fmtOdd(ini)}</td>
+            <td data-label="Odd máx">${fmtOdd(max)}</td>
+            <td data-label="Δ">${delta == null ? '—' : (delta >= 0 ? '+' : '') + delta.toFixed(2)}</td>
+            <td data-label="Min máx">${r.minuto_odd_max != null ? r.minuto_odd_max + "'" : '—'}</td>
+            <td data-label="Placar">${placar}</td>
+            <td data-label="Resultado">${resultado}</td>
+            <td data-label="Status">${st}</td>
+          </tr>`;
+        }).join('');
+      } catch (err) {
+        if (tbody) {
+          tbody.innerHTML = `<tr><td colspan="9" class="muted">Erro: ${String(err?.message || err)}</td></tr>`;
+        }
+        if (favStatus) {
+          favStatus.className = 'status error';
+          favStatus.textContent = String(err?.message || err);
+        }
+      }
+    }
+
     async function loadMercado() {
       if (mercadoLoading) return;
       mercadoLoading = true;
@@ -2156,6 +2253,7 @@
       if (mercadoPollTimer) clearInterval(mercadoPollTimer);
       mercadoPollTimer = setInterval(() => {
         if (activeTab === 'mercado') loadMercado();
+        if (activeTab === 'favorito') loadFavoritoDrift();
       }, 60000);
     }
 
@@ -2848,19 +2946,28 @@
     function switchTab(tab) {
       activeTab = tab;
       const mercadoPanel = document.getElementById('panel-mercado');
+      const favoritoPanel = document.getElementById('panel-favorito');
       const logPanel = document.getElementById('panel-log');
       const tabMercado = document.getElementById('tab-mercado');
+      const tabFavorito = document.getElementById('tab-favorito');
       const tabLog = document.getElementById('tab-log');
       const isMercado = tab === 'mercado';
+      const isFavorito = tab === 'favorito';
+      const isLog = tab === 'log';
       if (mercadoPanel) mercadoPanel.hidden = !isMercado;
-      if (logPanel) logPanel.hidden = isMercado;
+      if (favoritoPanel) favoritoPanel.hidden = !isFavorito;
+      if (logPanel) logPanel.hidden = !isLog;
       if (tabMercado) {
         tabMercado.classList.toggle('active', isMercado);
         tabMercado.setAttribute('aria-selected', isMercado ? 'true' : 'false');
       }
+      if (tabFavorito) {
+        tabFavorito.classList.toggle('active', isFavorito);
+        tabFavorito.setAttribute('aria-selected', isFavorito ? 'true' : 'false');
+      }
       if (tabLog) {
-        tabLog.classList.toggle('active', !isMercado);
-        tabLog.setAttribute('aria-selected', !isMercado ? 'true' : 'false');
+        tabLog.classList.toggle('active', isLog);
+        tabLog.setAttribute('aria-selected', isLog ? 'true' : 'false');
       }
       if (logPollTimer) {
         clearInterval(logPollTimer);
@@ -2872,6 +2979,8 @@
       }
       if (isMercado) {
         loadMercado();
+      } else if (isFavorito) {
+        loadFavoritoDrift();
       } else {
         loadSistemaLog();
         logPollTimer = setInterval(loadSistemaLog, 30000);
@@ -3016,6 +3125,7 @@
     document.getElementById('btn-logout')?.addEventListener('click', handleLogout);
     document.getElementById('btn-sistema')?.addEventListener('click', () => toggleSistemaAtivo());
     document.getElementById('tab-mercado')?.addEventListener('click', () => switchTab('mercado'));
+    document.getElementById('tab-favorito')?.addEventListener('click', () => switchTab('favorito'));
     document.getElementById('tab-log')?.addEventListener('click', () => switchTab('log'));
     document.getElementById('btn-log-refresh')?.addEventListener('click', () => loadSistemaLog());
     document.getElementById('btn-log-conference-detail')?.addEventListener('click', (e) => {
