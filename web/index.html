@@ -1833,25 +1833,34 @@
       }
       const cfg = STATS_PAIR_SORT[colId];
       if (!cfg) return [];
-      const amount = cfg.unit === 'pct' ? 'Percentual' : 'Número';
       const metric = cfg.metric;
+      const teamLabel =
+        cfg.unit === 'pct'
+          ? `Percentual de ${metric} de um Time`
+          : `Número de ${metric} de um Time`;
       if (arrowDir === 'desc') {
         const opts = [
-          { mode: 'team_max', label: statsSortTitleCase(`Maior ${amount} de um Time`) },
+          { mode: 'team_max', label: statsSortTitleCase(`Maior ${teamLabel}`) },
         ];
         if (cfg.unit !== 'pct') {
-          opts.push({ mode: 'sum', label: statsSortTitleCase(`Maior Soma de ${metric}`) });
+          opts.push({ mode: 'sum', label: statsSortTitleCase(`Maior Soma de ${metric} do Jogo`) });
         }
-        opts.push({ mode: 'imbalance', label: statsSortTitleCase('Maior Diferença Entre os Times') });
+        opts.push({
+          mode: 'imbalance',
+          label: statsSortTitleCase(`Maior Diferença de ${metric} Entre os Times`),
+        });
         return opts;
       }
       const opts = [
-        { mode: 'team_min', label: statsSortTitleCase(`Menor ${amount} de um Time`) },
+        { mode: 'team_min', label: statsSortTitleCase(`Menor ${teamLabel}`) },
       ];
       if (cfg.unit !== 'pct') {
-        opts.push({ mode: 'sum', label: statsSortTitleCase(`Menor Soma de ${metric}`) });
+        opts.push({ mode: 'sum', label: statsSortTitleCase(`Menor Soma de ${metric} do Jogo`) });
       }
-      opts.push({ mode: 'balance', label: statsSortTitleCase('Menor Diferença Entre os Times') });
+      opts.push({
+        mode: 'balance',
+        label: statsSortTitleCase(`Menor Diferença de ${metric} Entre os Times`),
+      });
       return opts;
     }
 
