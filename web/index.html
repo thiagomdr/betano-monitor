@@ -916,17 +916,15 @@
   </header>
   <main id="panel-mercado">
     <p class="hint">
-      Estatísticas Sportradar dos jogos ao vivo (gols, chutes, escanteios, tiros de meta e timeline completa).
+      Estatísticas Sportradar por jogo. Clique no placar para ver minutos dos gols; nos escanteios para ver o minuto de cada canto.
     </p>
     <div class="mercado-filters">
       <label class="filter-validados">
-        <input type="checkbox" id="filtro-validados" />
-        Somente jogos validados (Telegram)
+        <input type="checkbox" id="filtro-stats-live" checked />
+        Somente ao vivo
       </label>
       <div class="mercado-bulk-actions">
         <span class="mercado-selected-count muted" id="mercado-selected-count"></span>
-        <button type="button" class="mercado-delete-btn" id="btn-mercado-delete-selected"
-          title="Remover selecionados" aria-label="Remover jogos selecionados" disabled>🗑</button>
       </div>
     </div>
     <div class="coleta-countdown" id="coleta-countdown-mercado" aria-live="polite">
@@ -939,20 +937,23 @@
       <table>
         <thead>
           <tr>
-            <th class="mercado-check-cell" title="Selecionar">
-              <input type="checkbox" id="mercado-select-all" aria-label="Selecionar todos" />
-            </th>
             <th>#</th>
             <th>Jogo</th>
             <th title="Minuto do jogo">Tempo</th>
-            <th>Placar</th>
+            <th title="Clique para minutos dos gols">Placar</th>
+            <th title="Clique para minutos dos escanteios">Escanteios</th>
+            <th title="Chutes a gol casa × fora">Chutes a gol</th>
+            <th title="Chutes totais casa × fora">Chutes</th>
+            <th title="Posse de bola %">Posse</th>
+            <th title="Faltas casa × fora">Faltas</th>
+            <th title="Cartões amarelos">Amarelos</th>
             <th>Liga</th>
-            <th title="Ao Vivo ou Finalizado — clique para datas">Status</th>
+            <th title="Ao Vivo ou Finalizado">Status</th>
             <th>Link</th>
           </tr>
         </thead>
         <tbody id="mercado-tbody">
-          <tr><td colspan="8" class="empty">Carregando…</td></tr>
+          <tr><td colspan="13" class="empty">Carregando…</td></tr>
         </tbody>
       </table>
     </div>
@@ -1120,8 +1121,9 @@
     const favoritoSelectedIds = new Set();
     let favoritoDeleteBusy = false;
     let mercadoGoalsCache = {};
+    let mercadoCornersCache = {};
     let mercadoLoading = false;
-    let mercadoFilterValidadosOnly = localStorage.getItem('mercadoFilterValidados') === '1';
+    let mercadoFilterLiveOnly = localStorage.getItem('statsFilterLiveOnly') !== '0';
     let mercadoMetaCache = null;
     const mercadoSelectedIds = new Set();
     let mercadoDeleteBusy = false;
@@ -2072,13 +2074,13 @@
     }
 
     function mercadoStatusLabel(row) {
-      const inicio = formatDate(row.created_at);
+      const inicio = formatDate(row.fetched_at || row.created_at || row.updated_at);
       if (row.is_live) {
-        const tip = tipLinesHtml([`Início: ${inicio}`]);
+        const tip = tipLinesHtml([`Atualizado: ${formatDate(row.updated_at)}`]);
         return `<button type="button" class="table-tip-btn live" data-table-tip="status-${row.event_id}" data-tip-html="${encodeURIComponent(tip)}">Ao Vivo</button>`;
       }
-      const fim = formatDate(row.settled_at || row.updated_at || row.created_at);
-      const tip = tipLinesHtml([`Início: ${inicio}`, `Finalizado: ${fim}`]);
+      const fim = formatDate(row.updated_at);
+      const tip = tipLinesHtml([`Início/coleta: ${inicio}`, `Última atualização: ${fim}`]);
       return `<button type="button" class="table-tip-btn done" data-table-tip="status-${row.event_id}" data-tip-html="${encodeURIComponent(tip)}">Finalizado</button>`;
     }
 
@@ -2091,16 +2093,41 @@
       return `<button type="button" class="table-tip-btn" data-table-tip="tempo-${row.event_id}" data-tip-html="${encodeURIComponent(tip)}">${row.last_minute}'</button>`;
     }
 
+    function statsScoreText(row) {
+      if (row.home_score != null && row.away_score != null) {
+        return `${row.home_score}-${row.away_score}`;
+      }
+      if (row.is_live && row.live_score) return row.live_score;
+      return row.placar_final || row.score || '—';
+    }
+
+    function statsPairLabel(home, away, suffix = '') {
+      if (home == null && away == null) return '<span class="muted">—</span>';
+      const h = home != null ? home : '—';
+      const a = away != null ? away : '—';
+      return `${h}×${a}${suffix}`;
+    }
+
     function mercadoPlacarLabel(row) {
-      const score = row.is_live && row.live_score
-        ? row.live_score
-        : (row.placar_final || '—');
+      const score = statsScoreText(row);
       if (!score || score === '—') return '<span class="muted">—</span>';
       const goalsTotal = goalsTotalFromScoreText(score);
       if (goalsTotal == null || goalsTotal <= 0) {
         return `<span class="muted">${score}</span>`;
       }
       return `<button type="button" class="table-tip-btn placar" data-placar-goals="${row.event_id}" title="Minutos dos gols">${score}</button>`;
+    }
+
+    function mercadoEscanteiosLabel(row) {
+      if (row.home_corners == null && row.away_corners == null) {
+        return '<span class="muted">—</span>';
+      }
+      const h = row.home_corners != null ? row.home_corners : '—';
+      const a = row.away_corners != null ? row.away_corners : '—';
+      const text = `${h}×${a}`;
+      const total = (Number(row.home_corners) || 0) + (Number(row.away_corners) || 0);
+      if (total <= 0) return `<span class="muted">${text}</span>`;
+      return `<button type="button" class="table-tip-btn placar" data-placar-corners="${row.event_id}" title="Minutos dos escanteios">${text}</button>`;
     }
 
     function favoritoPlacarLabel(row) {
@@ -2115,9 +2142,7 @@
 
     function renderGoalsPopoverHtml(row, goals) {
       const match = row ? formatMatchHtml(row.home, row.away) : '';
-      const score = row?.is_live && row?.live_score
-        ? row.live_score
-        : (row?.placar_final || row?.placar_atual || '—');
+      const score = statsScoreText(row || {});
       if (!goals?.length) {
         return `<h4>Gols · ${match}</h4><p class="muted">Nenhum gol com minuto registrado ainda (placar ${score}).</p>`;
       }
@@ -2139,6 +2164,27 @@
       return `<h4>Gols · ${match} (${score})</h4><ul>${items}</ul>`;
     }
 
+    function renderCornersPopoverHtml(row, corners) {
+      const match = row ? formatMatchHtml(row.home, row.away) : '';
+      const total = statsPairLabel(row?.home_corners, row?.away_corners);
+      if (!corners?.length) {
+        return `<h4>Escanteios · ${match}</h4><p class="muted">Nenhum escanteio com minuto registrado ainda (placar ${total}).</p>`;
+      }
+      const items = corners.map((c) => {
+        const min = c.minute != null ? `${c.minute}'` : '—';
+        const side = String(c.team_side || '').toLowerCase();
+        let who = c.team || '';
+        if (!who) {
+          if (side === 'home') who = row?.home || 'Casa';
+          else if (side === 'away') who = row?.away || 'Fora';
+          else who = '—';
+        }
+        const player = c.player ? ` · ${c.player}` : '';
+        return `<li><strong>${min}</strong> ${who}<span class="muted">${player}</span></li>`;
+      }).join('');
+      return `<h4>Escanteios · ${match} (${total})</h4><ul>${items}</ul>`;
+    }
+
     async function loadGoalsForEvent(eventId) {
       const key = String(eventId);
       if (Array.isArray(mercadoGoalsCache[key])) return mercadoGoalsCache[key];
@@ -2149,6 +2195,19 @@
       const rows = await supabaseGet(path);
       mercadoGoalsCache[key] = Array.isArray(rows) ? rows : [];
       return mercadoGoalsCache[key];
+    }
+
+    async function loadCornersForEvent(eventId) {
+      const key = String(eventId);
+      if (Array.isArray(mercadoCornersCache[key])) return mercadoCornersCache[key];
+      const path =
+        `futebol_sportradar_events?event_id=eq.${encodeURIComponent(key)}` +
+        `&event_type=eq.corner&disabled=eq.false` +
+        `&select=minute,team,team_side,player,event_type` +
+        `&order=minute.asc`;
+      const rows = await supabaseGet(path);
+      mercadoCornersCache[key] = Array.isArray(rows) ? rows : [];
+      return mercadoCornersCache[key];
     }
 
     async function showPlacarGoalsPopover(btn, eventId) {
@@ -2178,6 +2237,31 @@
       }
     }
 
+    async function showCornersPopover(btn, eventId) {
+      const pop = document.getElementById('mercado-elevated-popover');
+      if (!pop) return;
+      const tipKey = `corners-${eventId}`;
+      if (pop.classList.contains('open') && pop.dataset.tipKey === tipKey) {
+        hideMercadoElevatedPopover();
+        return;
+      }
+      const row = mercadoCache.find((r) => String(r.event_id) === String(eventId));
+      pop.innerHTML = `<h4>Escanteios</h4><p class="muted">Carregando…</p>`;
+      pop.dataset.tipKey = tipKey;
+      delete pop.dataset.eventId;
+      positionMercadoPopover(btn, pop);
+      try {
+        const corners = await loadCornersForEvent(eventId);
+        if (pop.dataset.tipKey !== tipKey) return;
+        pop.innerHTML = renderCornersPopoverHtml(row, corners);
+        positionMercadoPopover(btn, pop);
+      } catch (err) {
+        if (pop.dataset.tipKey !== tipKey) return;
+        pop.innerHTML =
+          `<h4>Escanteios</h4><p class="muted">${err.message || String(err)}</p>`;
+      }
+    }
+
     function mercadoValidacaoLabel(row) {
       if (row.telegram_confirmacao === 'confirmada' || row.telegram_confirmacao === 'correta') {
         return '<span class="validacao-badge ok">Aposta ✓</span>';
@@ -2199,27 +2283,21 @@
     }
 
     function mercadoVisibleRows(rows) {
-      return rows.filter((r) => r.resultado !== 'excluido');
+      return rows.filter((r) => r != null && r.event_id != null);
     }
 
     function mercadoDisplayRows(rows) {
       let list = mercadoVisibleRows(rows);
-      if (mercadoFilterValidadosOnly) {
-        list = list.filter(mercadoIsValidado);
+      if (mercadoFilterLiveOnly) {
+        list = list.filter((r) => r.is_live);
       }
       return list;
     }
 
-    /** Ao vivo: Monitorando → Aposta → GREEN → demais. */
+    /** Ao vivo primeiro; depois por minuto decrescente. */
     function liveResultadoRank(row) {
       if (!row.is_live) return 99;
-      switch (row.resultado) {
-        case 'watching': return 0;
-        case 'pending': return 1;
-        case 'win': return 2;
-        case 'loss': return 3;
-        default: return 4;
-      }
+      return 0;
     }
 
     function renderMercado() {
@@ -2229,20 +2307,15 @@
         const liveA = a.is_live ? 1 : 0;
         const liveB = b.is_live ? 1 : 0;
         if (liveB !== liveA) return liveB - liveA;
-        const rankA = liveResultadoRank(a);
-        const rankB = liveResultadoRank(b);
-        if (rankA !== rankB) return rankA - rankB;
+        const minA = Number(a.last_minute) || 0;
+        const minB = Number(b.last_minute) || 0;
+        if (minB !== minA) return minB - minA;
         return String(mercadoSortKey(b)).localeCompare(String(mercadoSortKey(a)));
       });
-      const visibleIds = new Set(rows.map((r) => String(r.event_id)));
-      for (const id of [...mercadoSelectedIds]) {
-        if (!visibleIds.has(id)) mercadoSelectedIds.delete(id);
-      }
       if (!rows.length) {
-        tbody.innerHTML = mercadoFilterValidadosOnly
-          ? '<tr><td colspan="8" class="empty">Nenhum jogo validado no Telegram ainda.</td></tr>'
-          : '<tr><td colspan="8" class="empty">Nenhum jogo monitorado ainda. Novos jogos serao registrados automaticamente.</td></tr>';
-        syncMercadoSelectionUi();
+        tbody.innerHTML = mercadoFilterLiveOnly
+          ? '<tr><td colspan="13" class="empty">Nenhum jogo ao vivo com estatísticas ainda.</td></tr>'
+          : '<tr><td colspan="13" class="empty">Nenhuma estatística Sportradar gravada ainda.</td></tr>';
         return;
       }
       tbody.innerHTML = rows.map((row, i) => {
@@ -2250,28 +2323,29 @@
           formatMatchHtml(row.home, row.away),
           row.betano_url,
         );
-        const matchPlain = `${row.home || '—'} x ${row.away || '—'}`;
         const league = [row.country, row.league].filter(Boolean).join(' · ') || '—';
         const link = row.betano_url
           ? `<a href="${row.betano_url}" target="_blank" rel="noopener">abrir</a>`
           : '—';
-        const eventId = String(row.event_id);
-        const checked = mercadoSelectedIds.has(eventId) ? ' checked' : '';
+        const poss = (row.home_possession != null || row.away_possession != null)
+          ? statsPairLabel(row.home_possession, row.away_possession, '%')
+          : '<span class="muted">—</span>';
         return `<tr>
-          <td class="mercado-check-cell" data-label="">
-            <input type="checkbox" class="mercado-row-check" data-event-id="${eventId}"
-              aria-label="Selecionar ${matchPlain.replace(/"/g, '&quot;')}"${checked} />
-          </td>
           <td data-label="#">${i + 1}</td>
           <td data-label="Jogo">${matchHtml}</td>
           <td data-label="Tempo">${mercadoTempoLabel(row)}</td>
           <td data-label="Placar">${mercadoPlacarLabel(row)}</td>
+          <td data-label="Escanteios">${mercadoEscanteiosLabel(row)}</td>
+          <td data-label="Chutes a gol">${statsPairLabel(row.home_shots_on_target, row.away_shots_on_target)}</td>
+          <td data-label="Chutes">${statsPairLabel(row.home_shots_total, row.away_shots_total)}</td>
+          <td data-label="Posse">${poss}</td>
+          <td data-label="Faltas">${statsPairLabel(row.home_fouls, row.away_fouls)}</td>
+          <td data-label="Amarelos">${statsPairLabel(row.home_yellow_cards, row.away_yellow_cards)}</td>
           <td data-label="Liga">${league}</td>
           <td data-label="Status">${mercadoStatusLabel(row)}</td>
           <td data-label="Link">${link}</td>
         </tr>`;
       }).join('');
-      syncMercadoSelectionUi();
     }
 
     function updateMercadoStatus(meta, visibleCount, displayCount) {
@@ -2284,10 +2358,10 @@
       }
       status.className = 'status';
       const when = meta?.fetched_at ? formatDate(meta.fetched_at) : '—';
-      const source = meta?.source || 'betano-danae';
-      const listLabel = mercadoFilterValidadosOnly
-        ? `${formatNumber(displayCount)} validados de ${formatNumber(visibleCount)}`
-        : `${formatNumber(visibleCount)} jogos na lista`;
+      const source = meta?.source || 'sportradar';
+      const listLabel = mercadoFilterLiveOnly
+        ? `${formatNumber(displayCount)} ao vivo de ${formatNumber(visibleCount)}`
+        : `${formatNumber(displayCount)} jogos`;
       status.textContent = `${listLabel} · atualizado ${when} · fonte ${source}`;
     }
 
@@ -2824,11 +2898,12 @@
       try {
         await initAppCfg();
         const [rows, metaRows] = await Promise.all([
-          supabaseGet('futebol_mercado_gols_05?select=*&order=updated_at.desc&limit=500'),
+          supabaseGet('futebol_sportradar_stats?select=*&order=updated_at.desc&limit=500'),
           supabaseGet('futebol_live_meta?id=eq.1&select=fetched_at,source,last_error'),
         ]);
         mercadoCache = rows ?? [];
         mercadoGoalsCache = {};
+        mercadoCornersCache = {};
         mercadoMetaCache = metaRows?.[0] ?? null;
         const visible = mercadoVisibleRows(mercadoCache);
         const display = mercadoDisplayRows(mercadoCache);
@@ -2860,7 +2935,7 @@
           }
           if (tbody) {
             tbody.innerHTML =
-              `<tr><td colspan="8" class="empty">${msg}</td></tr>`;
+              `<tr><td colspan="13" class="empty">${msg}</td></tr>`;
           }
         }
       } finally {
@@ -2868,12 +2943,12 @@
       }
     }
 
-    const filtroValidados = document.getElementById('filtro-validados');
-    if (filtroValidados) {
-      filtroValidados.checked = mercadoFilterValidadosOnly;
-      filtroValidados.addEventListener('change', (e) => {
-        mercadoFilterValidadosOnly = e.target.checked;
-        localStorage.setItem('mercadoFilterValidados', mercadoFilterValidadosOnly ? '1' : '0');
+    const filtroStatsLive = document.getElementById('filtro-stats-live');
+    if (filtroStatsLive) {
+      filtroStatsLive.checked = mercadoFilterLiveOnly;
+      filtroStatsLive.addEventListener('change', (e) => {
+        mercadoFilterLiveOnly = e.target.checked;
+        localStorage.setItem('statsFilterLiveOnly', mercadoFilterLiveOnly ? '1' : '0');
         const visible = mercadoVisibleRows(mercadoCache);
         const display = mercadoDisplayRows(mercadoCache);
         updateMercadoStatus(mercadoMetaCache, visible.length, display.length);
@@ -2972,6 +3047,14 @@
         if (eventId) await showPlacarGoalsPopover(placarBtn, eventId);
         return;
       }
+      const cornersBtn = e.target.closest('[data-placar-corners]');
+      if (cornersBtn) {
+        e.preventDefault();
+        e.stopPropagation();
+        const eventId = cornersBtn.getAttribute('data-placar-corners');
+        if (eventId) await showCornersPopover(cornersBtn, eventId);
+        return;
+      }
       const tipBtn = e.target.closest('[data-table-tip]');
       if (tipBtn) {
         e.preventDefault();
@@ -3015,6 +3098,7 @@
         e.target.closest('[data-estrategia-popover]') ||
         e.target.closest('[data-table-tip]') ||
         e.target.closest('[data-placar-goals]') ||
+        e.target.closest('[data-placar-corners]') ||
         e.target.closest('[data-log-detail]') ||
         e.target.closest('#mercado-elevated-popover')
       ) {

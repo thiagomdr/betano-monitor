@@ -1888,10 +1888,44 @@ type TeamStats = {
   away_shots_on_target: number | null;
   home_shots_total: number | null;
   away_shots_total: number | null;
+  home_shots_off_target: number | null;
+  away_shots_off_target: number | null;
+  home_shots_blocked: number | null;
+  away_shots_blocked: number | null;
+  home_saves: number | null;
+  away_saves: number | null;
   home_corners: number | null;
   away_corners: number | null;
   home_goal_kicks: number | null;
   away_goal_kicks: number | null;
+  home_throw_ins: number | null;
+  away_throw_ins: number | null;
+  home_free_kicks: number | null;
+  away_free_kicks: number | null;
+  home_offsides: number | null;
+  away_offsides: number | null;
+  home_fouls: number | null;
+  away_fouls: number | null;
+  home_penalties: number | null;
+  away_penalties: number | null;
+  home_possession: number | null;
+  away_possession: number | null;
+  home_yellow_cards: number | null;
+  away_yellow_cards: number | null;
+  home_red_cards: number | null;
+  away_red_cards: number | null;
+  home_yellow_red_cards: number | null;
+  away_yellow_red_cards: number | null;
+  home_substitutions: number | null;
+  away_substitutions: number | null;
+  home_injuries: number | null;
+  away_injuries: number | null;
+  home_attacks: number | null;
+  away_attacks: number | null;
+  home_dangerous_attacks: number | null;
+  away_dangerous_attacks: number | null;
+  home_ball_safe: number | null;
+  away_ball_safe: number | null;
   available: boolean;
   values: Json;
   source_url: string | null;
@@ -1904,10 +1938,44 @@ function emptyStats(): TeamStats {
     away_shots_on_target: null,
     home_shots_total: null,
     away_shots_total: null,
+    home_shots_off_target: null,
+    away_shots_off_target: null,
+    home_shots_blocked: null,
+    away_shots_blocked: null,
+    home_saves: null,
+    away_saves: null,
     home_corners: null,
     away_corners: null,
     home_goal_kicks: null,
     away_goal_kicks: null,
+    home_throw_ins: null,
+    away_throw_ins: null,
+    home_free_kicks: null,
+    away_free_kicks: null,
+    home_offsides: null,
+    away_offsides: null,
+    home_fouls: null,
+    away_fouls: null,
+    home_penalties: null,
+    away_penalties: null,
+    home_possession: null,
+    away_possession: null,
+    home_yellow_cards: null,
+    away_yellow_cards: null,
+    home_red_cards: null,
+    away_red_cards: null,
+    home_yellow_red_cards: null,
+    away_yellow_red_cards: null,
+    home_substitutions: null,
+    away_substitutions: null,
+    home_injuries: null,
+    away_injuries: null,
+    home_attacks: null,
+    away_attacks: null,
+    home_dangerous_attacks: null,
+    away_dangerous_attacks: null,
+    home_ball_safe: null,
+    away_ball_safe: null,
     available: false,
     values: {},
     source_url: null,
@@ -1923,8 +1991,14 @@ function pairFromValues(
     const rec = asRecord(values[key]);
     if (!rec) continue;
     const value = asRecord(rec.value) ?? rec;
-    const home = toInt(value.home ?? value.Home);
-    const away = toInt(value.away ?? value.Away);
+    const home = toInt(value.home ?? value.Home) ??
+      (typeof (value.home ?? value.Home) === "string"
+        ? toInt(String(value.home ?? value.Home).split("/")[0])
+        : null);
+    const away = toInt(value.away ?? value.Away) ??
+      (typeof (value.away ?? value.Away) === "string"
+        ? toInt(String(value.away ?? value.Away).split("/")[0])
+        : null);
     if (home != null || away != null) return { home, away };
   }
   return { home: null, away: null };
@@ -1978,22 +2052,75 @@ async function tryFetchStats(
         continue;
       }
 
-      // Codigos Sportradar: 125 shots on target, 124 corners, 121 goal kicks, goalattempts total
+      // Codigos Sportradar (match_details / extended) — mapa tipado + values bruto
       const sot = pairFromValues(values, "125", "shotsonperiod");
       const total = pairFromValues(values, "goalattempts", "goalattemptsperiod");
+      const off = pairFromValues(values, "126", "shotsoffperiod");
+      const blocked = pairFromValues(values, "171", "shotsblockedperiod");
+      const saves = pairFromValues(values, "127", "savesperiod");
       const corners = pairFromValues(values, "124", "1634");
       const gk = pairFromValues(values, "121", "goalkicksperiod");
+      const throwIns = pairFromValues(values, "122", "throwinsperiod");
+      const freeKicks = pairFromValues(values, "120", "freekicksperiod");
+      const offsides = pairFromValues(values, "123", "offsidesperiod");
+      const fouls = pairFromValues(values, "129", "foulsperiod");
+      const pens = pairFromValues(values, "161");
+      const poss = pairFromValues(values, "110", "1199");
+      const yellow = pairFromValues(values, "40", "1627");
+      const red = pairFromValues(values, "50", "1628");
+      const yellowRed = pairFromValues(values, "45", "yellowredcardsperiod");
+      const subs = pairFromValues(values, "60", "substitutionsperiod");
+      const injuries = pairFromValues(values, "158", "injuriesperiod");
+      const attacks = pairFromValues(values, "1126", "attackperiod");
+      const dang = pairFromValues(values, "1029", "dangerousperiod");
+      const ballSafe = pairFromValues(values, "1030", "ballsafeperiod");
 
-      const available = [sot, total, corners, gk].some((p) => p.home != null || p.away != null);
+      const available = [sot, total, corners, gk, poss, fouls, yellow].some(
+        (p) => p.home != null || p.away != null,
+      );
       return {
         home_shots_on_target: sot.home,
         away_shots_on_target: sot.away,
         home_shots_total: total.home,
         away_shots_total: total.away,
+        home_shots_off_target: off.home,
+        away_shots_off_target: off.away,
+        home_shots_blocked: blocked.home,
+        away_shots_blocked: blocked.away,
+        home_saves: saves.home,
+        away_saves: saves.away,
         home_corners: corners.home,
         away_corners: corners.away,
         home_goal_kicks: gk.home,
         away_goal_kicks: gk.away,
+        home_throw_ins: throwIns.home,
+        away_throw_ins: throwIns.away,
+        home_free_kicks: freeKicks.home,
+        away_free_kicks: freeKicks.away,
+        home_offsides: offsides.home,
+        away_offsides: offsides.away,
+        home_fouls: fouls.home,
+        away_fouls: fouls.away,
+        home_penalties: pens.home,
+        away_penalties: pens.away,
+        home_possession: poss.home,
+        away_possession: poss.away,
+        home_yellow_cards: yellow.home,
+        away_yellow_cards: yellow.away,
+        home_red_cards: red.home,
+        away_red_cards: red.away,
+        home_yellow_red_cards: yellowRed.home,
+        away_yellow_red_cards: yellowRed.away,
+        home_substitutions: subs.home,
+        away_substitutions: subs.away,
+        home_injuries: injuries.home,
+        away_injuries: injuries.away,
+        home_attacks: attacks.home,
+        away_attacks: attacks.away,
+        home_dangerous_attacks: dang.home,
+        away_dangerous_attacks: dang.away,
+        home_ball_safe: ballSafe.home,
+        away_ball_safe: ballSafe.away,
         available,
         values,
         source_url: url,
@@ -2464,34 +2591,75 @@ async function persistSportradarStats(
     betradar_match_id: string | null;
     home: string | null;
     away: string | null;
+    league: string | null;
+    country: string | null;
+    betano_url: string | null;
     last_minute: number | null;
     home_score: number | null;
     away_score: number | null;
+    is_live?: boolean;
     stats: TeamStats;
   },
 ): Promise<void> {
   const nowIso = new Date().toISOString();
-  const values = input.stats.values && typeof input.stats.values === "object"
-    ? input.stats.values
-    : {};
+  const s = input.stats;
+  const values = s.values && typeof s.values === "object" ? s.values : {};
   await supabase.from("futebol_sportradar_stats").upsert({
     event_id: input.event_id,
     betradar_match_id: input.betradar_match_id,
     home: input.home,
     away: input.away,
+    league: input.league,
+    country: input.country,
+    betano_url: input.betano_url,
+    is_live: input.is_live !== false,
     last_minute: input.last_minute,
     home_score: input.home_score,
     away_score: input.away_score,
-    home_shots_on_target: input.stats.home_shots_on_target,
-    away_shots_on_target: input.stats.away_shots_on_target,
-    home_shots_total: input.stats.home_shots_total,
-    away_shots_total: input.stats.away_shots_total,
-    home_corners: input.stats.home_corners,
-    away_corners: input.stats.away_corners,
-    home_goal_kicks: input.stats.home_goal_kicks,
-    away_goal_kicks: input.stats.away_goal_kicks,
+    home_shots_on_target: s.home_shots_on_target,
+    away_shots_on_target: s.away_shots_on_target,
+    home_shots_total: s.home_shots_total,
+    away_shots_total: s.away_shots_total,
+    home_shots_off_target: s.home_shots_off_target,
+    away_shots_off_target: s.away_shots_off_target,
+    home_shots_blocked: s.home_shots_blocked,
+    away_shots_blocked: s.away_shots_blocked,
+    home_saves: s.home_saves,
+    away_saves: s.away_saves,
+    home_corners: s.home_corners,
+    away_corners: s.away_corners,
+    home_goal_kicks: s.home_goal_kicks,
+    away_goal_kicks: s.away_goal_kicks,
+    home_throw_ins: s.home_throw_ins,
+    away_throw_ins: s.away_throw_ins,
+    home_free_kicks: s.home_free_kicks,
+    away_free_kicks: s.away_free_kicks,
+    home_offsides: s.home_offsides,
+    away_offsides: s.away_offsides,
+    home_fouls: s.home_fouls,
+    away_fouls: s.away_fouls,
+    home_penalties: s.home_penalties,
+    away_penalties: s.away_penalties,
+    home_possession: s.home_possession,
+    away_possession: s.away_possession,
+    home_yellow_cards: s.home_yellow_cards,
+    away_yellow_cards: s.away_yellow_cards,
+    home_red_cards: s.home_red_cards,
+    away_red_cards: s.away_red_cards,
+    home_yellow_red_cards: s.home_yellow_red_cards,
+    away_yellow_red_cards: s.away_yellow_red_cards,
+    home_substitutions: s.home_substitutions,
+    away_substitutions: s.away_substitutions,
+    home_injuries: s.home_injuries,
+    away_injuries: s.away_injuries,
+    home_attacks: s.home_attacks,
+    away_attacks: s.away_attacks,
+    home_dangerous_attacks: s.home_dangerous_attacks,
+    away_dangerous_attacks: s.away_dangerous_attacks,
+    home_ball_safe: s.home_ball_safe,
+    away_ball_safe: s.away_ball_safe,
     values_json: values,
-    source_url: input.stats.source_url,
+    source_url: s.source_url,
     fetched_at: nowIso,
     updated_at: nowIso,
   }, { onConflict: "event_id" });
@@ -3680,9 +3848,13 @@ Deno.serve(async (req) => {
           betradar_match_id: betradarId != null ? String(betradarId) : null,
           home: teams.home,
           away: teams.away,
+          league: league.league,
+          country: league.country,
+          betano_url: url,
           last_minute: minute,
           home_score: score.home,
           away_score: score.away,
+          is_live: true,
           stats,
         });
       } catch (err) {
@@ -3939,6 +4111,15 @@ Deno.serve(async (req) => {
         .eq("is_live", true)
         .not("event_id", "in", `(${liveIds.join(",")})`)
         .lt("last_seen_at", graceCutoff);
+
+      await supabase
+        .from("futebol_sportradar_stats")
+        .update({
+          is_live: false,
+          updated_at: new Date().toISOString(),
+        })
+        .eq("is_live", true)
+        .not("event_id", "in", `(${liveIds.join(",")})`);
     }
 
     const favoritoFinalize = await finalizeFavoritoDriftOffLive(supabase, liveIds);
