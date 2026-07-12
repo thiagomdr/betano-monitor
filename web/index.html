@@ -570,12 +570,21 @@
     #stats-columns-popover .scb-group-head {
       display: flex;
       align-items: center;
-      gap: 0.4rem;
+      gap: 0.3rem;
       font-weight: 700;
       color: #e8eef7;
       margin-bottom: 0.35rem;
-      cursor: pointer;
       user-select: none;
+      width: fit-content;
+      max-width: 100%;
+    }
+    #stats-columns-popover .scb-group-main {
+      display: inline-flex;
+      align-items: center;
+      gap: 0.4rem;
+      cursor: pointer;
+      min-width: 0;
+      flex: 0 1 auto;
     }
     #stats-columns-popover .scb-cols {
       display: grid;
@@ -673,7 +682,7 @@
       cursor: pointer;
     }
     #stats-columns-popover .scb-col input[type="checkbox"],
-    #stats-columns-popover .scb-group-head input {
+    #stats-columns-popover .scb-group-main input {
       accent-color: var(--accent);
       cursor: pointer;
     }
@@ -1472,6 +1481,7 @@
       {
         id: 'ident',
         label: 'Identificação do Jogo',
+        info: 'Colunas de identificação: ordem, times, minuto, placar, liga e status.',
         cols: [
           { id: 'num', label: '#', title: 'Ordem na Lista', info: 'Número de ordem do jogo na tabela.' },
           { id: 'jogo', label: 'Jogo', title: 'Times', info: 'Times da partida: casa × fora.' },
@@ -1484,6 +1494,7 @@
       {
         id: 'finalizacao',
         label: 'Finalização',
+        info: 'Estatísticas de finalização: chutes, defesas e pênaltis.',
         cols: [
           { id: 'sot', label: 'Chutes a Gol', title: 'Chutes a Gol', info: 'Chutes no alvo (casa × fora).' },
           { id: 'soff', label: 'Chutes Fora', title: 'Chutes Fora', info: 'Chutes para fora do gol (casa × fora).' },
@@ -1496,6 +1507,7 @@
       {
         id: 'dominio',
         label: 'Domínio / Pressão',
+        info: 'Indicadores de domínio e pressão: posse, ataques e bola segura.',
         cols: [
           { id: 'posse', label: 'Posse', title: 'Posse de Bola', info: 'Posse de bola em % (casa × fora).' },
           { id: 'ataques', label: 'Ataques', title: 'Ataques', info: 'Ataques registrados (casa × fora).' },
@@ -1506,6 +1518,7 @@
       {
         id: 'parada',
         label: 'Bola Parada',
+        info: 'Jogadas de bola parada: escanteios, faltas, livres, impedimentos, laterais e tiros de meta.',
         cols: [
           { id: 'escanteios', label: 'Escanteios', title: 'Escanteios', info: 'Escanteios (casa × fora).' },
           { id: 'faltas', label: 'Faltas', title: 'Faltas', info: 'Faltas cometidas (casa × fora).' },
@@ -1518,6 +1531,7 @@
       {
         id: 'disciplina',
         label: 'Disciplina',
+        info: 'Cartões e disciplina: amarelos, vermelhos e segundo amarelo.',
         cols: [
           { id: 'amarelos', label: 'Amarelos', title: 'Cartões Amarelos', info: 'Cartões amarelos (casa × fora).' },
           { id: 'vermelhos', label: 'Vermelhos', title: 'Cartões Vermelhos', info: 'Cartões vermelhos (casa × fora).' },
@@ -1527,6 +1541,7 @@
       {
         id: 'elenco',
         label: 'Elenco',
+        info: 'Movimentação do elenco: substituições e lesões.',
         cols: [
           { id: 'subs', label: 'Subs', title: 'Substituições', info: 'Substituições (casa × fora).' },
           { id: 'lesoes', label: 'Lesões', title: 'Lesões', info: 'Lesões no jogo (casa × fora).' },
@@ -1535,6 +1550,7 @@
       {
         id: 'contexto',
         label: 'Contexto',
+        info: 'Contexto da partida: estádio, árbitro, técnicos, clima e gramado.',
         cols: [
           { id: 'estadio', label: 'Estádio', title: 'Estádio', info: 'Nome do estádio e local.' },
           { id: 'arbitro', label: 'Árbitro', title: 'Árbitro', info: 'Árbitro principal do jogo.' },
@@ -1545,6 +1561,7 @@
       },
     ];
     const ALL_STATS_COL_IDS = STATS_COL_GROUPS.flatMap((g) => g.cols.map((c) => c.id));
+    const ALL_STATS_GROUP_IDS = STATS_COL_GROUPS.map((g) => g.id);
 
     function loadStatsVisibleCols() {
       try {
@@ -1599,6 +1616,10 @@
 
     const STATS_COL_COLOR_FALLBACK = '#8fa3bf';
 
+    function isStatsColorTargetId(id) {
+      return ALL_STATS_COL_IDS.includes(id) || ALL_STATS_GROUP_IDS.includes(id);
+    }
+
     function loadStatsColumnColors() {
       try {
         const raw = localStorage.getItem('statsColumnColors');
@@ -1607,7 +1628,7 @@
         if (!obj || typeof obj !== 'object' || Array.isArray(obj)) return {};
         const out = {};
         for (const [id, hex] of Object.entries(obj)) {
-          if (ALL_STATS_COL_IDS.includes(id) && typeof hex === 'string' && /^#[0-9a-fA-F]{6}$/.test(hex)) {
+          if (isStatsColorTargetId(id) && typeof hex === 'string' && /^#[0-9a-fA-F]{6}$/.test(hex)) {
             out[id] = hex.toLowerCase();
           }
         }
@@ -1629,7 +1650,7 @@
     }
 
     function setStatsColTextColor(colId, hex) {
-      if (!colId || !ALL_STATS_COL_IDS.includes(colId)) return;
+      if (!colId || !isStatsColorTargetId(colId)) return;
       if (typeof hex === 'string' && /^#[0-9a-fA-F]{6}$/.test(hex)) {
         statsColumnColors[colId] = hex.toLowerCase();
       } else {
@@ -1938,7 +1959,11 @@
         return;
       }
       const groupRow = groups
-        .map((g) => `<th colspan="${g.cols.length}">${escapeHtml(g.label)}</th>`)
+        .map((g) => {
+          const color = getStatsColTextColor(g.id);
+          const style = color ? ` style="color:${escapeHtml(color)}"` : '';
+          return `<th colspan="${g.cols.length}"${style}>${escapeHtml(g.label)}</th>`;
+        })
         .join('');
       const colRow = groups
         .map((g) =>
@@ -3925,11 +3950,23 @@
             </div>`;
           })
           .join('');
+        const groupInfo = g.info || g.label;
+        const groupCustomColor = getStatsColTextColor(g.id);
+        const groupPickerValue = groupCustomColor || STATS_COL_COLOR_FALLBACK;
+        const groupColorCls = groupCustomColor ? ' scb-color has-custom' : ' scb-color';
+        const groupColorStyle = groupCustomColor ? ` style="color:${escapeHtml(groupCustomColor)}"` : '';
         return `<div class="scb-group" data-group-id="${escapeHtml(g.id)}">
-          <label class="scb-group-head">
-            <input type="checkbox" data-scb-group="${escapeHtml(g.id)}" />
-            <span>${escapeHtml(g.label)}</span>
-          </label>
+          <div class="scb-group-head">
+            <label class="scb-group-main">
+              <input type="checkbox" data-scb-group="${escapeHtml(g.id)}" />
+              <span>${escapeHtml(g.label)}</span>
+            </label>
+            <label class="${groupColorCls.trim()}"${groupColorStyle} title="Cor do texto (duplo clique = padrão)" aria-label="Cor do texto de ${escapeHtml(g.label)}">
+              <span class="scb-color-icon" aria-hidden="true"></span>
+              <input type="color" class="scb-color-input" data-scb-color="${escapeHtml(g.id)}" value="${escapeHtml(groupPickerValue)}" />
+            </label>
+            <button type="button" class="scb-info" data-scb-info-group="${escapeHtml(g.id)}" title="${escapeHtml(groupInfo)}" aria-label="Sobre ${escapeHtml(g.label)}">i</button>
+          </div>
           <div class="scb-cols">${colsHtml}</div>
         </div>`;
       }).join('');
@@ -3960,6 +3997,17 @@
         infoBtn.addEventListener('click', (e) => {
           e.preventDefault();
           e.stopPropagation();
+          const groupId = infoBtn.getAttribute('data-scb-info-group');
+          if (groupId) {
+            const group = STATS_COL_GROUPS.find((g) => g.id === groupId);
+            const text = group?.info || group?.label || '—';
+            const tip = tipLinesHtml([
+              `<strong>${escapeHtml(group?.label || 'Grupo')}</strong>`,
+              escapeHtml(text),
+            ]);
+            showMercadoTipPopover(infoBtn, `scb-info-group-${groupId}`, tip);
+            return;
+          }
           const colId = infoBtn.getAttribute('data-scb-info');
           const col = STATS_COL_GROUPS.flatMap((g) => g.cols).find((c) => c.id === colId);
           const text = col?.info || col?.title || col?.label || '—';
