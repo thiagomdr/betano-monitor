@@ -575,7 +575,7 @@ async function processFavoritoDriftLive(
     .maybeSingle();
 
   const row = prev as FavoritoDriftRow | null;
-  if (row?.status === "settled") return "skipped";
+  if (row?.status === "settled" || row?.status === "excluido") return "skipped";
 
   if (!row) {
     // Odd "inicial": so abre se o jogo ainda esta nos primeiros N minutos.

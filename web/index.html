@@ -963,6 +963,14 @@
       <span class="cd-hint">próxima atualização</span>
     </div>
     <p class="status" id="favorito-status" aria-live="polite" style="padding:0 1.25rem"></p>
+    <div class="mercado-filters" style="padding:0 1.25rem;margin-bottom:0.5rem">
+      <span class="muted" style="font-size:0.85rem">Marque as caixas e use a lixeira para ocultar da lista.</span>
+      <div class="mercado-bulk-actions">
+        <span class="mercado-selected-count muted" id="favorito-selected-count"></span>
+        <button type="button" class="mercado-delete-btn" id="btn-favorito-delete-selected"
+          title="Remover selecionados" aria-label="Remover jogos selecionados" disabled>🗑</button>
+      </div>
+    </div>
     <section class="favorito-section" aria-labelledby="favorito-live-title">
       <h2 class="favorito-section-title" id="favorito-live-title">Jogos Ao Vivo</h2>
       <div class="table-wrap">
@@ -980,6 +988,10 @@
           </colgroup>
           <thead>
             <tr>
+              <th class="mercado-check-cell" title="Selecionar">
+                <input type="checkbox" id="favorito-select-all-live" aria-label="Selecionar todos ao vivo" />
+              </th>
+              <th>#</th>
               <th data-col="jogo">Jogo</th>
               <th data-col="tempo">Tempo</th>
               <th data-col="placar">Placar</th>
@@ -992,7 +1004,7 @@
             </tr>
           </thead>
           <tbody id="favorito-tbody-live">
-            <tr><td colspan="9" class="muted">Carregando…</td></tr>
+            <tr><td colspan="11" class="muted">Carregando…</td></tr>
           </tbody>
         </table>
       </div>
@@ -1014,6 +1026,10 @@
           </colgroup>
           <thead>
             <tr>
+              <th class="mercado-check-cell" title="Selecionar">
+                <input type="checkbox" id="favorito-select-all-settled" aria-label="Selecionar todos finalizados" />
+              </th>
+              <th>#</th>
               <th data-col="jogo">Jogo</th>
               <th data-col="tempo">Tempo</th>
               <th data-col="placar">Placar</th>
@@ -1026,7 +1042,7 @@
             </tr>
           </thead>
           <tbody id="favorito-tbody-settled">
-            <tr><td colspan="9" class="muted">Carregando…</td></tr>
+            <tr><td colspan="11" class="muted">Carregando…</td></tr>
           </tbody>
         </table>
       </div>
@@ -1093,6 +1109,8 @@
     const WORKER_IDLE_POLL_SEC = 5;
     let mercadoCache = [];
     let favoritoCache = [];
+    const favoritoSelectedIds = new Set();
+    let favoritoDeleteBusy = false;
     let mercadoGoalsCache = {};
     let mercadoLoading = false;
     let mercadoFilterValidadosOnly = localStorage.getItem('mercadoFilterValidados') === '1';
@@ -2515,7 +2533,49 @@
       });
     }
 
-    function renderFavoritoRow(r, mercadoMinuteById) {
+    function syncFavoritoSelectionUi() {
+      const btn = document.getElementById('btn-favorito-delete-selected');
+      const countEl = document.getElementById('favorito-selected-count');
+      const n = favoritoSelectedIds.size;
+      if (btn) btn.disabled = favoritoDeleteBusy || n === 0;
+      if (countEl) countEl.textContent = n > 0 ? `${n} selecionado${n === 1 ? '' : 's'}` : '';
+      for (const [selectId, tbodyId] of [
+        ['favorito-select-all-live', 'favorito-tbody-live'],
+        ['favorito-select-all-settled', 'favorito-tbody-settled'],
+      ]) {
+        const selectAll = document.getElementById(selectId);
+        if (!selectAll) continue;
+        const checks = [...document.querySelectorAll(`#${tbodyId} .favorito-row-check`)];
+        const checked = checks.filter((c) => c.checked).length;
+        selectAll.checked = checks.length > 0 && checked === checks.length;
+        selectAll.indeterminate = checked > 0 && checked < checks.length;
+        selectAll.disabled = checks.length === 0;
+      }
+    }
+
+    async function deleteFavoritoRows(eventIds) {
+      if (!appCfg || !eventIds.length) return;
+      const ids = [...new Set(eventIds.map((id) => String(id)).filter(Boolean))];
+      if (!ids.length) return;
+      const msg = ids.length === 1
+        ? 'Remover 1 jogo da lista Favorito?\n\nO cron nao recria esta linha.'
+        : `Remover ${ids.length} jogos da lista Favorito?\n\nO cron nao recria estas linhas.`;
+      if (!window.confirm(msg)) return;
+      const list = ids.map((id) => `"${id.replace(/"/g, '')}"`).join(',');
+      const updated = await supabasePatch(
+        `futebol_favorito_drift?event_id=in.(${list})`,
+        { status: 'excluido', updated_at: new Date().toISOString() },
+      );
+      if (!updated.length) {
+        throw new Error('Nenhuma linha foi atualizada no Supabase.');
+      }
+      const removed = new Set(ids);
+      favoritoCache = favoritoCache.filter((r) => !removed.has(String(r.event_id)));
+      for (const id of removed) favoritoSelectedIds.delete(id);
+      await loadFavoritoDrift();
+    }
+
+    function renderFavoritoRow(r, mercadoMinuteById, rowIndex) {
       const max = Number(r.odd_max);
       const atual = Number(r.odd_atual);
       const jogo = wrapMatchHtmlWithLink(
@@ -2649,7 +2709,15 @@
       } else if (r.status === 'watching') {
         oddAtualCell = '<span class="muted" title="Mercado Vencedor/1X2 indisponivel na Betano">sem 1X2</span>';
       }
+      const eventId = String(r.event_id);
+      const matchPlain = `${r.home || '—'} x ${r.away || '—'}`;
+      const checked = favoritoSelectedIds.has(eventId) ? ' checked' : '';
       return `<tr>
+        <td class="mercado-check-cell" data-label="">
+          <input type="checkbox" class="favorito-row-check" data-event-id="${eventId}"
+            aria-label="Selecionar ${matchPlain.replace(/"/g, '&quot;')}"${checked} />
+        </td>
+        <td data-label="#">${rowIndex}</td>
         <td data-label="Jogo">${jogo}</td>
         <td data-label="Tempo">${tempoCell}</td>
         <td data-label="Placar">${placar}</td>
@@ -2666,21 +2734,21 @@
       const tbodyLive = document.getElementById('favorito-tbody-live');
       const tbodySettled = document.getElementById('favorito-tbody-settled');
       const favStatus = document.getElementById('favorito-status');
-      const emptyLive = '<tr><td colspan="9" class="muted">Nenhum jogo ao vivo.</td></tr>';
-      const emptySettled = '<tr><td colspan="9" class="muted">Nenhum jogo finalizado ainda.</td></tr>';
-      const emptyAll = '<tr><td colspan="9" class="muted">Nenhum jogo ainda — aguarde o próximo cron da Edge.</td></tr>';
+      const emptyLive = '<tr><td colspan="11" class="muted">Nenhum jogo ao vivo.</td></tr>';
+      const emptySettled = '<tr><td colspan="11" class="muted">Nenhum jogo finalizado ainda.</td></tr>';
+      const emptyAll = '<tr><td colspan="11" class="muted">Nenhum jogo ainda — aguarde o próximo cron da Edge.</td></tr>';
       try {
         await initAppCfg();
         const rows = await supabaseGet(
           'futebol_favorito_drift?select=*&order=updated_at.desc&limit=200',
         );
-        const list = Array.isArray(rows) ? rows : [];
+        const list = (Array.isArray(rows) ? rows : []).filter((r) => r.status !== 'excluido');
         favoritoCache = list;
         for (const r of list) {
           if (r?.event_id != null) delete mercadoGoalsCache[String(r.event_id)];
         }
         const liveList = list.filter((r) => r.status === 'watching');
-        const settledList = list.filter((r) => r.status !== 'watching');
+        const settledList = list.filter((r) => r.status === 'settled');
         const liveIds = liveList.map((r) => r.event_id).filter(Boolean);
         const mercadoMinuteById = {};
         if (liveIds.length) {
@@ -2717,17 +2785,18 @@
         }
         if (tbodyLive) {
           tbodyLive.innerHTML = liveList.length
-            ? liveList.map((r) => renderFavoritoRow(r, mercadoMinuteById)).join('')
+            ? liveList.map((r, i) => renderFavoritoRow(r, mercadoMinuteById, i + 1)).join('')
             : emptyLive;
         }
         if (tbodySettled) {
           tbodySettled.innerHTML = settledList.length
-            ? settledList.map((r) => renderFavoritoRow(r, mercadoMinuteById)).join('')
+            ? settledList.map((r, i) => renderFavoritoRow(r, mercadoMinuteById, i + 1)).join('')
             : emptySettled;
         }
         initFavoritoColumnResize();
+        syncFavoritoSelectionUi();
       } catch (err) {
-        const errRow = `<tr><td colspan="9" class="muted">Erro: ${String(err?.message || err)}</td></tr>`;
+        const errRow = `<tr><td colspan="11" class="muted">Erro: ${String(err?.message || err)}</td></tr>`;
         if (tbodyLive) tbodyLive.innerHTML = errRow;
         if (tbodySettled) tbodySettled.innerHTML = errRow;
         if (favStatus) {
@@ -2837,6 +2906,49 @@
       } finally {
         mercadoDeleteBusy = false;
         syncMercadoSelectionUi();
+      }
+    });
+
+    function bindFavoritoSelectAll(selectId, tbodyId) {
+      document.getElementById(selectId)?.addEventListener('change', (e) => {
+        const on = e.target.checked;
+        document.querySelectorAll(`#${tbodyId} .favorito-row-check`).forEach((cb) => {
+          const id = cb.getAttribute('data-event-id');
+          if (!id) return;
+          cb.checked = on;
+          if (on) favoritoSelectedIds.add(id);
+          else favoritoSelectedIds.delete(id);
+        });
+        syncFavoritoSelectionUi();
+      });
+    }
+    bindFavoritoSelectAll('favorito-select-all-live', 'favorito-tbody-live');
+    bindFavoritoSelectAll('favorito-select-all-settled', 'favorito-tbody-settled');
+
+    document.getElementById('panel-favorito')?.addEventListener('change', (e) => {
+      const cb = e.target.closest('.favorito-row-check');
+      if (!cb) return;
+      const id = cb.getAttribute('data-event-id');
+      if (!id) return;
+      if (cb.checked) favoritoSelectedIds.add(id);
+      else favoritoSelectedIds.delete(id);
+      syncFavoritoSelectionUi();
+    });
+
+    document.getElementById('btn-favorito-delete-selected')?.addEventListener('click', async () => {
+      const btn = document.getElementById('btn-favorito-delete-selected');
+      if (!btn || btn.disabled || favoritoDeleteBusy) return;
+      const ids = [...favoritoSelectedIds];
+      if (!ids.length) return;
+      favoritoDeleteBusy = true;
+      syncFavoritoSelectionUi();
+      try {
+        await deleteFavoritoRows(ids);
+      } catch (err) {
+        window.alert(err.message || String(err));
+      } finally {
+        favoritoDeleteBusy = false;
+        syncFavoritoSelectionUi();
       }
     });
 
