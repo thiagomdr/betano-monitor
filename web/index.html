@@ -461,6 +461,45 @@
       font-size: 0.85rem;
       color: var(--muted);
     }
+    .stats-filters {
+      display: flex;
+      flex-wrap: wrap;
+      align-items: flex-end;
+      gap: 0.65rem 0.85rem;
+      margin-bottom: 0.75rem;
+      font-size: 0.82rem;
+      color: var(--muted);
+    }
+    .stats-filter-field {
+      display: inline-flex;
+      flex-direction: column;
+      gap: 0.2rem;
+    }
+    .stats-filter-field label {
+      font-size: 0.72rem;
+      letter-spacing: 0.02em;
+      text-transform: uppercase;
+      color: var(--muted);
+    }
+    .stats-filter-field input[type="number"] {
+      width: 4.5rem;
+      padding: 0.35rem 0.45rem;
+      border: 1px solid var(--border, #333);
+      border-radius: 6px;
+      background: var(--bg-elevated, #1a1a1a);
+      color: inherit;
+      font: inherit;
+    }
+    .stats-filters .filter-validados {
+      align-self: center;
+      margin-top: 0.85rem;
+    }
+    .stats-filters .btn-secondary {
+      align-self: center;
+      margin-top: 0.85rem;
+      font-size: 0.8rem;
+      padding: 0.35rem 0.65rem;
+    }
     .filter-validados {
       display: inline-flex;
       align-items: center;
@@ -916,16 +955,30 @@
   </header>
   <main id="panel-mercado">
     <p class="hint">
-      Estatísticas Sportradar por jogo. Clique no placar para ver minutos dos gols; nos escanteios para ver o minuto de cada canto.
+      Estatísticas Sportradar por jogo. Clique no placar, escanteios, chutes a gol ou amarelos para ver os minutos de cada ocorrência.
     </p>
-    <div class="mercado-filters">
+    <div class="stats-filters" id="stats-filters">
       <label class="filter-validados">
         <input type="checkbox" id="filtro-stats-live" checked />
         Somente ao vivo
       </label>
-      <div class="mercado-bulk-actions">
-        <span class="mercado-selected-count muted" id="mercado-selected-count"></span>
+      <div class="stats-filter-field">
+        <label for="filtro-stats-min-minuto">Minuto ≥</label>
+        <input type="number" id="filtro-stats-min-minuto" min="0" max="130" step="1" placeholder="0" />
       </div>
+      <div class="stats-filter-field">
+        <label for="filtro-stats-min-esc">Escanteios ≥</label>
+        <input type="number" id="filtro-stats-min-esc" min="0" max="40" step="1" placeholder="0" />
+      </div>
+      <div class="stats-filter-field">
+        <label for="filtro-stats-min-sot">Chutes a gol ≥</label>
+        <input type="number" id="filtro-stats-min-sot" min="0" max="40" step="1" placeholder="0" />
+      </div>
+      <div class="stats-filter-field">
+        <label for="filtro-stats-min-amarelos">Amarelos ≥</label>
+        <input type="number" id="filtro-stats-min-amarelos" min="0" max="20" step="1" placeholder="0" />
+      </div>
+      <button type="button" class="btn-secondary" id="btn-stats-filters-clear">Limpar filtros</button>
     </div>
     <div class="coleta-countdown" id="coleta-countdown-mercado" aria-live="polite">
       <span class="cd-item"><span class="cd-label">JSON</span><span class="cd-value" data-cd="json">—</span></span>
@@ -942,11 +995,11 @@
             <th title="Minuto do jogo">Tempo</th>
             <th title="Clique para minutos dos gols">Placar</th>
             <th title="Clique para minutos dos escanteios">Escanteios</th>
-            <th title="Chutes a gol casa × fora">Chutes a gol</th>
+            <th title="Clique para minutos dos chutes a gol">Chutes a gol</th>
             <th title="Chutes totais casa × fora">Chutes</th>
             <th title="Posse de bola %">Posse</th>
             <th title="Faltas casa × fora">Faltas</th>
-            <th title="Cartões amarelos">Amarelos</th>
+            <th title="Clique para minutos dos cartões">Amarelos</th>
             <th>Liga</th>
             <th title="Ao Vivo ou Finalizado">Status</th>
             <th>Link</th>
@@ -1121,9 +1174,19 @@
     const favoritoSelectedIds = new Set();
     let favoritoDeleteBusy = false;
     let mercadoGoalsCache = {};
-    let mercadoCornersCache = {};
+    let mercadoTimelineCache = {};
     let mercadoLoading = false;
+    function readStoredFilterInt(key) {
+      const raw = localStorage.getItem(key);
+      if (raw == null || String(raw).trim() === '') return null;
+      const n = Number(raw);
+      return Number.isFinite(n) && n >= 0 ? Math.trunc(n) : null;
+    }
     let mercadoFilterLiveOnly = localStorage.getItem('statsFilterLiveOnly') !== '0';
+    let mercadoFilterMinMinute = readStoredFilterInt('statsFilterMinMinute');
+    let mercadoFilterMinCorners = readStoredFilterInt('statsFilterMinCorners');
+    let mercadoFilterMinSot = readStoredFilterInt('statsFilterMinSot');
+    let mercadoFilterMinYellows = readStoredFilterInt('statsFilterMinYellows');
     let mercadoMetaCache = null;
     const mercadoSelectedIds = new Set();
     let mercadoDeleteBusy = false;
@@ -2101,11 +2164,22 @@
       return row.placar_final || row.score || '—';
     }
 
-    function statsPairLabel(home, away, suffix = '') {
-      if (home == null && away == null) return '<span class="muted">—</span>';
+    function statsPairPlain(home, away, suffix = '') {
+      if (home == null && away == null) return null;
       const h = home != null ? home : '—';
       const a = away != null ? away : '—';
       return `${h}×${a}${suffix}`;
+    }
+
+    function statsPairLabel(home, away, suffix = '') {
+      const text = statsPairPlain(home, away, suffix);
+      if (!text) return '<span class="muted">—</span>';
+      return text;
+    }
+
+    function statsPairSum(home, away) {
+      if (home == null && away == null) return null;
+      return (Number(home) || 0) + (Number(away) || 0);
     }
 
     function mercadoPlacarLabel(row) {
@@ -2118,16 +2192,42 @@
       return `<button type="button" class="table-tip-btn placar" data-placar-goals="${row.event_id}" title="Minutos dos gols">${score}</button>`;
     }
 
-    function mercadoEscanteiosLabel(row) {
-      if (row.home_corners == null && row.away_corners == null) {
-        return '<span class="muted">—</span>';
-      }
-      const h = row.home_corners != null ? row.home_corners : '—';
-      const a = row.away_corners != null ? row.away_corners : '—';
-      const text = `${h}×${a}`;
-      const total = (Number(row.home_corners) || 0) + (Number(row.away_corners) || 0);
+    function mercadoClickablePairLabel(row, home, away, dataAttr, title) {
+      const text = statsPairPlain(home, away);
+      if (!text) return '<span class="muted">—</span>';
+      const total = statsPairSum(home, away) || 0;
       if (total <= 0) return `<span class="muted">${text}</span>`;
-      return `<button type="button" class="table-tip-btn placar" data-placar-corners="${row.event_id}" title="Minutos dos escanteios">${text}</button>`;
+      return `<button type="button" class="table-tip-btn placar" ${dataAttr}="${row.event_id}" title="${title}">${text}</button>`;
+    }
+
+    function mercadoEscanteiosLabel(row) {
+      return mercadoClickablePairLabel(
+        row,
+        row.home_corners,
+        row.away_corners,
+        'data-placar-corners',
+        'Minutos dos escanteios',
+      );
+    }
+
+    function mercadoSotLabel(row) {
+      return mercadoClickablePairLabel(
+        row,
+        row.home_shots_on_target,
+        row.away_shots_on_target,
+        'data-placar-sot',
+        'Minutos dos chutes a gol',
+      );
+    }
+
+    function mercadoAmarelosLabel(row) {
+      return mercadoClickablePairLabel(
+        row,
+        row.home_yellow_cards,
+        row.away_yellow_cards,
+        'data-placar-cards',
+        'Minutos dos cartões',
+      );
     }
 
     function favoritoPlacarLabel(row) {
@@ -2138,6 +2238,31 @@
         return `<span class="muted">${score}</span>`;
       }
       return `<button type="button" class="table-tip-btn placar" data-placar-goals="${row.event_id}" title="Minutos dos gols">${score}</button>`;
+    }
+
+    function timelineWhoLabel(row, ev) {
+      const side = String(ev.team_side || '').toLowerCase();
+      let who = ev.team || '';
+      if (!who) {
+        if (side === 'home' || side === '1') who = row?.home || 'Casa';
+        else if (side === 'away' || side === '2') who = row?.away || 'Fora';
+        else who = '—';
+      }
+      return who;
+    }
+
+    function cardKindFromEvent(ev) {
+      const payload = ev?.payload && typeof ev.payload === 'object' ? ev.payload : {};
+      const raw = String(
+        payload.cardtype ?? payload.card ?? payload.name ?? payload.type ?? ev.event_type ?? '',
+      ).toLowerCase();
+      if (raw.includes('yellow') && raw.includes('red')) return 'Amarelo/vermelho';
+      if (raw.includes('red') || raw.includes('vermelh')) return 'Vermelho';
+      if (raw.includes('yellow') || raw.includes('amarel')) return 'Amarelo';
+      if (Number(ev.type_id) === 50) return 'Vermelho';
+      if (Number(ev.type_id) === 45) return 'Amarelo/vermelho';
+      if (Number(ev.type_id) === 40) return 'Amarelo';
+      return 'Cartão';
     }
 
     function renderGoalsPopoverHtml(row, goals) {
@@ -2164,25 +2289,21 @@
       return `<h4>Gols · ${match} (${score})</h4><ul>${items}</ul>`;
     }
 
-    function renderCornersPopoverHtml(row, corners) {
+    function renderTimelinePopoverHtml(row, events, opts) {
+      const title = opts?.title || 'Eventos';
       const match = row ? formatMatchHtml(row.home, row.away) : '';
-      const total = statsPairLabel(row?.home_corners, row?.away_corners);
-      if (!corners?.length) {
-        return `<h4>Escanteios · ${match}</h4><p class="muted">Nenhum escanteio com minuto registrado ainda (placar ${total}).</p>`;
+      const total = opts?.totalLabel || '—';
+      if (!events?.length) {
+        return `<h4>${title} · ${match}</h4><p class="muted">Nenhum registro com minuto ainda (${total}).</p>`;
       }
-      const items = corners.map((c) => {
-        const min = c.minute != null ? `${c.minute}'` : '—';
-        const side = String(c.team_side || '').toLowerCase();
-        let who = c.team || '';
-        if (!who) {
-          if (side === 'home') who = row?.home || 'Casa';
-          else if (side === 'away') who = row?.away || 'Fora';
-          else who = '—';
-        }
-        const player = c.player ? ` · ${c.player}` : '';
-        return `<li><strong>${min}</strong> ${who}<span class="muted">${player}</span></li>`;
+      const items = events.map((ev) => {
+        const min = ev.minute != null ? `${ev.minute}'` : '—';
+        const who = timelineWhoLabel(row, ev);
+        const player = ev.player ? ` · ${ev.player}` : '';
+        const kind = opts?.kindFn ? ` · ${opts.kindFn(ev)}` : '';
+        return `<li><strong>${min}</strong> ${who}<span class="muted">${kind}${player}</span></li>`;
       }).join('');
-      return `<h4>Escanteios · ${match} (${total})</h4><ul>${items}</ul>`;
+      return `<h4>${title} · ${match} (${total})</h4><ul>${items}</ul>`;
     }
 
     async function loadGoalsForEvent(eventId) {
@@ -2197,17 +2318,20 @@
       return mercadoGoalsCache[key];
     }
 
-    async function loadCornersForEvent(eventId) {
-      const key = String(eventId);
-      if (Array.isArray(mercadoCornersCache[key])) return mercadoCornersCache[key];
+    async function loadTimelineEventsForTypes(eventId, types) {
+      const key = `${eventId}|${types.slice().sort().join(',')}`;
+      if (Array.isArray(mercadoTimelineCache[key])) return mercadoTimelineCache[key];
+      const typeFilter = types.length === 1
+        ? `event_type=eq.${encodeURIComponent(types[0])}`
+        : `event_type=in.(${types.map((t) => encodeURIComponent(t)).join(',')})`;
       const path =
-        `futebol_sportradar_events?event_id=eq.${encodeURIComponent(key)}` +
-        `&event_type=eq.corner&disabled=eq.false` +
-        `&select=minute,team,team_side,player,event_type` +
+        `futebol_sportradar_events?event_id=eq.${encodeURIComponent(String(eventId))}` +
+        `&${typeFilter}&disabled=eq.false` +
+        `&select=minute,team,team_side,player,event_type,type_id,payload` +
         `&order=minute.asc`;
       const rows = await supabaseGet(path);
-      mercadoCornersCache[key] = Array.isArray(rows) ? rows : [];
-      return mercadoCornersCache[key];
+      mercadoTimelineCache[key] = Array.isArray(rows) ? rows : [];
+      return mercadoTimelineCache[key];
     }
 
     async function showPlacarGoalsPopover(btn, eventId) {
@@ -2237,29 +2361,70 @@
       }
     }
 
-    async function showCornersPopover(btn, eventId) {
+    async function showTimelinePopover(btn, eventId, tipPrefix, title, types, totalLabel, kindFn) {
       const pop = document.getElementById('mercado-elevated-popover');
       if (!pop) return;
-      const tipKey = `corners-${eventId}`;
+      const tipKey = `${tipPrefix}-${eventId}`;
       if (pop.classList.contains('open') && pop.dataset.tipKey === tipKey) {
         hideMercadoElevatedPopover();
         return;
       }
       const row = mercadoCache.find((r) => String(r.event_id) === String(eventId));
-      pop.innerHTML = `<h4>Escanteios</h4><p class="muted">Carregando…</p>`;
+      pop.innerHTML = `<h4>${title}</h4><p class="muted">Carregando…</p>`;
       pop.dataset.tipKey = tipKey;
       delete pop.dataset.eventId;
       positionMercadoPopover(btn, pop);
       try {
-        const corners = await loadCornersForEvent(eventId);
+        const events = await loadTimelineEventsForTypes(eventId, types);
         if (pop.dataset.tipKey !== tipKey) return;
-        pop.innerHTML = renderCornersPopoverHtml(row, corners);
+        pop.innerHTML = renderTimelinePopoverHtml(row, events, {
+          title,
+          totalLabel,
+          kindFn,
+        });
         positionMercadoPopover(btn, pop);
       } catch (err) {
         if (pop.dataset.tipKey !== tipKey) return;
         pop.innerHTML =
-          `<h4>Escanteios</h4><p class="muted">${err.message || String(err)}</p>`;
+          `<h4>${title}</h4><p class="muted">${err.message || String(err)}</p>`;
       }
+    }
+
+    async function showCornersPopover(btn, eventId) {
+      const row = mercadoCache.find((r) => String(r.event_id) === String(eventId));
+      await showTimelinePopover(
+        btn,
+        eventId,
+        'corners',
+        'Escanteios',
+        ['corner'],
+        statsPairPlain(row?.home_corners, row?.away_corners) || '—',
+      );
+    }
+
+    async function showSotPopover(btn, eventId) {
+      const row = mercadoCache.find((r) => String(r.event_id) === String(eventId));
+      await showTimelinePopover(
+        btn,
+        eventId,
+        'sot',
+        'Chutes a gol',
+        ['shotontarget'],
+        statsPairPlain(row?.home_shots_on_target, row?.away_shots_on_target) || '—',
+      );
+    }
+
+    async function showCardsPopover(btn, eventId) {
+      const row = mercadoCache.find((r) => String(r.event_id) === String(eventId));
+      await showTimelinePopover(
+        btn,
+        eventId,
+        'cards',
+        'Cartões',
+        ['card'],
+        statsPairPlain(row?.home_yellow_cards, row?.away_yellow_cards) || '—',
+        cardKindFromEvent,
+      );
     }
 
     function mercadoValidacaoLabel(row) {
@@ -2291,6 +2456,22 @@
       if (mercadoFilterLiveOnly) {
         list = list.filter((r) => r.is_live);
       }
+      if (mercadoFilterMinMinute != null) {
+        list = list.filter((r) => (Number(r.last_minute) || 0) >= mercadoFilterMinMinute);
+      }
+      if (mercadoFilterMinCorners != null) {
+        list = list.filter((r) => (statsPairSum(r.home_corners, r.away_corners) || 0) >= mercadoFilterMinCorners);
+      }
+      if (mercadoFilterMinSot != null) {
+        list = list.filter((r) =>
+          (statsPairSum(r.home_shots_on_target, r.away_shots_on_target) || 0) >= mercadoFilterMinSot
+        );
+      }
+      if (mercadoFilterMinYellows != null) {
+        list = list.filter((r) =>
+          (statsPairSum(r.home_yellow_cards, r.away_yellow_cards) || 0) >= mercadoFilterMinYellows
+        );
+      }
       return list;
     }
 
@@ -2313,9 +2494,7 @@
         return String(mercadoSortKey(b)).localeCompare(String(mercadoSortKey(a)));
       });
       if (!rows.length) {
-        tbody.innerHTML = mercadoFilterLiveOnly
-          ? '<tr><td colspan="13" class="empty">Nenhum jogo ao vivo com estatísticas ainda.</td></tr>'
-          : '<tr><td colspan="13" class="empty">Nenhuma estatística Sportradar gravada ainda.</td></tr>';
+        tbody.innerHTML = '<tr><td colspan="13" class="empty">Nenhum jogo com esses filtros.</td></tr>';
         return;
       }
       tbody.innerHTML = rows.map((row, i) => {
@@ -2336,11 +2515,11 @@
           <td data-label="Tempo">${mercadoTempoLabel(row)}</td>
           <td data-label="Placar">${mercadoPlacarLabel(row)}</td>
           <td data-label="Escanteios">${mercadoEscanteiosLabel(row)}</td>
-          <td data-label="Chutes a gol">${statsPairLabel(row.home_shots_on_target, row.away_shots_on_target)}</td>
+          <td data-label="Chutes a gol">${mercadoSotLabel(row)}</td>
           <td data-label="Chutes">${statsPairLabel(row.home_shots_total, row.away_shots_total)}</td>
           <td data-label="Posse">${poss}</td>
           <td data-label="Faltas">${statsPairLabel(row.home_fouls, row.away_fouls)}</td>
-          <td data-label="Amarelos">${statsPairLabel(row.home_yellow_cards, row.away_yellow_cards)}</td>
+          <td data-label="Amarelos">${mercadoAmarelosLabel(row)}</td>
           <td data-label="Liga">${league}</td>
           <td data-label="Status">${mercadoStatusLabel(row)}</td>
           <td data-label="Link">${link}</td>
@@ -2359,9 +2538,7 @@
       status.className = 'status';
       const when = meta?.fetched_at ? formatDate(meta.fetched_at) : '—';
       const source = meta?.source || 'sportradar';
-      const listLabel = mercadoFilterLiveOnly
-        ? `${formatNumber(displayCount)} ao vivo de ${formatNumber(visibleCount)}`
-        : `${formatNumber(displayCount)} jogos`;
+      const listLabel = `${formatNumber(displayCount)} exibidos de ${formatNumber(visibleCount)}`;
       status.textContent = `${listLabel} · atualizado ${when} · fonte ${source}`;
     }
 
@@ -2903,7 +3080,7 @@
         ]);
         mercadoCache = rows ?? [];
         mercadoGoalsCache = {};
-        mercadoCornersCache = {};
+        mercadoTimelineCache = {};
         mercadoMetaCache = metaRows?.[0] ?? null;
         const visible = mercadoVisibleRows(mercadoCache);
         const display = mercadoDisplayRows(mercadoCache);
@@ -2943,18 +3120,71 @@
       }
     }
 
-    const filtroStatsLive = document.getElementById('filtro-stats-live');
-    if (filtroStatsLive) {
-      filtroStatsLive.checked = mercadoFilterLiveOnly;
-      filtroStatsLive.addEventListener('change', (e) => {
-        mercadoFilterLiveOnly = e.target.checked;
-        localStorage.setItem('statsFilterLiveOnly', mercadoFilterLiveOnly ? '1' : '0');
-        const visible = mercadoVisibleRows(mercadoCache);
-        const display = mercadoDisplayRows(mercadoCache);
-        updateMercadoStatus(mercadoMetaCache, visible.length, display.length);
-        renderMercado();
-      });
+    function parseFilterInt(raw) {
+      if (raw == null || String(raw).trim() === '') return null;
+      const n = Number(raw);
+      return Number.isFinite(n) && n >= 0 ? Math.trunc(n) : null;
     }
+
+    function persistStatsFilters() {
+      localStorage.setItem('statsFilterLiveOnly', mercadoFilterLiveOnly ? '1' : '0');
+      localStorage.setItem('statsFilterMinMinute', mercadoFilterMinMinute != null ? String(mercadoFilterMinMinute) : '');
+      localStorage.setItem('statsFilterMinCorners', mercadoFilterMinCorners != null ? String(mercadoFilterMinCorners) : '');
+      localStorage.setItem('statsFilterMinSot', mercadoFilterMinSot != null ? String(mercadoFilterMinSot) : '');
+      localStorage.setItem('statsFilterMinYellows', mercadoFilterMinYellows != null ? String(mercadoFilterMinYellows) : '');
+    }
+
+    function refreshStatsFilterView() {
+      const visible = mercadoVisibleRows(mercadoCache);
+      const display = mercadoDisplayRows(mercadoCache);
+      updateMercadoStatus(mercadoMetaCache, visible.length, display.length);
+      renderMercado();
+    }
+
+    function syncStatsFilterInputsFromState() {
+      const live = document.getElementById('filtro-stats-live');
+      const minM = document.getElementById('filtro-stats-min-minuto');
+      const minE = document.getElementById('filtro-stats-min-esc');
+      const minS = document.getElementById('filtro-stats-min-sot');
+      const minY = document.getElementById('filtro-stats-min-amarelos');
+      if (live) live.checked = mercadoFilterLiveOnly;
+      if (minM) minM.value = mercadoFilterMinMinute != null ? String(mercadoFilterMinMinute) : '';
+      if (minE) minE.value = mercadoFilterMinCorners != null ? String(mercadoFilterMinCorners) : '';
+      if (minS) minS.value = mercadoFilterMinSot != null ? String(mercadoFilterMinSot) : '';
+      if (minY) minY.value = mercadoFilterMinYellows != null ? String(mercadoFilterMinYellows) : '';
+    }
+
+    syncStatsFilterInputsFromState();
+
+    document.getElementById('filtro-stats-live')?.addEventListener('change', (e) => {
+      mercadoFilterLiveOnly = e.target.checked;
+      persistStatsFilters();
+      refreshStatsFilterView();
+    });
+
+    [
+      ['filtro-stats-min-minuto', (v) => { mercadoFilterMinMinute = v; }],
+      ['filtro-stats-min-esc', (v) => { mercadoFilterMinCorners = v; }],
+      ['filtro-stats-min-sot', (v) => { mercadoFilterMinSot = v; }],
+      ['filtro-stats-min-amarelos', (v) => { mercadoFilterMinYellows = v; }],
+    ].forEach(([id, setter]) => {
+      document.getElementById(id)?.addEventListener('input', (e) => {
+        setter(parseFilterInt(e.target.value));
+        persistStatsFilters();
+        refreshStatsFilterView();
+      });
+    });
+
+    document.getElementById('btn-stats-filters-clear')?.addEventListener('click', () => {
+      mercadoFilterLiveOnly = true;
+      mercadoFilterMinMinute = null;
+      mercadoFilterMinCorners = null;
+      mercadoFilterMinSot = null;
+      mercadoFilterMinYellows = null;
+      persistStatsFilters();
+      syncStatsFilterInputsFromState();
+      refreshStatsFilterView();
+    });
 
     document.getElementById('mercado-select-all')?.addEventListener('change', (e) => {
       const on = e.target.checked;
@@ -3055,6 +3285,22 @@
         if (eventId) await showCornersPopover(cornersBtn, eventId);
         return;
       }
+      const sotBtn = e.target.closest('[data-placar-sot]');
+      if (sotBtn) {
+        e.preventDefault();
+        e.stopPropagation();
+        const eventId = sotBtn.getAttribute('data-placar-sot');
+        if (eventId) await showSotPopover(sotBtn, eventId);
+        return;
+      }
+      const cardsBtn = e.target.closest('[data-placar-cards]');
+      if (cardsBtn) {
+        e.preventDefault();
+        e.stopPropagation();
+        const eventId = cardsBtn.getAttribute('data-placar-cards');
+        if (eventId) await showCardsPopover(cardsBtn, eventId);
+        return;
+      }
       const tipBtn = e.target.closest('[data-table-tip]');
       if (tipBtn) {
         e.preventDefault();
@@ -3099,6 +3345,8 @@
         e.target.closest('[data-table-tip]') ||
         e.target.closest('[data-placar-goals]') ||
         e.target.closest('[data-placar-corners]') ||
+        e.target.closest('[data-placar-sot]') ||
+        e.target.closest('[data-placar-cards]') ||
         e.target.closest('[data-log-detail]') ||
         e.target.closest('#mercado-elevated-popover')
       ) {
