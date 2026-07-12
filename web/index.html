@@ -2340,15 +2340,29 @@
           let displayAtual = Number.isFinite(atual) && atual >= 1.01 ? atual : null;
           let displayMax = Number.isFinite(max) && max >= 1.01 ? max : null;
           let displayIni = iniOdd;
-          if (repairedFav && displayIni != null) {
-            const curMl = favLado === 'home'
-              ? parseFavoritoOdd(r.ml_home_atual)
-              : parseFavoritoOdd(r.ml_away_atual);
+          const mlHomeCur = parseFavoritoOdd(r.ml_home_atual);
+          const mlAwayCur = parseFavoritoOdd(r.ml_away_atual);
+          const mercado1x2Aberto = mlHomeCur != null && mlAwayCur != null;
+          if (!mercado1x2Aberto) {
+            // Sem par 1X2 atual no BD → nao inventar Odd atual.
+            displayAtual = null;
+          }
+          if (repairedFav && displayIni != null && mercado1x2Aberto) {
+            const curMl = favLado === 'home' ? mlHomeCur : mlAwayCur;
             displayAtual = curMl ?? displayIni;
             displayMax = Math.max(displayIni, displayAtual);
           }
           const deltaMax = displayIni != null && displayMax != null ? (displayMax - displayIni) : null;
           const deltaAtual = displayIni != null && displayAtual != null ? (displayAtual - displayIni) : null;
+          // #region agent log
+          {
+            const label = `${r.home || ''} x ${r.away || ''}`;
+            if (/Bulls|Illawarra|88720263/i.test(label) || String(r.event_id) === '88720263') {
+              const upd = r.updated_at ? Date.parse(r.updated_at) : NaN;
+              fetch('http://127.0.0.1:7904/ingest/86615625-6ae5-4e98-a1da-0a5f0f15fc42',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'230425'},body:JSON.stringify({sessionId:'230425',runId:'post-fix',hypothesisId:'H1',location:'web/index.html:loadFavoritoDrift',message:'Bulls favorito odds snapshot',data:{event_id:r.event_id,home:r.home,away:r.away,status:r.status,favorito_lado:r.favorito_lado,odd_inicial:r.odd_inicial,odd_max:r.odd_max,odd_atual:r.odd_atual,ml_home_atual:r.ml_home_atual,ml_away_atual:r.ml_away_atual,mercado1x2Aberto,displayAtual,displayMax,updated_at:r.updated_at,updatedAgeSec:Number.isFinite(upd)?Math.round((Date.now()-upd)/1000):null},timestamp:Date.now()})}).catch(()=>{});
+            }
+          }
+          // #endregion
           let oddIniCell = '—';
           if (homeIni != null && awayIni != null) {
             const homeCls = favLado === 'home' ? 'hctg-pill' : 'hctg-pill rival';

@@ -379,7 +379,14 @@ function betanoUrl(eventId: string, home: string | null, away: string | null): s
 function extractMlOdds(
   eventId: string,
   overview: Json,
-): { home: number | null; draw: number | null; away: number | null } {
+): {
+  home: number | null;
+  draw: number | null;
+  away: number | null;
+  matchedMarket: string | null;
+  matchedTypeId: string | null;
+  marketCount: number;
+} {
   const markets = asRecord(overview.markets) ?? {};
   const selections = asRecord(overview.selections) ?? {};
   const event = asRecord(eventsMap(overview)[eventId]);
@@ -394,9 +401,11 @@ function extractMlOdds(
     if (String(rec.eventId ?? rec.eventID ?? "") === eventId) marketIds.push(mid);
   }
 
+  let marketCount = 0;
   for (const mid of marketIds) {
     const market = asRecord(markets[mid]);
     if (!market) continue;
+    marketCount += 1;
     const name = String(market.name ?? market.typeName ?? market.marketType ?? "").toLowerCase();
     const typeId = String(market.typeId ?? market.marketTypeId ?? "");
     const is1x2 =
@@ -438,10 +447,26 @@ function extractMlOdds(
         sel.isAway === true
       ) away = price;
     }
-    if (home != null || draw != null || away != null) return { home, draw, away };
+    if (home != null || draw != null || away != null) {
+      return {
+        home,
+        draw,
+        away,
+        matchedMarket: String(market.name ?? market.typeName ?? mid),
+        matchedTypeId: typeId || null,
+        marketCount,
+      };
+    }
   }
 
-  return { home: null, draw: null, away: null };
+  return {
+    home: null,
+    draw: null,
+    away: null,
+    matchedMarket: null,
+    matchedTypeId: null,
+    marketCount,
+  };
 }
 
 /** Analise favorito 1X2: odd inicial → máximo → vitória? */
@@ -514,8 +539,8 @@ async function processFavoritoDriftLive(
   const mlOk =
     ml_home != null &&
     ml_away != null &&
-    ml_home >= 1.01 &&
-    ml_away >= 1.01;
+    ml_home >= 1.001 &&
+    ml_away >= 1.001;
 
   const nowIso = new Date().toISOString();
   const { data: prev } = await supabase
@@ -585,7 +610,35 @@ async function processFavoritoDriftLive(
   };
 
   if (!mlOk) {
-    await supabase.from("futebol_favorito_drift").update(clockPatch).eq("event_id", input.event_id);
+    // #region agent log
+    await insertSistemaLog(supabase, {
+      level: "info",
+      source: "debug-230425",
+      action: "favorito_ml_missing",
+      message: "1X2 ausente — limpando odd_atual/ml_*_atual",
+      event_id: input.event_id,
+      match_label: matchLabel(input.home, input.away),
+      payload: {
+        hypothesisId: "H1",
+        ml_home,
+        ml_away,
+        minuto: input.minute,
+        score: input.score_text,
+        clearedOdds: true,
+      },
+    });
+    // #endregion
+    // Mercado Vencedor fechado/suspenso: nao manter odd fantasma na tabela.
+    await supabase
+      .from("futebol_favorito_drift")
+      .update({
+        ...clockPatch,
+        odd_atual: null,
+        ml_home_atual: null,
+        ml_draw_atual: null,
+        ml_away_atual: null,
+      })
+      .eq("event_id", input.event_id);
     return "updated";
   }
 
@@ -3304,6 +3357,34 @@ Deno.serve(async (req) => {
       const injury = extractInjuryTime(event);
       // 1X2 do overview JSON — base da analise favorito (odd inicial → máximo).
       const ml = extractMlOdds(eventId, overview);
+      // #region agent log
+      if (
+        eventId === "88720263" ||
+        /bulls|illawarra/i.test(`${teams.home} ${teams.away}`) ||
+        (ml.home != null && ml.home <= 1.02) ||
+        (ml.away != null && ml.away <= 1.02)
+      ) {
+        await insertSistemaLog(supabase, {
+          level: "info",
+          source: "debug-230425",
+          action: "favorito_ml_extract",
+          message: "extractMlOdds debug",
+          event_id: eventId,
+          match_label: matchLabel(teams.home, teams.away),
+          payload: {
+            hypothesisId: "H2-H3",
+            home: ml.home,
+            draw: ml.draw,
+            away: ml.away,
+            matchedMarket: ml.matchedMarket,
+            matchedTypeId: ml.matchedTypeId,
+            marketCount: ml.marketCount,
+            minute,
+            score: score.text,
+          },
+        });
+      }
+      // #endregion
       const goalsTotal = (score.home ?? 0) + (score.away ?? 0);
       const mercadoResultado = mercadoResultadoByEvent.get(eventId) ?? null;
       const url = betanoUrl(eventId, teams.home, teams.away);
