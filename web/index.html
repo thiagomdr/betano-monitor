@@ -1689,9 +1689,10 @@
 
     /** Time 1 azul · Time 2 vermelho. opts.pinEventId = botão fixar ao lado do time 2. */
     function statsPinIconSvg() {
+      // Pushpin / thumbtack (Material-style), cor via currentColor
       return (
         '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" aria-hidden="true" focusable="false">' +
-        '<path d="M12 2C8.13 2 5 5.13 5 9c0 5.25 7 13 7 13s7-7.75 7-13c0-3.87-3.13-7-7-7zm0 9.5c-1.38 0-2.5-1.12-2.5-2.5S10.62 6.5 12 6.5s2.5 1.12 2.5 2.5S13.38 11.5 12 11.5z"/>' +
+        '<path fill="currentColor" d="M16 12V4h1V2H7v2h1v8l-2 2v2h5.2V22h1.6v-6H18v-2l-2-2z"/>' +
         '</svg>'
       );
     }
