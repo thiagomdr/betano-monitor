@@ -929,7 +929,6 @@
           title="Remover selecionados" aria-label="Remover jogos selecionados" disabled>🗑</button>
       </div>
     </div>
-    <section class="mercado-summary" id="mercado-summary" aria-live="polite"></section>
     <div class="coleta-countdown" id="coleta-countdown-mercado" aria-live="polite">
       <span class="cd-item"><span class="cd-label">JSON</span><span class="cd-value" data-cd="json">—</span></span>
       <span class="cd-item"><span class="cd-label">Worker</span><span class="cd-value" data-cd="worker">—</span></span>
@@ -2240,7 +2239,6 @@
         if (rankA !== rankB) return rankA - rankB;
         return String(mercadoSortKey(b)).localeCompare(String(mercadoSortKey(a)));
       });
-      renderMercadoSummary(rows);
       const visibleIds = new Set(rows.map((r) => String(r.event_id)));
       for (const id of [...mercadoSelectedIds]) {
         if (!visibleIds.has(id)) mercadoSelectedIds.delete(id);
