@@ -287,6 +287,36 @@
       color: var(--muted);
       font-weight: 500;
     }
+    .stats-pin-btn {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      margin-left: 0.25rem;
+      padding: 0;
+      width: 1.2rem;
+      height: 1.2rem;
+      border: none;
+      border-radius: 4px;
+      background: transparent;
+      color: var(--muted);
+      font-size: 0.78rem;
+      line-height: 1;
+      cursor: pointer;
+      vertical-align: middle;
+      opacity: 0.55;
+    }
+    .stats-pin-btn:hover {
+      opacity: 1;
+      color: #ffd166;
+      background: rgba(255, 209, 102, 0.12);
+    }
+    .stats-pin-btn.is-pinned {
+      opacity: 1;
+      color: #ffd166;
+    }
+    #stats-table tbody tr.is-pinned td {
+      background: rgba(255, 209, 102, 0.06);
+    }
     .log-detail-line {
       padding: 0.2rem 0;
       border-bottom: 1px solid rgba(255, 255, 255, 0.06);
@@ -1397,6 +1427,38 @@
 
     let statsVisibleCols = loadStatsVisibleCols();
 
+    function loadStatsPinnedIds() {
+      try {
+        const raw = localStorage.getItem('statsPinnedEventIds');
+        if (!raw) return [];
+        const arr = JSON.parse(raw);
+        if (!Array.isArray(arr)) return [];
+        return arr.map((id) => String(id)).filter(Boolean);
+      } catch {
+        return [];
+      }
+    }
+
+    let statsPinnedIds = loadStatsPinnedIds();
+
+    function persistStatsPinnedIds() {
+      localStorage.setItem('statsPinnedEventIds', JSON.stringify(statsPinnedIds));
+    }
+
+    function isStatsPinned(eventId) {
+      return statsPinnedIds.includes(String(eventId));
+    }
+
+    function toggleStatsPin(eventId) {
+      const id = String(eventId || '');
+      if (!id) return;
+      const idx = statsPinnedIds.indexOf(id);
+      if (idx >= 0) statsPinnedIds.splice(idx, 1);
+      else statsPinnedIds.unshift(id);
+      persistStatsPinnedIds();
+      renderMercado();
+    }
+
     function persistStatsVisibleCols() {
       localStorage.setItem('statsTableColumns', JSON.stringify([...statsVisibleCols]));
     }
@@ -1449,7 +1511,7 @@
         case 'num':
           return `<td class="stats-group-start" data-label="#">${i + 1}</td>`;
         case 'jogo':
-          return `<td data-label="Jogo">${formatMatchHtml(row.home, row.away)}</td>`;
+          return `<td data-label="Jogo">${formatMatchHtml(row.home, row.away, { pinEventId: row.event_id })}</td>`;
         case 'tempo':
           return `<td data-label="Tempo">${mercadoTempoLabel(row)}</td>`;
         case 'placar':
@@ -1619,11 +1681,23 @@
         .replace(/"/g, '&quot;');
     }
 
-    /** Time 1 azul · Time 2 vermelho */
-    function formatMatchHtml(home, away) {
+    /** Time 1 azul · Time 2 vermelho. opts.pinEventId = botão fixar ao lado do time 2. */
+    function formatMatchHtml(home, away, opts = {}) {
       const h = escapeHtml(home || '—');
       const a = escapeHtml(away || '—');
-      return `<span class="team-home">${h}</span> <span class="match-vs">x</span> <span class="team-away">${a}</span>`;
+      let awayHtml = `<span class="team-away">${a}</span>`;
+      const pinId = opts.pinEventId != null && opts.pinEventId !== '' ? String(opts.pinEventId) : '';
+      if (pinId) {
+        const pinned = isStatsPinned(pinId);
+        const title = pinned ? 'Remover fixador' : 'Fixar jogo no topo';
+        awayHtml +=
+          ` <button type="button" class="stats-pin-btn${pinned ? ' is-pinned' : ''}"` +
+          ` data-stats-pin="${escapeHtml(pinId)}"` +
+          ` title="${escapeHtml(title)}"` +
+          ` aria-label="${escapeHtml(title)}"` +
+          ` aria-pressed="${pinned ? 'true' : 'false'}">📌</button>`;
+      }
+      return `<span class="team-home">${h}</span> <span class="match-vs">x</span> ${awayHtml}`;
     }
 
     function formatMatchLabelHtml(label) {
@@ -3257,6 +3331,13 @@
       renderStatsThead();
       const colCount = Math.max(1, statsVisibleColCount());
       const rows = mercadoDisplayRows(mercadoCache).slice().sort((a, b) => {
+        const pinA = statsPinnedIds.indexOf(String(a.event_id));
+        const pinB = statsPinnedIds.indexOf(String(b.event_id));
+        const aPinned = pinA >= 0;
+        const bPinned = pinB >= 0;
+        if (aPinned && bPinned) return pinA - pinB;
+        if (aPinned) return -1;
+        if (bPinned) return 1;
         const liveA = a.is_live ? 1 : 0;
         const liveB = b.is_live ? 1 : 0;
         if (liveB !== liveA) return liveB - liveA;
@@ -3276,7 +3357,10 @@
         return;
       }
       tbody.innerHTML = rows
-        .map((row, i) => `<tr>${statsRowCellsHtml(row, i)}</tr>`)
+        .map((row, i) => {
+          const pinned = isStatsPinned(row.event_id);
+          return `<tr${pinned ? ' class="is-pinned"' : ''}>${statsRowCellsHtml(row, i)}</tr>`;
+        })
         .join('');
     }
 
@@ -4117,6 +4201,13 @@
     });
 
     document.getElementById('mercado-tbody')?.closest('main')?.addEventListener('click', async (e) => {
+      const pinBtn = e.target.closest('[data-stats-pin]');
+      if (pinBtn) {
+        e.preventDefault();
+        e.stopPropagation();
+        toggleStatsPin(pinBtn.getAttribute('data-stats-pin'));
+        return;
+      }
       const balloonMap = [
         ['data-placar-goals', showPlacarGoalsPopover],
         ['data-placar-corners', showCornersPopover],
