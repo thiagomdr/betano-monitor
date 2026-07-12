@@ -467,21 +467,47 @@
       border-collapse: collapse;
       font-size: 0.84rem;
     }
-    /* Favorito: colunas compactas à esquerda (sem justificar em tela cheia) */
+    /* Favorito: colunas compactas; larguras ajustáveis (arraste no cabeçalho) */
     #panel-favorito .mercado-table {
       width: max-content;
-      max-width: 100%;
-      table-layout: auto;
+      max-width: none;
+      table-layout: fixed;
+      border-collapse: separate;
+      border-spacing: 0;
     }
     #panel-favorito .mercado-table th,
     #panel-favorito .mercado-table td {
-      width: 1%;
+      overflow: hidden;
+      text-overflow: ellipsis;
       white-space: nowrap;
+      box-sizing: border-box;
     }
     #panel-favorito .mercado-table td[data-label="Jogo"] {
-      width: auto;
-      max-width: 22rem;
       white-space: normal;
+      overflow: hidden;
+    }
+    #panel-favorito .mercado-table th {
+      position: sticky;
+      top: 0;
+      z-index: 1;
+    }
+    #panel-favorito .mercado-table th .col-resize {
+      position: absolute;
+      right: 0;
+      top: 0;
+      width: 7px;
+      height: 100%;
+      cursor: col-resize;
+      user-select: none;
+      touch-action: none;
+    }
+    #panel-favorito .mercado-table th .col-resize:hover,
+    #panel-favorito .mercado-table th .col-resize.is-dragging {
+      background: rgba(94, 179, 255, 0.35);
+    }
+    body.favorito-col-resizing {
+      cursor: col-resize !important;
+      user-select: none !important;
     }
     th, td {
       padding: 0.5rem 0.65rem;
@@ -829,18 +855,29 @@
     </p>
     <p class="status" id="favorito-status" aria-live="polite" style="padding:0 1.25rem"></p>
     <div class="table-wrap" style="padding:0 1.25rem 1.5rem">
-      <table class="mercado-table">
+      <table class="mercado-table" id="favorito-table">
+        <colgroup id="favorito-colgroup">
+          <col data-col="jogo" />
+          <col data-col="tempo" />
+          <col data-col="placar" />
+          <col data-col="odd_ini" />
+          <col data-col="odd_max" />
+          <col data-col="delta" />
+          <col data-col="resultado" />
+          <col data-col="print" />
+          <col data-col="status" />
+        </colgroup>
         <thead>
           <tr>
-            <th>Jogo</th>
-            <th>Tempo</th>
-            <th>Placar</th>
-            <th>Odd ini</th>
-            <th>Odd máx</th>
-            <th>Δ</th>
-            <th>Resultado</th>
-            <th>Print</th>
-            <th>Status</th>
+            <th data-col="jogo">Jogo</th>
+            <th data-col="tempo">Tempo</th>
+            <th data-col="placar">Placar</th>
+            <th data-col="odd_ini">Odd ini</th>
+            <th data-col="odd_max">Odd máx</th>
+            <th data-col="delta">Δ</th>
+            <th data-col="resultado">Resultado</th>
+            <th data-col="print">Print</th>
+            <th data-col="status">Status</th>
           </tr>
         </thead>
         <tbody id="favorito-tbody">
@@ -2062,6 +2099,103 @@
       return Number.isFinite(v) ? v.toFixed(2) : '—';
     }
 
+    const FAVORITO_COL_WIDTHS_KEY = 'favoritoColWidths.v1';
+    const FAVORITO_COL_DEFAULTS = {
+      jogo: 200,
+      tempo: 56,
+      placar: 56,
+      odd_ini: 148,
+      odd_max: 96,
+      delta: 56,
+      resultado: 80,
+      print: 72,
+      status: 88,
+    };
+    const FAVORITO_COL_MIN = 40;
+    let favoritoColResizeBound = false;
+
+    function readFavoritoColWidths() {
+      try {
+        const raw = localStorage.getItem(FAVORITO_COL_WIDTHS_KEY);
+        if (!raw) return { ...FAVORITO_COL_DEFAULTS };
+        const parsed = JSON.parse(raw);
+        return { ...FAVORITO_COL_DEFAULTS, ...parsed };
+      } catch {
+        return { ...FAVORITO_COL_DEFAULTS };
+      }
+    }
+
+    function saveFavoritoColWidths(widths) {
+      try {
+        localStorage.setItem(FAVORITO_COL_WIDTHS_KEY, JSON.stringify(widths));
+      } catch {
+        /* ignore */
+      }
+    }
+
+    function applyFavoritoColWidths(widths) {
+      const table = document.getElementById('favorito-table');
+      const group = document.getElementById('favorito-colgroup');
+      if (!table || !group) return;
+      let total = 0;
+      for (const col of group.querySelectorAll('col[data-col]')) {
+        const key = col.getAttribute('data-col');
+        const px = Math.max(FAVORITO_COL_MIN, Number(widths[key]) || FAVORITO_COL_DEFAULTS[key] || 80);
+        col.style.width = `${px}px`;
+        total += px;
+      }
+      table.style.width = `${total}px`;
+    }
+
+    function initFavoritoColumnResize() {
+      const table = document.getElementById('favorito-table');
+      if (!table) return;
+      const widths = readFavoritoColWidths();
+      applyFavoritoColWidths(widths);
+
+      if (favoritoColResizeBound) return;
+      favoritoColResizeBound = true;
+
+      const headers = table.querySelectorAll('thead th[data-col]');
+      headers.forEach((th) => {
+        if (th.querySelector('.col-resize')) return;
+        const handle = document.createElement('span');
+        handle.className = 'col-resize';
+        handle.title = 'Arraste para ajustar a largura';
+        th.appendChild(handle);
+
+        handle.addEventListener('mousedown', (ev) => {
+          ev.preventDefault();
+          ev.stopPropagation();
+          const key = th.getAttribute('data-col');
+          if (!key) return;
+          const startX = ev.clientX;
+          const current = readFavoritoColWidths();
+          const startW = Math.max(
+            FAVORITO_COL_MIN,
+            Number(current[key]) || FAVORITO_COL_DEFAULTS[key] || 80,
+          );
+          handle.classList.add('is-dragging');
+          document.body.classList.add('favorito-col-resizing');
+
+          const onMove = (e) => {
+            const next = Math.max(FAVORITO_COL_MIN, startW + (e.clientX - startX));
+            current[key] = Math.round(next);
+            applyFavoritoColWidths(current);
+          };
+          const onUp = () => {
+            handle.classList.remove('is-dragging');
+            document.body.classList.remove('favorito-col-resizing');
+            document.removeEventListener('mousemove', onMove);
+            document.removeEventListener('mouseup', onUp);
+            saveFavoritoColWidths(current);
+          };
+          document.addEventListener('mousemove', onMove);
+          document.addEventListener('mouseup', onUp);
+        });
+      });
+    }
+
     async function loadFavoritoDrift() {
       const tbody = document.getElementById('favorito-tbody');
       const favStatus = document.getElementById('favorito-status');
@@ -2087,6 +2221,7 @@
         if (!tbody) return;
         if (!list.length) {
           tbody.innerHTML = '<tr><td colspan="9" class="muted">Nenhum jogo ainda — aguarde o próximo cron da Edge.</td></tr>';
+          initFavoritoColumnResize();
           return;
         }
         tbody.innerHTML = list.map((r) => {
@@ -2161,6 +2296,7 @@
             <td data-label="Status">${st}</td>
           </tr>`;
         }).join('');
+        initFavoritoColumnResize();
       } catch (err) {
         if (tbody) {
           tbody.innerHTML = `<tr><td colspan="9" class="muted">Erro: ${String(err?.message || err)}</td></tr>`;
@@ -3066,6 +3202,7 @@
       if (isMercado) {
         loadMercado();
       } else if (isFavorito) {
+        initFavoritoColumnResize();
         loadFavoritoDrift();
       } else {
         loadSistemaLog();
