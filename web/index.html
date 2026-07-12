@@ -2525,7 +2525,9 @@
         else if (r.favorito_venceu === false) resultado = '<span style="color:#ff6b6b">Perdeu</span>';
         else resultado = 'Empate';
       }
-      const st = r.status === 'watching' ? 'Ao vivo' : 'Finalizado';
+      const st = r.status === 'watching'
+        ? 'Ao vivo'
+        : `Finalizado <span class="muted">${formatDate(r.settled_at || r.updated_at)}</span>`;
       let printCell = '—';
       if (r.screenshot_url) {
         const shotMin = r.screenshot_minuto != null ? r.screenshot_minuto : r.minuto_inicial;
