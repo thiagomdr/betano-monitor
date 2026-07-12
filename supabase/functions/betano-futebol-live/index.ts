@@ -1893,6 +1893,8 @@ type TeamStats = {
   home_goal_kicks: number | null;
   away_goal_kicks: number | null;
   available: boolean;
+  values: Json;
+  source_url: string | null;
   raw: Json;
 };
 
@@ -1907,6 +1909,8 @@ function emptyStats(): TeamStats {
     home_goal_kicks: null,
     away_goal_kicks: null,
     available: false,
+    values: {},
+    source_url: null,
     raw: {},
   };
 }
@@ -1991,7 +1995,9 @@ async function tryFetchStats(
         home_goal_kicks: gk.home,
         away_goal_kicks: gk.away,
         available,
-        raw: { betradarMatchId, url, valuesKeys: Object.keys(values).slice(0, 30) },
+        values,
+        source_url: url,
+        raw: { betradarMatchId, url, valuesKeys: Object.keys(values).slice(0, 80) },
       };
     } catch (err) {
       errors.push(`${url} ${err instanceof Error ? err.message : String(err)}`);
@@ -2262,6 +2268,13 @@ async function reconcileHistoricGoals(
       game.home,
       game.away,
     );
+    try {
+      if (timelineResult.timeline.length) {
+        await persistSportradarTimeline(supabase, timelineResult.timeline);
+      }
+    } catch {
+      /* backfill: timeline opcional */
+    }
     let goals = timelineResult.goals;
     if (goals.length === 0) {
       goals = inferGoalsFromFinalScore(
@@ -2293,15 +2306,32 @@ async function reconcileHistoricGoals(
   return { backfilled, fixed, scanned };
 }
 
-/** Gols com minuto via Sportradar match_timeline. */
+type TimelineEventRow = {
+  event_id: string;
+  betradar_match_id: string | null;
+  sportradar_event_id: string;
+  event_type: string | null;
+  type_id: number | null;
+  minute: number | null;
+  seconds: number | null;
+  team_side: string | null;
+  team: string | null;
+  player: string | null;
+  score_home: number | null;
+  score_away: number | null;
+  disabled: boolean;
+  payload: Json;
+};
+
+/** Timeline Sportradar: todos os eventos + gols tipados para historico. */
 async function fetchGoalsTimeline(
   eventId: string,
   betradarMatchId: string | number | null,
   homeName: string | null,
   awayName: string | null,
-): Promise<{ goals: GoalEvent[]; eventsTotal: number }> {
+): Promise<{ goals: GoalEvent[]; timeline: TimelineEventRow[]; eventsTotal: number }> {
   if (betradarMatchId == null || betradarMatchId === "") {
-    return { goals: [], eventsTotal: 0 };
+    return { goals: [], timeline: [], eventsTotal: 0 };
   }
 
   const url =
@@ -2315,29 +2345,26 @@ async function fetchGoalsTimeline(
         Referer: "https://www.betano.bet.br/",
       },
     });
-    if (!res.ok) return { goals: [], eventsTotal: 0 };
+    if (!res.ok) return { goals: [], timeline: [], eventsTotal: 0 };
     const data = asRecord(await res.json());
     const doc0 = Array.isArray(data?.doc) ? asRecord(data.doc[0]) : null;
-    if (String(doc0?.event ?? "") === "exception") return { goals: [], eventsTotal: 0 };
+    if (String(doc0?.event ?? "") === "exception") {
+      return { goals: [], timeline: [], eventsTotal: 0 };
+    }
     const payload = asRecord(doc0?.data) ?? {};
     const events = payload.events ?? payload.event ?? payload.timeline;
-    if (!Array.isArray(events)) return { goals: [], eventsTotal: 0 };
+    if (!Array.isArray(events)) return { goals: [], timeline: [], eventsTotal: 0 };
 
     const goals: GoalEvent[] = [];
+    const timeline: TimelineEventRow[] = [];
+    let synSeq = 0;
     for (const item of events) {
       const rec = asRecord(item);
       if (!rec) continue;
       const type = String(rec.type ?? "").toLowerCase();
       const typeId = toInt(rec.typeid ?? rec._typeid ?? rec.type_id);
       const docType = String(rec._doctype ?? "").toLowerCase();
-      // BD-first: aceita apenas eventos Sportradar tipados como gol
-      const isGoal =
-        docType === "goal" ||
-        type === "goal" ||
-        typeId === 30 ||
-        String(rec._typeid ?? "") === "30";
-      if (!isGoal) continue;
-      if (Number(rec.disabled ?? 0) !== 0) continue;
+      const disabled = Number(rec.disabled ?? 0) !== 0;
 
       let minute: number | null = null;
       const timeField = toInt(rec.time);
@@ -2355,7 +2382,6 @@ async function fetchGoalsTimeline(
           minute = Math.floor(secondsField / 60);
         }
       }
-      if (minute == null || minute < 0) continue;
 
       let teamSide: string | null = null;
       const teamField = rec.team ?? rec.side ?? rec.teams;
@@ -2383,10 +2409,39 @@ async function fetchGoalsTimeline(
         : player;
 
       const result = asRecord(rec.result) ?? asRecord(rec.score);
-      const srId = rec._id != null ? String(rec._id) : null;
+      const eventType = docType || type || (typeId != null ? `type_${typeId}` : "unknown");
+      const srIdRaw = rec._id != null ? String(rec._id) : null;
+      const sportradarEventId = srIdRaw ??
+        `syn:${eventType}:${typeId ?? "x"}:${minute ?? "x"}:${teamSide ?? "x"}:${player ?? "x"}:${synSeq++}`;
+
+      timeline.push({
+        event_id: eventId,
+        betradar_match_id: String(betradarMatchId),
+        sportradar_event_id: sportradarEventId,
+        event_type: eventType,
+        type_id: typeId,
+        minute: minute != null && minute >= 0 ? minute : null,
+        seconds: secondsField,
+        team_side: teamSide,
+        team: teamName,
+        player,
+        score_home: toInt(result?.home),
+        score_away: toInt(result?.away),
+        disabled,
+        payload: rec,
+      });
+
+      const isGoal =
+        docType === "goal" ||
+        type === "goal" ||
+        typeId === 30 ||
+        String(rec._typeid ?? "") === "30";
+      if (!isGoal || disabled) continue;
+      if (minute == null || minute < 0) continue;
+
       goals.push({
         event_id: eventId,
-        sportradar_goal_id: srId,
+        sportradar_goal_id: srIdRaw,
         minute,
         team: teamName,
         team_side: teamSide,
@@ -2396,10 +2451,84 @@ async function fetchGoalsTimeline(
       });
     }
 
-    return { goals: dedupeGoals(goals), eventsTotal: events.length };
+    return { goals: dedupeGoals(goals), timeline, eventsTotal: events.length };
   } catch {
-    return { goals: [], eventsTotal: 0 };
+    return { goals: [], timeline: [], eventsTotal: 0 };
   }
+}
+
+async function persistSportradarStats(
+  supabase: ReturnType<typeof createClient>,
+  input: {
+    event_id: string;
+    betradar_match_id: string | null;
+    home: string | null;
+    away: string | null;
+    last_minute: number | null;
+    home_score: number | null;
+    away_score: number | null;
+    stats: TeamStats;
+  },
+): Promise<void> {
+  const nowIso = new Date().toISOString();
+  const values = input.stats.values && typeof input.stats.values === "object"
+    ? input.stats.values
+    : {};
+  await supabase.from("futebol_sportradar_stats").upsert({
+    event_id: input.event_id,
+    betradar_match_id: input.betradar_match_id,
+    home: input.home,
+    away: input.away,
+    last_minute: input.last_minute,
+    home_score: input.home_score,
+    away_score: input.away_score,
+    home_shots_on_target: input.stats.home_shots_on_target,
+    away_shots_on_target: input.stats.away_shots_on_target,
+    home_shots_total: input.stats.home_shots_total,
+    away_shots_total: input.stats.away_shots_total,
+    home_corners: input.stats.home_corners,
+    away_corners: input.stats.away_corners,
+    home_goal_kicks: input.stats.home_goal_kicks,
+    away_goal_kicks: input.stats.away_goal_kicks,
+    values_json: values,
+    source_url: input.stats.source_url,
+    fetched_at: nowIso,
+    updated_at: nowIso,
+  }, { onConflict: "event_id" });
+}
+
+async function persistSportradarTimeline(
+  supabase: ReturnType<typeof createClient>,
+  rows: TimelineEventRow[],
+): Promise<number> {
+  if (!rows.length) return 0;
+  const nowIso = new Date().toISOString();
+  const chunkSize = 80;
+  let saved = 0;
+  for (let i = 0; i < rows.length; i += chunkSize) {
+    const chunk = rows.slice(i, i + chunkSize).map((r) => ({
+      event_id: r.event_id,
+      betradar_match_id: r.betradar_match_id,
+      sportradar_event_id: r.sportradar_event_id,
+      event_type: r.event_type,
+      type_id: r.type_id,
+      minute: r.minute,
+      seconds: r.seconds,
+      team_side: r.team_side,
+      team: r.team,
+      player: r.player,
+      score_home: r.score_home,
+      score_away: r.score_away,
+      disabled: r.disabled,
+      payload: r.payload,
+      fetched_at: nowIso,
+    }));
+    const { error, count } = await supabase
+      .from("futebol_sportradar_events")
+      .upsert(chunk, { onConflict: "event_id,sportradar_event_id", count: "exact" });
+    if (!error) saved += count ?? chunk.length;
+  }
+  return saved;
 }
 
 function pressureLabel(pressure: number, thresholds: [number, number]): string {
@@ -3545,6 +3674,21 @@ Deno.serve(async (req) => {
         updated_at: nowIso,
       }, { onConflict: "event_id" });
 
+      try {
+        await persistSportradarStats(supabase, {
+          event_id: eventId,
+          betradar_match_id: betradarId != null ? String(betradarId) : null,
+          home: teams.home,
+          away: teams.away,
+          last_minute: minute,
+          home_score: score.home,
+          away_score: score.away,
+          stats,
+        });
+      } catch (err) {
+        console.warn(`[sportradar-stats] falha ao gravar ${eventId}:`, err);
+      }
+
       const favAction = await processFavoritoDriftLive(supabase, {
         event_id: eventId,
         home: teams.home,
@@ -3572,6 +3716,14 @@ Deno.serve(async (req) => {
       const timelineGoals = timelineResult.goals;
       if (timelineGoals.length > 0) goalsTimelineOk += 1;
       else if (betradarId != null && goalsTotal > 0) goalsTimelineEmpty += 1;
+
+      try {
+        if (timelineResult.timeline.length) {
+          await persistSportradarTimeline(supabase, timelineResult.timeline);
+        }
+      } catch (err) {
+        console.warn(`[sportradar-timeline] falha ao gravar ${eventId}:`, err);
+      }
 
       const inferredGoals = inferGoalsFromScoreDelta(
         eventId,
