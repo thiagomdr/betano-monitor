@@ -621,6 +621,37 @@
       top: 0;
       background: var(--panel);
     }
+    #stats-table thead tr.stats-group-row th {
+      text-align: center;
+      font-size: 0.68rem;
+      letter-spacing: 0.06em;
+      padding: 0.4rem 0.5rem;
+      border-bottom: 1px solid var(--border);
+      border-left: 1px solid var(--border);
+      background: rgba(232, 238, 247, 0.06);
+      top: 0;
+      z-index: 3;
+    }
+    #stats-table thead tr.stats-group-row th:first-child {
+      border-left: none;
+    }
+    #stats-table thead tr.stats-col-row th {
+      top: 1.85rem;
+      z-index: 2;
+      border-left: 1px solid transparent;
+    }
+    #stats-table thead tr.stats-col-row th.stats-group-start {
+      border-left: 1px solid var(--border);
+    }
+    #stats-table thead tr.stats-col-row th.stats-group-start:first-child {
+      border-left: none;
+    }
+    #stats-table tbody td.stats-group-start {
+      border-left: 1px solid var(--border);
+    }
+    #stats-table tbody td.stats-group-start:first-child {
+      border-left: none;
+    }
     tr:last-child td { border-bottom: none; }
     #mercado-tbody tr:hover td,
     #favorito-tbody-live tr:hover td,
@@ -970,42 +1001,51 @@
     </div>
     <p class="table-scroll-hint">Dica: role a tabela horizontalmente para ver todas as colunas.</p>
     <div class="table-wrap">
-      <table>
+      <table id="stats-table">
         <thead>
-          <tr>
-            <th>#</th>
+          <tr class="stats-group-row">
+            <th colspan="7">Identificação do jogo</th>
+            <th colspan="6">Finalização</th>
+            <th colspan="4">Domínio / pressão</th>
+            <th colspan="6">Bola parada</th>
+            <th colspan="3">Disciplina</th>
+            <th colspan="2">Elenco</th>
+            <th colspan="5">Contexto</th>
+          </tr>
+          <tr class="stats-col-row">
+            <th class="stats-group-start">#</th>
             <th>Jogo</th>
             <th title="Minuto do jogo (+acréscimos quando anunciados)">Tempo</th>
             <th title="Clique para minutos dos gols">Placar</th>
-            <th title="Clique para minutos dos escanteios">Escanteios</th>
-            <th title="Clique para minutos dos chutes a gol">Chutes a gol</th>
+            <th>Liga</th>
+            <th title="Ao Vivo ou Finalizado">Status</th>
+            <th>Link</th>
+            <th class="stats-group-start" title="Clique para minutos dos chutes a gol">Chutes a gol</th>
             <th title="Clique para minutos dos chutes para fora">Chutes fora</th>
             <th title="Clique para minutos dos chutes bloqueados">Bloqueados</th>
             <th title="Clique para minutos dos chutes (a gol, fora e bloqueados)">Chutes</th>
             <th title="Clique para minutos das defesas">Defesas</th>
-            <th title="Posse de bola % (sem timeline individual)">Posse</th>
+            <th title="Pênaltis (contador)">Pênaltis</th>
+            <th class="stats-group-start" title="Posse de bola % (sem timeline individual)">Posse</th>
+            <th title="Ataques (contador; sem timeline individual)">Ataques</th>
+            <th title="Ataques perigosos (contador; sem timeline individual)">At. perigosos</th>
+            <th title="Bola segura (contador; sem timeline individual)">Bola segura</th>
+            <th class="stats-group-start" title="Clique para minutos dos escanteios">Escanteios</th>
             <th title="Clique para minutos das faltas (cobranças)">Faltas</th>
             <th title="Clique para minutos dos livres">Livres</th>
             <th title="Clique para minutos dos impedimentos">Impedimentos</th>
             <th title="Clique para minutos dos laterais">Laterais</th>
             <th title="Clique para minutos dos tiros de meta">Tiros de meta</th>
-            <th title="Ataques (contador; sem timeline individual)">Ataques</th>
-            <th title="Ataques perigosos (contador; sem timeline individual)">At. perigosos</th>
-            <th title="Bola segura (contador; sem timeline individual)">Bola segura</th>
-            <th title="Clique para minutos dos cartões amarelos">Amarelos</th>
+            <th class="stats-group-start" title="Clique para minutos dos cartões amarelos">Amarelos</th>
             <th title="Clique para minutos dos cartões vermelhos">Vermelhos</th>
             <th title="Clique para minutos amarelo/vermelho">A/V</th>
-            <th title="Clique para minutos das substituições">Subs</th>
+            <th class="stats-group-start" title="Clique para minutos das substituições">Subs</th>
             <th title="Clique para minutos das lesões">Lesões</th>
-            <th title="Pênaltis (contador)">Pênaltis</th>
-            <th>Liga</th>
-            <th title="Estádio Sportradar (match_info)">Estádio</th>
+            <th class="stats-group-start" title="Estádio Sportradar (match_info)">Estádio</th>
             <th title="Árbitro">Árbitro</th>
             <th title="Técnicos casa / fora">Técnicos</th>
             <th title="Clima (Bom/Médio/Ruim) + temperatura se houver">Clima</th>
             <th title="Condição do gramado">Gramado</th>
-            <th title="Ao Vivo ou Finalizado">Status</th>
-            <th>Link</th>
           </tr>
         </thead>
         <tbody id="mercado-tbody">
@@ -2891,39 +2931,39 @@
           ? statsPairLabel(row.home_possession, row.away_possession, '%')
           : '<span class="muted">—</span>';
         return `<tr>
-          <td data-label="#">${i + 1}</td>
+          <td class="stats-group-start" data-label="#">${i + 1}</td>
           <td data-label="Jogo">${matchHtml}</td>
           <td data-label="Tempo">${mercadoTempoLabel(row)}</td>
           <td data-label="Placar">${mercadoPlacarLabel(row)}</td>
-          <td data-label="Escanteios">${mercadoEscanteiosLabel(row)}</td>
-          <td data-label="Chutes a gol">${mercadoSotLabel(row)}</td>
+          <td data-label="Liga">${league}</td>
+          <td data-label="Status">${mercadoStatusLabel(row)}</td>
+          <td data-label="Link">${link}</td>
+          <td class="stats-group-start" data-label="Chutes a gol">${mercadoSotLabel(row)}</td>
           <td data-label="Chutes fora">${mercadoChutesForaLabel(row)}</td>
           <td data-label="Bloqueados">${mercadoBloqueadosLabel(row)}</td>
           <td data-label="Chutes">${mercadoChutesTotalLabel(row)}</td>
           <td data-label="Defesas">${mercadoDefesasLabel(row)}</td>
-          <td data-label="Posse">${poss}</td>
+          <td data-label="Pênaltis">${mercadoPenaltisLabel(row)}</td>
+          <td class="stats-group-start" data-label="Posse">${poss}</td>
+          <td data-label="Ataques">${mercadoAtaquesLabel(row)}</td>
+          <td data-label="At. perigosos">${mercadoAtaquesPerigososLabel(row)}</td>
+          <td data-label="Bola segura">${mercadoBolaSeguraLabel(row)}</td>
+          <td class="stats-group-start" data-label="Escanteios">${mercadoEscanteiosLabel(row)}</td>
           <td data-label="Faltas">${mercadoFaltasLabel(row)}</td>
           <td data-label="Livres">${mercadoLivresLabel(row)}</td>
           <td data-label="Impedimentos">${mercadoImpedimentosLabel(row)}</td>
           <td data-label="Laterais">${mercadoLateraisLabel(row)}</td>
           <td data-label="Tiros de meta">${mercadoTirosMetaLabel(row)}</td>
-          <td data-label="Ataques">${mercadoAtaquesLabel(row)}</td>
-          <td data-label="At. perigosos">${mercadoAtaquesPerigososLabel(row)}</td>
-          <td data-label="Bola segura">${mercadoBolaSeguraLabel(row)}</td>
-          <td data-label="Amarelos">${mercadoAmarelosLabel(row)}</td>
+          <td class="stats-group-start" data-label="Amarelos">${mercadoAmarelosLabel(row)}</td>
           <td data-label="Vermelhos">${mercadoVermelhosLabel(row)}</td>
           <td data-label="A/V">${mercadoAmareloVermelhoLabel(row)}</td>
-          <td data-label="Subs">${mercadoSubsLabel(row)}</td>
+          <td class="stats-group-start" data-label="Subs">${mercadoSubsLabel(row)}</td>
           <td data-label="Lesões">${mercadoLesoesLabel(row)}</td>
-          <td data-label="Pênaltis">${mercadoPenaltisLabel(row)}</td>
-          <td data-label="Liga">${league}</td>
-          <td data-label="Estádio">${mercadoEstadioLabel(row)}</td>
+          <td class="stats-group-start" data-label="Estádio">${mercadoEstadioLabel(row)}</td>
           <td data-label="Árbitro">${mercadoArbitroLabel(row)}</td>
           <td data-label="Técnicos">${mercadoTecnicosLabel(row)}</td>
           <td data-label="Clima">${mercadoClimaLabel(row)}</td>
           <td data-label="Gramado">${mercadoGramadoLabel(row)}</td>
-          <td data-label="Status">${mercadoStatusLabel(row)}</td>
-          <td data-label="Link">${link}</td>
         </tr>`;
       }).join('');
     }
