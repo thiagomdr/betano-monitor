@@ -1712,10 +1712,10 @@
       const eq = cfg.gender === 'a' ? 'equilibrada' : 'equilibrados';
       const dif = cfg.gender === 'a' ? 'diferenciada' : 'diferenciados';
       return {
-        ascTitle: `${cfg.label} mais ${eq} (=)`,
-        descTitle: `${cfg.label} mais ${dif} (≠)`,
-        ascAria: `Ordenar por ${cfg.label} mais ${eq}`,
-        descAria: `Ordenar por ${cfg.label} mais ${dif}`,
+        ascTitle: statsSortTitleCase(`${cfg.label} mais ${eq} (=)`),
+        descTitle: statsSortTitleCase(`${cfg.label} mais ${dif} (≠)`),
+        ascAria: statsSortTitleCase(`Ordenar por ${cfg.label} mais ${eq}`),
+        descAria: statsSortTitleCase(`Ordenar por ${cfg.label} mais ${dif}`),
       };
     }
 
@@ -1834,6 +1834,28 @@
       renderMercado();
     }
 
+    /** Palavras curtas que ficam em minúsculas no Title Case de ordenação (exceto a 1ª). */
+    const STATS_SORT_TITLE_SMALL = new Set([
+      'a', 'as', 'o', 'os', 'um', 'uma', 'uns', 'umas',
+      'de', 'do', 'da', 'dos', 'das', 'e', 'em', 'no', 'na', 'nos', 'nas',
+      'com', 'por', 'para', 'ao', 'à', '×', 'x', '·',
+    ]);
+
+    /** Title Case padrão dos rótulos de ordenação (balões e tooltips). */
+    function statsSortTitleCase(text) {
+      return String(text || '')
+        .trim()
+        .split(/\s+/)
+        .map((raw, i) => {
+          if (!raw) return raw;
+          if (/^\d+[ªº]?$/.test(raw)) return raw;
+          const lower = raw.toLocaleLowerCase('pt-BR');
+          if (i > 0 && STATS_SORT_TITLE_SMALL.has(lower)) return lower;
+          return lower.charAt(0).toLocaleUpperCase('pt-BR') + lower.slice(1);
+        })
+        .join(' ');
+    }
+
     function showPlacarSortPopover(btn, arrowDir) {
       const pop = document.getElementById('mercado-elevated-popover');
       if (!pop || !btn) return;
@@ -1845,14 +1867,16 @@
       const options =
         arrowDir === 'desc'
           ? [
-              { mode: 'team_max', label: 'Maior Número de Gols de 1 Time' },
-              { mode: 'sum', label: 'Maior Soma de Gols do Jogo' },
+              { mode: 'team_max', label: statsSortTitleCase('Maior Número de Gols de 1 Time') },
+              { mode: 'sum', label: statsSortTitleCase('Maior Soma de Gols do Jogo') },
             ]
           : [
-              { mode: 'team_min', label: 'Menor Número de Gols de 1 Time' },
-              { mode: 'sum', label: 'Menor Soma de Gols do Jogo' },
+              { mode: 'team_min', label: statsSortTitleCase('Menor Número de Gols de 1 Time') },
+              { mode: 'sum', label: statsSortTitleCase('Menor Soma de Gols do Jogo') },
             ];
-      const title = arrowDir === 'desc' ? 'Ordenar placar · maior' : 'Ordenar placar · menor';
+      const title = statsSortTitleCase(
+        arrowDir === 'desc' ? 'Ordenar Placar · Maior' : 'Ordenar Placar · Menor',
+      );
       pop.innerHTML =
         `<h4>${escapeHtml(title)}</h4><div class="stats-sort-menu">${options
           .map((opt) => {
