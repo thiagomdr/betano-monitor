@@ -872,15 +872,6 @@
       background: rgba(94, 179, 255, 0.35);
       color: #fff;
     }
-    #stats-table thead tr.stats-col-row th .stats-col-move-btn.stats-sort-sym {
-      width: auto;
-      min-width: 0.95rem;
-      height: 0.95rem;
-      padding: 0 0.12rem;
-      font-size: 0.72rem;
-      font-weight: 800;
-      line-height: 1;
-    }
     #stats-table thead tr.stats-col-row th .stats-tri {
       display: block;
       width: 0;
@@ -1660,63 +1651,51 @@
     /** @type {{ colId: string|null, dir: 'asc'|'desc'|null, mode: string|null }} */
     let statsSort = { colId: null, dir: null, mode: null };
 
-    /** Pair stats: sort by balance |casa − fora| (= equilibrado / ≠ diferenciado). */
-    function statsPairAbsDiffSortValue(home, away) {
+    function statsPairAbsDiff(home, away) {
       if (home == null && away == null) return null;
       return Math.abs((Number(home) || 0) - (Number(away) || 0));
     }
 
-    /** Colunas com ordenação = / ≠. gender: a=feminino, o=masculino. */
-    const STATS_BALANCE_SORT = {
-      sot: { home: 'home_shots_on_target', away: 'away_shots_on_target', label: 'Chutes a Gol', gender: 'o' },
-      soff: { home: 'home_shots_off_target', away: 'away_shots_off_target', label: 'Chutes Fora', gender: 'o' },
-      blocked: { home: 'home_shots_blocked', away: 'away_shots_blocked', label: 'Bloqueados', gender: 'o' },
-      shots: { home: 'home_shots_total', away: 'away_shots_total', label: 'Chutes', gender: 'o' },
-      saves: { home: 'home_saves', away: 'away_saves', label: 'Defesas', gender: 'a' },
-      pens: { home: 'home_penalties', away: 'away_penalties', label: 'Pênaltis', gender: 'o' },
-      posse: { home: 'home_possession', away: 'away_possession', label: 'Posse', gender: 'a' },
-      ataques: { home: 'home_attacks', away: 'away_attacks', label: 'Ataques', gender: 'o' },
-      ataques_perig: { home: 'home_dangerous_attacks', away: 'away_dangerous_attacks', label: 'Ataques perigosos', gender: 'o' },
-      bola_segura: { home: 'home_ball_safe', away: 'away_ball_safe', label: 'Bola segura', gender: 'a' },
-      escanteios: { home: 'home_corners', away: 'away_corners', label: 'Escanteios', gender: 'o' },
-      faltas: { home: 'home_fouls', away: 'away_fouls', label: 'Faltas', gender: 'a' },
-      livres: { home: 'home_free_kicks', away: 'away_free_kicks', label: 'Livres', gender: 'o' },
-      impedimentos: { home: 'home_offsides', away: 'away_offsides', label: 'Impedimentos', gender: 'o' },
-      laterais: { home: 'home_throw_ins', away: 'away_throw_ins', label: 'Laterais', gender: 'o' },
-      tiros_meta: { home: 'home_goal_kicks', away: 'away_goal_kicks', label: 'Tiros de Meta', gender: 'o' },
-      amarelos: { home: 'home_yellow_cards', away: 'away_yellow_cards', label: 'Amarelos', gender: 'o' },
-      vermelhos: { home: 'home_red_cards', away: 'away_red_cards', label: 'Vermelhos', gender: 'o' },
-      av: { home: 'home_yellow_red_cards', away: 'away_yellow_red_cards', label: 'A/V', gender: 'o' },
-      subs: { home: 'home_substitutions', away: 'away_substitutions', label: 'Subs', gender: 'a' },
-      lesoes: { home: 'home_injuries', away: 'away_injuries', label: 'Lesões', gender: 'a' },
+    /**
+     * Colunas casa×fora com balão ▲/▼ (como Placar).
+     * unit: 'count' | 'pct' — pct omite opção de soma (~100%).
+     */
+    const STATS_PAIR_SORT = {
+      sot: { home: 'home_shots_on_target', away: 'away_shots_on_target', label: 'Chutes a Gol', metric: 'Chutes a Gol', unit: 'count' },
+      soff: { home: 'home_shots_off_target', away: 'away_shots_off_target', label: 'Chutes Fora', metric: 'Chutes Fora', unit: 'count' },
+      blocked: { home: 'home_shots_blocked', away: 'away_shots_blocked', label: 'Bloqueados', metric: 'Chutes Bloqueados', unit: 'count' },
+      shots: { home: 'home_shots_total', away: 'away_shots_total', label: 'Chutes', metric: 'Chutes', unit: 'count' },
+      saves: { home: 'home_saves', away: 'away_saves', label: 'Defesas', metric: 'Defesas', unit: 'count' },
+      pens: { home: 'home_penalties', away: 'away_penalties', label: 'Pênaltis', metric: 'Pênaltis', unit: 'count' },
+      posse: { home: 'home_possession', away: 'away_possession', label: 'Posse', metric: 'Posse', unit: 'pct' },
+      ataques: { home: 'home_attacks', away: 'away_attacks', label: 'Ataques', metric: 'Ataques', unit: 'count' },
+      ataques_perig: { home: 'home_dangerous_attacks', away: 'away_dangerous_attacks', label: 'At. Perigosos', metric: 'Ataques Perigosos', unit: 'count' },
+      bola_segura: { home: 'home_ball_safe', away: 'away_ball_safe', label: 'Bola Segura', metric: 'Bola Segura', unit: 'count' },
+      escanteios: { home: 'home_corners', away: 'away_corners', label: 'Escanteios', metric: 'Escanteios', unit: 'count' },
+      faltas: { home: 'home_fouls', away: 'away_fouls', label: 'Faltas', metric: 'Faltas', unit: 'count' },
+      livres: { home: 'home_free_kicks', away: 'away_free_kicks', label: 'Livres', metric: 'Livres', unit: 'count' },
+      impedimentos: { home: 'home_offsides', away: 'away_offsides', label: 'Impedimentos', metric: 'Impedimentos', unit: 'count' },
+      laterais: { home: 'home_throw_ins', away: 'away_throw_ins', label: 'Laterais', metric: 'Laterais', unit: 'count' },
+      tiros_meta: { home: 'home_goal_kicks', away: 'away_goal_kicks', label: 'Tiros de Meta', metric: 'Tiros de Meta', unit: 'count' },
+      amarelos: { home: 'home_yellow_cards', away: 'away_yellow_cards', label: 'Amarelos', metric: 'Cartões Amarelos', unit: 'count' },
+      vermelhos: { home: 'home_red_cards', away: 'away_red_cards', label: 'Vermelhos', metric: 'Cartões Vermelhos', unit: 'count' },
+      av: { home: 'home_yellow_red_cards', away: 'away_yellow_red_cards', label: 'A/V', metric: 'Amarelo/Vermelho', unit: 'count' },
+      subs: { home: 'home_substitutions', away: 'away_substitutions', label: 'Subs', metric: 'Substituições', unit: 'count' },
+      lesoes: { home: 'home_injuries', away: 'away_injuries', label: 'Lesões', metric: 'Lesões', unit: 'count' },
     };
 
-    function isStatsBalanceSortCol(colId) {
-      return Object.prototype.hasOwnProperty.call(STATS_BALANCE_SORT, colId);
+    function isStatsPairSortCol(colId) {
+      return Object.prototype.hasOwnProperty.call(STATS_PAIR_SORT, colId);
     }
 
-    function statsBalancePair(row, colId) {
-      const cfg = STATS_BALANCE_SORT[colId];
-      if (!cfg || !row) return { home: null, away: null };
-      return { home: row[cfg.home], away: row[cfg.away] };
-    }
-
-    function statsBalanceSortValue(row, colId) {
-      const { home, away } = statsBalancePair(row, colId);
-      return statsPairAbsDiffSortValue(home, away);
-    }
-
-    function statsBalanceSortTitles(colId) {
-      const cfg = STATS_BALANCE_SORT[colId];
-      if (!cfg) return null;
-      const eq = cfg.gender === 'a' ? 'equilibrada' : 'equilibrados';
-      const dif = cfg.gender === 'a' ? 'diferenciada' : 'diferenciados';
-      return {
-        ascTitle: statsSortTitleCase(`${cfg.label} mais ${eq} (=)`),
-        descTitle: statsSortTitleCase(`${cfg.label} mais ${dif} (≠)`),
-        ascAria: statsSortTitleCase(`Ordenar por ${cfg.label} mais ${eq}`),
-        descAria: statsSortTitleCase(`Ordenar por ${cfg.label} mais ${dif}`),
-      };
+    function statsPairParts(row, colId) {
+      if (colId === 'placar') return statsPlacarParts(row);
+      const cfg = STATS_PAIR_SORT[colId];
+      if (!cfg || !row) return null;
+      const home = row[cfg.home];
+      const away = row[cfg.away];
+      if (home == null && away == null) return null;
+      return { home: Number(home) || 0, away: Number(away) || 0 };
     }
 
     function statsPlacarParts(row) {
@@ -1744,14 +1723,6 @@
           const inj = Number(row.injury_time);
           return m + (Number.isFinite(inj) && inj > 0 ? inj / 100 : 0);
         }
-        case 'placar': {
-          const parts = statsPlacarParts(row);
-          if (!parts) return null;
-          const mode = statsSort.mode || 'sum';
-          if (mode === 'team_max') return Math.max(parts.home, parts.away);
-          if (mode === 'team_min') return Math.min(parts.home, parts.away);
-          return parts.home + parts.away;
-        }
         case 'liga': {
           const t = [row.country, row.league].filter(Boolean).join(' ').toLowerCase();
           return t || null;
@@ -1769,18 +1740,6 @@
         case 'gramado':
           return row.pitch ? String(row.pitch).toLowerCase() : null;
         default:
-          if (isStatsBalanceSortCol(colId)) {
-            const val = statsBalanceSortValue(row, colId);
-            // #region agent log
-            if (!window.__balanceSortLogCount) window.__balanceSortLogCount = 0;
-            if (window.__balanceSortLogCount < 8) {
-              window.__balanceSortLogCount += 1;
-              const pair = statsBalancePair(row, colId);
-              fetch('http://127.0.0.1:7904/ingest/86615625-6ae5-4e98-a1da-0a5f0f15fc42',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'71820e'},body:JSON.stringify({sessionId:'71820e',runId:'post-fix',hypothesisId:'L',location:'web/index.html:statsColSortValue:balance',message:'Balance sort key',data:{colId,dir:statsSort.dir,home:pair.home,away:pair.away,absDiff:val,event_id:row.event_id},timestamp:Date.now()})}).catch(()=>{});
-            }
-            // #endregion
-            return val;
-          }
           return null;
       }
     }
@@ -1797,28 +1756,35 @@
       return dir === 'desc' ? -c : c;
     }
 
-    function cmpPlacarSortRows(a, b) {
-      const pa = statsPlacarParts(a);
-      const pb = statsPlacarParts(b);
+    /** Compara linhas por modo de par (placar ou STATS_PAIR_SORT). */
+    function cmpPairSortRows(a, b, colId) {
+      const pa = statsPairParts(a, colId);
+      const pb = statsPairParts(b, colId);
       if (!pa && !pb) return 0;
       if (!pa) return 1;
       if (!pb) return -1;
       const mode = statsSort.mode || 'sum';
+      const dir = statsSort.dir || 'desc';
       if (mode === 'team_min') {
         const minA = Math.min(pa.home, pa.away);
         const minB = Math.min(pb.home, pb.away);
         if (minA !== minB) return minA - minB;
-        // Same low side (often 0): higher goals on the other side ranks as "even smaller".
         return Math.max(pb.home, pb.away) - Math.max(pa.home, pa.away);
       }
       if (mode === 'team_max') {
         return cmpStatsSortValues(
           Math.max(pa.home, pa.away),
           Math.max(pb.home, pb.away),
-          statsSort.dir || 'desc',
+          dir,
         );
       }
-      return cmpStatsSortValues(pa.home + pa.away, pb.home + pb.away, statsSort.dir || 'desc');
+      if (mode === 'balance') {
+        return cmpStatsSortValues(statsPairAbsDiff(pa.home, pa.away), statsPairAbsDiff(pb.home, pb.away), 'asc');
+      }
+      if (mode === 'imbalance') {
+        return cmpStatsSortValues(statsPairAbsDiff(pa.home, pa.away), statsPairAbsDiff(pb.home, pb.away), 'desc');
+      }
+      return cmpStatsSortValues(pa.home + pa.away, pb.home + pb.away, dir);
     }
 
     function setStatsSort(colId, dir, mode = null) {
@@ -1828,9 +1794,6 @@
       } else {
         statsSort = { colId, dir, mode };
       }
-      // #region agent log
-      fetch('http://127.0.0.1:7904/ingest/86615625-6ae5-4e98-a1da-0a5f0f15fc42',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'71820e'},body:JSON.stringify({sessionId:'71820e',runId:'post-fix',hypothesisId:'H',location:'web/index.html:setStatsSort',message:'Sort state set',data:{colId:statsSort.colId,dir:statsSort.dir,mode:statsSort.mode,cleared:!statsSort.colId},timestamp:Date.now()})}).catch(()=>{});
-      // #endregion
       renderMercado();
     }
 
@@ -1856,16 +1819,9 @@
         .join(' ');
     }
 
-    function showPlacarSortPopover(btn, arrowDir) {
-      const pop = document.getElementById('mercado-elevated-popover');
-      if (!pop || !btn) return;
-      const tipKey = `placar-sort-${arrowDir}`;
-      if (pop.classList.contains('open') && pop.dataset.tipKey === tipKey) {
-        hideMercadoElevatedPopover();
-        return;
-      }
-      const options =
-        arrowDir === 'desc'
+    function pairSortMenuOptions(colId, arrowDir) {
+      if (colId === 'placar') {
+        return arrowDir === 'desc'
           ? [
               { mode: 'team_max', label: statsSortTitleCase('Maior Número de Gols de 1 Time') },
               { mode: 'sum', label: statsSortTitleCase('Maior Soma de Gols do Jogo') },
@@ -1874,32 +1830,70 @@
               { mode: 'team_min', label: statsSortTitleCase('Menor Número de Gols de 1 Time') },
               { mode: 'sum', label: statsSortTitleCase('Menor Soma de Gols do Jogo') },
             ];
+      }
+      const cfg = STATS_PAIR_SORT[colId];
+      if (!cfg) return [];
+      const amount = cfg.unit === 'pct' ? 'Percentual' : 'Número';
+      const metric = cfg.metric;
+      if (arrowDir === 'desc') {
+        const opts = [
+          { mode: 'team_max', label: statsSortTitleCase(`Maior ${amount} de 1 Time`) },
+        ];
+        if (cfg.unit !== 'pct') {
+          opts.push({ mode: 'sum', label: statsSortTitleCase(`Maior Soma de ${metric}`) });
+        }
+        opts.push({ mode: 'imbalance', label: statsSortTitleCase('Maior Diferença Entre os Times') });
+        return opts;
+      }
+      const opts = [
+        { mode: 'team_min', label: statsSortTitleCase(`Menor ${amount} de 1 Time`) },
+      ];
+      if (cfg.unit !== 'pct') {
+        opts.push({ mode: 'sum', label: statsSortTitleCase(`Menor Soma de ${metric}`) });
+      }
+      opts.push({ mode: 'balance', label: statsSortTitleCase('Menor Diferença Entre os Times') });
+      return opts;
+    }
+
+    function showPairSortPopover(btn, colId, arrowDir) {
+      const pop = document.getElementById('mercado-elevated-popover');
+      if (!pop || !btn) return;
+      const tipKey = `pair-sort-${colId}-${arrowDir}`;
+      if (pop.classList.contains('open') && pop.dataset.tipKey === tipKey) {
+        hideMercadoElevatedPopover();
+        return;
+      }
+      const colLabel =
+        colId === 'placar' ? 'Placar' : (STATS_PAIR_SORT[colId]?.label || colId);
+      const options = pairSortMenuOptions(colId, arrowDir);
+      if (!options.length) return;
       const title = statsSortTitleCase(
-        arrowDir === 'desc' ? 'Ordenar Placar · Maior' : 'Ordenar Placar · Menor',
+        arrowDir === 'desc' ? `Ordenar ${colLabel} · Maior` : `Ordenar ${colLabel} · Menor`,
       );
       pop.innerHTML =
         `<h4>${escapeHtml(title)}</h4><div class="stats-sort-menu">${options
           .map((opt) => {
             const active =
-              statsSort.colId === 'placar' &&
+              statsSort.colId === colId &&
               statsSort.dir === arrowDir &&
               statsSort.mode === opt.mode
                 ? ' is-active'
                 : '';
-            return `<button type="button" class="${active.trim()}" data-placar-sort-mode="${escapeHtml(opt.mode)}" data-placar-sort-dir="${escapeHtml(arrowDir)}">${escapeHtml(opt.label)}</button>`;
+            return `<button type="button" class="${active.trim()}" data-pair-sort-mode="${escapeHtml(opt.mode)}" data-pair-sort-dir="${escapeHtml(arrowDir)}" data-pair-sort-col="${escapeHtml(colId)}">${escapeHtml(opt.label)}</button>`;
           })
           .join('')}</div>`;
       pop.dataset.tipKey = tipKey;
       delete pop.dataset.eventId;
       positionMercadoPopover(btn, pop);
-      pop.querySelectorAll('[data-placar-sort-mode]').forEach((optBtn) => {
+      pop.querySelectorAll('[data-pair-sort-mode]').forEach((optBtn) => {
         optBtn.addEventListener('click', (e) => {
           e.preventDefault();
           e.stopPropagation();
-          const mode = optBtn.getAttribute('data-placar-sort-mode');
-          const dir = optBtn.getAttribute('data-placar-sort-dir');
-          if (!mode || (dir !== 'asc' && dir !== 'desc')) return;
-          setStatsSort('placar', dir, mode);
+          const mode = optBtn.getAttribute('data-pair-sort-mode');
+          const dir = optBtn.getAttribute('data-pair-sort-dir');
+          const id = optBtn.getAttribute('data-pair-sort-col');
+          if (!id || !mode || (dir !== 'asc' && dir !== 'desc')) return;
+          setStatsSort(id, dir, mode);
           hideMercadoElevatedPopover();
         });
       });
@@ -1949,21 +1943,11 @@
               let descInner = '<span class="stats-tri stats-tri-down"></span>';
               let ascBtnClass = `stats-col-move-btn${ascActive}`;
               let descBtnClass = `stats-col-move-btn${descActive}`;
-              if (c.id === 'placar') {
-                ascTitle = 'Opções: menor placar';
-                descTitle = 'Opções: maior placar';
-                ascAria = `Opções de ordenação menor para ${c.label}`;
-                descAria = `Opções de ordenação maior para ${c.label}`;
-              } else if (isStatsBalanceSortCol(c.id)) {
-                const bal = statsBalanceSortTitles(c.id);
-                ascTitle = bal.ascTitle;
-                descTitle = bal.descTitle;
-                ascAria = bal.ascAria;
-                descAria = bal.descAria;
-                ascInner = '=';
-                descInner = '≠';
-                ascBtnClass += ' stats-sort-sym';
-                descBtnClass += ' stats-sort-sym';
+              if (c.id === 'placar' || isStatsPairSortCol(c.id)) {
+                ascTitle = statsSortTitleCase(`Opções: Menor ${c.label}`);
+                descTitle = statsSortTitleCase(`Opções: Maior ${c.label}`);
+                ascAria = statsSortTitleCase(`Opções de Ordenação Menor para ${c.label}`);
+                descAria = statsSortTitleCase(`Opções de Ordenação Maior para ${c.label}`);
               }
               return `<th${cls}${title}${style} data-stats-col="${escapeHtml(c.id)}"><span class="stats-th-inner"><span class="stats-th-label">${escapeHtml(c.label)}</span><span class="stats-col-move"><button type="button" class="${ascBtnClass}" data-stats-sort="asc" data-stats-col-id="${escapeHtml(c.id)}" title="${escapeHtml(ascTitle)}" aria-label="${escapeHtml(ascAria)}">${ascInner}</button><button type="button" class="${descBtnClass}" data-stats-sort="desc" data-stats-col-id="${escapeHtml(c.id)}" title="${escapeHtml(descTitle)}" aria-label="${escapeHtml(descAria)}">${descInner}</button></span></span></th>`;
             })
@@ -1980,13 +1964,10 @@
           const colId = sortBtn.getAttribute('data-stats-col-id');
           const dir = sortBtn.getAttribute('data-stats-sort');
           if (!colId || (dir !== 'asc' && dir !== 'desc')) return;
-          if (colId === 'placar') {
-            showPlacarSortPopover(sortBtn, dir);
+          if (colId === 'placar' || isStatsPairSortCol(colId)) {
+            showPairSortPopover(sortBtn, colId, dir);
             return;
           }
-          // #region agent log
-          fetch('http://127.0.0.1:7904/ingest/86615625-6ae5-4e98-a1da-0a5f0f15fc42',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'71820e'},body:JSON.stringify({sessionId:'71820e',runId:'pre-fix',hypothesisId:'D',location:'web/index.html:sortBtn.click',message:'Sort arrow clicked',data:{colId,dir,btnTitle:sortBtn.getAttribute('title'),activeBefore:statsSort},timestamp:Date.now()})}).catch(()=>{});
-          // #endregion
           setStatsSort(colId, dir);
         });
       });
@@ -3836,8 +3817,8 @@
         if (bPinned) return 1;
         if (statsSort.colId && statsSort.dir) {
           const cmp =
-            statsSort.colId === 'placar'
-              ? cmpPlacarSortRows(a, b)
+            statsSort.colId === 'placar' || isStatsPairSortCol(statsSort.colId)
+              ? cmpPairSortRows(a, b, statsSort.colId)
               : cmpStatsSortValues(
                   statsColSortValue(statsSort.colId, a),
                   statsColSortValue(statsSort.colId, b),
@@ -3853,23 +3834,6 @@
         if (minB !== minA) return minB - minA;
         return String(mercadoSortKey(b)).localeCompare(String(mercadoSortKey(a)));
       });
-      // #region agent log
-      if (isStatsBalanceSortCol(statsSort.colId)) {
-        window.__balanceSortLogCount = 0;
-        const top = rows.slice(0, 5).map((r) => {
-          const pair = statsBalancePair(r, statsSort.colId);
-          return {
-            event_id: r.event_id,
-            home: pair.home,
-            away: pair.away,
-            absDiff: statsPairAbsDiffSortValue(pair.home, pair.away),
-            sortVal: statsColSortValue(statsSort.colId, r),
-            minute: r.last_minute,
-          };
-        });
-        fetch('http://127.0.0.1:7904/ingest/86615625-6ae5-4e98-a1da-0a5f0f15fc42',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'71820e'},body:JSON.stringify({sessionId:'71820e',runId:'post-fix',hypothesisId:'L',location:'web/index.html:renderMercado',message:'Balance sort result top rows',data:{colId:statsSort.colId,dir:statsSort.dir,meaning:statsSort.dir==='asc'?'equilibrada':'diferenciada',top},timestamp:Date.now()})}).catch(()=>{});
-      }
-      // #endregion
       if (!statsVisibleColCount()) {
         tbody.innerHTML =
           `<tr><td colspan="${colCount}" class="empty">Nenhuma coluna selecionada. Use Montar Tabela.</td></tr>`;
