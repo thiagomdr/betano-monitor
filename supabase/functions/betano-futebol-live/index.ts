@@ -600,27 +600,6 @@ async function processFavoritoDriftLive(
     homeIniOk,
     awayIniOk,
   );
-  // #region agent log
-  if (repaired.repaired) {
-    console.log(
-      JSON.stringify({
-        sessionId: "230425",
-        hypothesisId: "A",
-        location: "betano-futebol-live:repairFavoritoIfInverted",
-        message: "repaired inverted favorito",
-        data: {
-          event_id: input.event_id,
-          from: row.favorito_lado,
-          to: repaired.lado,
-          homeIni: homeIniOk,
-          awayIni: awayIniOk,
-          odd_inicial: repaired.odd,
-        },
-        timestamp: Date.now(),
-      }),
-    );
-  }
-  // #endregion
 
   const lado = repaired.lado;
   const oddInicial = repaired.odd;

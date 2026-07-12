@@ -2349,14 +2349,6 @@
           }
           const deltaMax = displayIni != null && displayMax != null ? (displayMax - displayIni) : null;
           const deltaAtual = displayIni != null && displayAtual != null ? (displayAtual - displayIni) : null;
-          // #region agent log
-          {
-            const label = `${r.home || ''} x ${r.away || ''}`;
-            if (/George|Llamas|Blacktown|Tadotsu/i.test(label) || repairedFav) {
-              fetch('http://127.0.0.1:7904/ingest/86615625-6ae5-4e98-a1da-0a5f0f15fc42',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'230425'},body:JSON.stringify({sessionId:'230425',runId:'post-fix',hypothesisId:'A',location:'web/index.html:loadFavoritoDrift',message:'favorito after repair check',data:{event_id:r.event_id,home:r.home,away:r.away,db_favorito_lado:r.favorito_lado,display_favLado:favLado,repairedFav,homeIni,awayIni,db_odd_inicial:r.odd_inicial,displayIni,displayAtual,displayMax,ladoMatchesLower:homeIni!=null&&awayIni!=null?favLado===(awayIni<homeIni?'away':'home'):null},timestamp:Date.now()})}).catch(()=>{});
-            }
-          }
-          // #endregion
           let oddIniCell = '—';
           if (homeIni != null && awayIni != null) {
             const homeCls = favLado === 'home' ? 'hctg-pill' : 'hctg-pill rival';
