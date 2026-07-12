@@ -531,6 +531,13 @@
       white-space: normal;
       overflow: hidden;
     }
+    #panel-favorito .mercado-table th[data-col="check"],
+    #panel-favorito .mercado-table th[data-col="num"],
+    #panel-favorito .mercado-table td.mercado-check-cell,
+    #panel-favorito .mercado-table td[data-label="#"] {
+      text-align: center;
+      overflow: visible;
+    }
     #panel-favorito .mercado-table th[data-col="tempo"],
     #panel-favorito .mercado-table th[data-col="placar"],
     #panel-favorito .mercado-table td[data-label="Tempo"],
@@ -980,6 +987,8 @@
       <div class="table-wrap">
         <table class="mercado-table favorito-table" id="favorito-table-live">
           <colgroup class="favorito-colgroup">
+            <col data-col="check" />
+            <col data-col="num" />
             <col data-col="jogo" />
             <col data-col="tempo" />
             <col data-col="placar" />
@@ -992,10 +1001,10 @@
           </colgroup>
           <thead>
             <tr>
-              <th class="mercado-check-cell" title="Selecionar">
+              <th class="mercado-check-cell" data-col="check" title="Selecionar">
                 <input type="checkbox" id="favorito-select-all-live" aria-label="Selecionar todos ao vivo" />
               </th>
-              <th>#</th>
+              <th data-col="num">#</th>
               <th data-col="jogo">Jogo</th>
               <th data-col="tempo">Tempo</th>
               <th data-col="placar">Placar</th>
@@ -1018,6 +1027,8 @@
       <div class="table-wrap favorito-settled-wrap">
         <table class="mercado-table favorito-table" id="favorito-table-settled">
           <colgroup class="favorito-colgroup">
+            <col data-col="check" />
+            <col data-col="num" />
             <col data-col="jogo" />
             <col data-col="tempo" />
             <col data-col="placar" />
@@ -1030,10 +1041,10 @@
           </colgroup>
           <thead>
             <tr>
-              <th class="mercado-check-cell" title="Selecionar">
+              <th class="mercado-check-cell" data-col="check" title="Selecionar">
                 <input type="checkbox" id="favorito-select-all-settled" aria-label="Selecionar todos finalizados" />
               </th>
-              <th>#</th>
+              <th data-col="num">#</th>
               <th data-col="jogo">Jogo</th>
               <th data-col="tempo">Tempo</th>
               <th data-col="placar">Placar</th>
@@ -2435,8 +2446,10 @@
       return `${dd}/${mm} ${hh}:${mi}${minPart}`;
     }
 
-    const FAVORITO_COL_WIDTHS_KEY = 'favoritoColWidths.v1';
+    const FAVORITO_COL_WIDTHS_KEY = 'favoritoColWidths.v2';
     const FAVORITO_COL_DEFAULTS = {
+      check: 40,
+      num: 48,
       jogo: 200,
       tempo: 56,
       placar: 56,
