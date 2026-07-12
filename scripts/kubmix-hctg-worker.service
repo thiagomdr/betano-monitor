@@ -13,7 +13,7 @@ Environment=HCTG_HTML_SOURCE=html-dom-kubmix
 Environment=HCTG_HEADLESS=0
 Environment=HCTG_SCRAPE=0
 Environment=FAVORITO_SCREENSHOT=1
-Environment=FAVORITO_POLL_SEC=20
+Environment=FAVORITO_POLL_SEC=0
 Environment=HCTG_CHROME_PROFILE=/home/admin/betano-monitor/.chrome-hctg-profile
 Environment=HCTG_POLL_SEC=90
 Environment=HCTG_MAX_PER_CYCLE=4

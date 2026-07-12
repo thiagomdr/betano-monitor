@@ -71,8 +71,13 @@ const favoritoScreenshotOn = (process.env.FAVORITO_SCREENSHOT || "1").trim() !==
  * Producao atual: desligado (so prints favorito). Religar: HCTG_SCRAPE=1
  */
 const hctgScrapeOn = (process.env.HCTG_SCRAPE || "0").trim() === "1";
-/** Intervalo entre ciclos quando so prints (evita busy-loop). */
-const favoritoPollSec = Number(process.env.FAVORITO_POLL_SEC || "20");
+/**
+ * Intervalo entre ciclos quando so prints.
+ * 0 = imediato apos tirar print(s); idle (sem pendentes) usa 5s para nao martelar o BD.
+ */
+const favoritoPollSec = Number(process.env.FAVORITO_POLL_SEC || "0");
+/** true se o ultimo ciclo processou ao menos um print (done/failed). */
+let lastFavoritoHadWork = false;
 
 // #region agent log
 function dbgWorker(hypothesisId, location, message, data = {}) {
@@ -176,9 +181,13 @@ function nextPollDelayMs() {
     const sec = Math.max(5, errorRetrySec);
     return sec * 1000;
   }
-  // So prints: espera entre ciclos (nao busy-loop quando nao ha pendentes).
+  // So prints: apos trabalho → imediato (ou FAVORITO_POLL_SEC). Idle → 5s.
   if (!hctgScrapeOn) {
-    return Math.max(5, favoritoPollSec) * 1000;
+    if (lastFavoritoHadWork) {
+      return Math.max(0, favoritoPollSec) * 1000;
+    }
+    const idleSec = favoritoPollSec > 0 ? favoritoPollSec : 5;
+    return Math.max(5, idleSec) * 1000;
   }
   // HCTG: imediato apos cada jogo; so espera em erro.
   return 0;
@@ -862,13 +871,15 @@ async function runCycle() {
   if (favoritoScreenshotOn) {
     try {
       const page = await ensureScrapePage(epoch);
-      const shot = await processPendingFavoritoScreenshots(page, { limit: 2 });
+      const shot = await processPendingFavoritoScreenshots(page, { limit: 10 });
+      lastFavoritoHadWork = (shot.done + shot.failed) > 0;
       if (shot.done || shot.failed) {
         console.log(
           `[worker] favorito-shot ciclo ${cycleCount}: done=${shot.done} failed=${shot.failed}`,
         );
       }
     } catch (err) {
+      lastFavoritoHadWork = false;
       if (err instanceof ColetaPausadaError) {
         await closeChromeIfPausado();
         await logScrapeAbort(err.message, epoch);
@@ -876,6 +887,8 @@ async function runCycle() {
       }
       console.error(`[worker] favorito-shot:`, err?.message ?? err);
     }
+  } else {
+    lastFavoritoHadWork = false;
   }
 
   // Modo atual: worker so tira prints do favorito — sem scrape Total de Gols / Mercado +0,5.
@@ -1095,7 +1108,7 @@ process.on("SIGTERM", shutdown);
 console.log(
   `[worker] mode=${workerSource} html=${htmlSource} headless=${headless} ` +
     `hctg_scrape=${hctgScrapeOn ? "on" : "off"} favorito_shot=${favoritoScreenshotOn ? "on" : "off"} ` +
-    `poll=${hctgScrapeOn ? "imediato" : `${favoritoPollSec}s`} erro-retry=${errorRetrySec}s round-robin=1 ` +
+    `poll=${hctgScrapeOn ? "imediato" : favoritoPollSec <= 0 ? "imediato" : `${favoritoPollSec}s`} erro-retry=${errorRetrySec}s round-robin=1 ` +
     `max_attempts=${maxHctgAttempts} ` +
     `restart=${restartEveryCycles > 0 ? `${restartEveryCycles}ciclo|` : ""}${restartEveryMin}min ` +
     `aba=unica cache=${restartEveryMin}min ` +
@@ -1127,7 +1140,9 @@ async function scheduleNextCycle() {
       const why = lastCycleHadError
         ? "retry apos erro"
         : !hctgScrapeOn
-          ? "prints favorito"
+          ? lastFavoritoHadWork
+            ? "prints favorito"
+            : "idle sem pendentes"
           : "espera";
       console.log(`[worker] proximo ciclo em ${(delayMs / 1000).toFixed(0)}s (${why})`);
     } else {
