@@ -670,50 +670,6 @@
       accent-color: var(--accent);
       cursor: pointer;
     }
-    #stats-columns-popover .scb-move {
-      display: inline-flex;
-      flex-direction: column;
-      align-items: center;
-      justify-content: center;
-      gap: 1px;
-      flex: 0 0 auto;
-      margin-left: 0.05rem;
-    }
-    #stats-columns-popover .scb-move-btn {
-      width: 0.95rem;
-      height: 0.7rem;
-      padding: 0;
-      border: 0;
-      border-radius: 2px;
-      background: transparent;
-      color: #9ecfff;
-      cursor: pointer;
-      display: inline-flex;
-      align-items: center;
-      justify-content: center;
-      line-height: 0;
-    }
-    #stats-columns-popover .scb-move-btn:hover:not(:disabled) {
-      background: rgba(94, 179, 255, 0.22);
-      color: #fff;
-    }
-    #stats-columns-popover .scb-move-btn:disabled {
-      opacity: 0.28;
-      cursor: default;
-    }
-    #stats-columns-popover .scb-tri {
-      display: block;
-      width: 0;
-      height: 0;
-      border-left: 3.5px solid transparent;
-      border-right: 3.5px solid transparent;
-    }
-    #stats-columns-popover .scb-tri-up {
-      border-bottom: 4.5px solid currentColor;
-    }
-    #stats-columns-popover .scb-tri-down {
-      border-top: 4.5px solid currentColor;
-    }
     #stats-columns-popover .scb-actions {
       display: flex;
       justify-content: flex-end;
@@ -873,6 +829,57 @@
       background: #0d131c;
       box-shadow: inset 0 -1px 0 var(--border);
       text-transform: none;
+      vertical-align: middle;
+    }
+    #stats-table thead tr.stats-col-row th .stats-th-inner {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      gap: 0.28rem;
+      white-space: nowrap;
+    }
+    #stats-table thead tr.stats-col-row th .stats-col-move {
+      display: inline-flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      gap: 1px;
+      flex: 0 0 auto;
+    }
+    #stats-table thead tr.stats-col-row th .stats-col-move-btn {
+      width: 0.95rem;
+      height: 0.7rem;
+      padding: 0;
+      border: 0;
+      border-radius: 2px;
+      background: transparent;
+      color: #9ecfff;
+      cursor: pointer;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      line-height: 0;
+    }
+    #stats-table thead tr.stats-col-row th .stats-col-move-btn:hover:not(:disabled) {
+      background: rgba(94, 179, 255, 0.22);
+      color: #fff;
+    }
+    #stats-table thead tr.stats-col-row th .stats-col-move-btn:disabled {
+      opacity: 0.28;
+      cursor: default;
+    }
+    #stats-table thead tr.stats-col-row th .stats-tri {
+      display: block;
+      width: 0;
+      height: 0;
+      border-left: 3.5px solid transparent;
+      border-right: 3.5px solid transparent;
+    }
+    #stats-table thead tr.stats-col-row th .stats-tri-up {
+      border-bottom: 4.5px solid currentColor;
+    }
+    #stats-table thead tr.stats-col-row th .stats-tri-down {
+      border-top: 4.5px solid currentColor;
     }
     #stats-table tbody td {
       background: var(--panel);
@@ -1684,7 +1691,9 @@
               const title = tip ? ` title="${escapeHtml(tip)}"` : '';
               const color = getStatsColTextColor(c.id);
               const style = color ? ` style="color:${escapeHtml(color)}"` : '';
-              return `<th${cls}${title}${style}>${escapeHtml(c.label)}</th>`;
+              const upDisabled = ci === 0 ? ' disabled' : '';
+              const downDisabled = ci === g.cols.length - 1 ? ' disabled' : '';
+              return `<th${cls}${title}${style} data-stats-col="${escapeHtml(c.id)}"><span class="stats-th-inner"><span class="stats-th-label">${escapeHtml(c.label)}</span><span class="stats-col-move"><button type="button" class="stats-col-move-btn" data-stats-move="-1" data-stats-col-id="${escapeHtml(c.id)}" title="Mover para cima" aria-label="Mover ${escapeHtml(c.label)} para cima"${upDisabled}><span class="stats-tri stats-tri-up"></span></button><button type="button" class="stats-col-move-btn" data-stats-move="1" data-stats-col-id="${escapeHtml(c.id)}" title="Mover para baixo" aria-label="Mover ${escapeHtml(c.label)} para baixo"${downDisabled}><span class="stats-tri stats-tri-down"></span></button></span></span></th>`;
             })
             .join(''),
         )
@@ -1692,6 +1701,24 @@
       thead.innerHTML =
         `<tr class="stats-group-row">${groupRow}</tr>` +
         `<tr class="stats-col-row">${colRow}</tr>`;
+      thead.querySelectorAll('button.stats-col-move-btn').forEach((moveBtn) => {
+        moveBtn.addEventListener('click', (e) => {
+          e.preventDefault();
+          e.stopPropagation();
+          if (moveBtn.disabled) return;
+          const colId = moveBtn.getAttribute('data-stats-col-id');
+          const dir = Number(moveBtn.getAttribute('data-stats-move'));
+          if (!colId || !dir) return;
+          // #region agent log
+          fetch('http://127.0.0.1:7904/ingest/86615625-6ae5-4e98-a1da-0a5f0f15fc42',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'71820e'},body:JSON.stringify({sessionId:'71820e',runId:'post-fix',hypothesisId:'D',location:'web/index.html:stats-col-move-btn',message:'Table header column move clicked',data:{colId,dir,buildMarker:'thead-move-v1'},timestamp:Date.now()})}).catch(()=>{});
+          // #endregion
+          if (!moveStatsColumn(colId, dir)) return;
+          renderMercado();
+        });
+      });
+      // #region agent log
+      fetch('http://127.0.0.1:7904/ingest/86615625-6ae5-4e98-a1da-0a5f0f15fc42',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'71820e'},body:JSON.stringify({sessionId:'71820e',runId:'post-fix',hypothesisId:'D',location:'web/index.html:renderStatsThead',message:'Thead rendered with move controls',data:{theadMoveBtnCount:thead.querySelectorAll('button.stats-col-move-btn').length,visibleColCount:statsVisibleColCount(),builderMoveBtnCount:document.querySelectorAll('#stats-columns-popover button.scb-move-btn').length,buildMarker:'thead-move-v1'},timestamp:Date.now()})}).catch(()=>{});
+      // #endregion
     }
 
     function statsCellHtml(colId, row, i) {
@@ -3591,41 +3618,26 @@
       });
     }
 
-    function collectStatsBuilderDraft(root) {
-      const draft = new Set();
-      root?.querySelectorAll('input[data-scb-col]:checked').forEach((cb) => {
-        const id = cb.getAttribute('data-scb-col');
-        if (id) draft.add(id);
-      });
-      return draft;
-    }
-
-    function openStatsColumnsPopover(draftCols) {
+    function openStatsColumnsPopover() {
       const pop = document.getElementById('stats-columns-popover');
       const btn = document.getElementById('btn-stats-montar-tabela');
       if (!pop) return;
       hideMercadoElevatedPopover();
-      const draft = draftCols instanceof Set ? draftCols : new Set(statsVisibleCols);
+      const draft = new Set(statsVisibleCols);
       const groupsHtml = STATS_COL_GROUPS.map((g) => {
         const cols = orderedGroupCols(g);
         const colsHtml = cols
-          .map((c, ci) => {
+          .map((c) => {
             const info = c.info || c.title || c.label;
             const customColor = getStatsColTextColor(c.id);
             const pickerValue = customColor || STATS_COL_COLOR_FALLBACK;
             const colorCls = customColor ? ' scb-color has-custom' : ' scb-color';
             const colorStyle = customColor ? ` style="color:${escapeHtml(customColor)}"` : '';
-            const upDisabled = ci === 0 ? ' disabled' : '';
-            const downDisabled = ci === cols.length - 1 ? ' disabled' : '';
             return `<div class="scb-col">
               <label class="scb-col-main">
                 <input type="checkbox" data-scb-col="${escapeHtml(c.id)}" ${draft.has(c.id) ? 'checked' : ''} />
                 <span>${escapeHtml(c.label)}</span>
               </label>
-              <span class="scb-move">
-                <button type="button" class="scb-move-btn" data-scb-move="-1" data-scb-col-id="${escapeHtml(c.id)}" title="Mover para cima" aria-label="Mover ${escapeHtml(c.label)} para cima"${upDisabled}><span class="scb-tri scb-tri-up"></span></button>
-                <button type="button" class="scb-move-btn" data-scb-move="1" data-scb-col-id="${escapeHtml(c.id)}" title="Mover para baixo" aria-label="Mover ${escapeHtml(c.label)} para baixo"${downDisabled}><span class="scb-tri scb-tri-down"></span></button>
-              </span>
               <button type="button" class="scb-info" data-scb-info="${escapeHtml(c.id)}" title="${escapeHtml(info)}" aria-label="Sobre ${escapeHtml(c.label)}">i</button>
               <label class="${colorCls.trim()}"${colorStyle} title="Cor do texto (duplo clique = padrão)" aria-label="Cor do texto de ${escapeHtml(c.label)}">
                 <svg viewBox="0 0 16 16" aria-hidden="true"><path fill="currentColor" d="M12.9 1.6a1.8 1.8 0 0 1 0 2.55L6.4 10.65l-2.7.45.45-2.7 6.5-6.5a1.8 1.8 0 0 1 2.25-.3zM2.2 13.1c1.35-.9 2.7-.45 3.15.55-.75.7-2 .9-3.15.45z"/></svg>
@@ -3652,6 +3664,9 @@
       pop.classList.add('open');
       if (btn) btn.setAttribute('aria-expanded', 'true');
       syncStatsBuilderGroupChecks(pop);
+      // #region agent log
+      fetch('http://127.0.0.1:7904/ingest/86615625-6ae5-4e98-a1da-0a5f0f15fc42',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'71820e'},body:JSON.stringify({sessionId:'71820e',runId:'post-fix',hypothesisId:'D',location:'web/index.html:openStatsColumnsPopover',message:'Montar Tabela opened (no move arrows expected)',data:{builderMoveBtnCount:pop.querySelectorAll('button.scb-move-btn').length,theadMoveBtnCount:document.querySelectorAll('#stats-thead button.stats-col-move-btn').length,buildMarker:'thead-move-v1'},timestamp:Date.now()})}).catch(()=>{});
+      // #endregion
 
       pop.querySelectorAll('input[data-scb-group]').forEach((groupCb) => {
         groupCb.addEventListener('change', () => {
@@ -3677,20 +3692,6 @@
             escapeHtml(text),
           ]);
           showMercadoTipPopover(infoBtn, `scb-info-${colId}`, tip);
-        });
-      });
-      pop.querySelectorAll('button.scb-move-btn').forEach((moveBtn) => {
-        moveBtn.addEventListener('click', (e) => {
-          e.preventDefault();
-          e.stopPropagation();
-          if (moveBtn.disabled) return;
-          const colId = moveBtn.getAttribute('data-scb-col-id');
-          const dir = Number(moveBtn.getAttribute('data-scb-move'));
-          if (!colId || !dir) return;
-          const draftNow = collectStatsBuilderDraft(pop);
-          if (!moveStatsColumn(colId, dir)) return;
-          openStatsColumnsPopover(draftNow);
-          renderMercado();
         });
       });
       pop.querySelectorAll('input.scb-color-input').forEach((colorInput) => {
@@ -4358,6 +4359,9 @@
     document.getElementById('btn-stats-montar-tabela')?.addEventListener('click', (e) => {
       e.preventDefault();
       e.stopPropagation();
+      // #region agent log
+      fetch('http://127.0.0.1:7904/ingest/86615625-6ae5-4e98-a1da-0a5f0f15fc42',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'71820e'},body:JSON.stringify({sessionId:'71820e',runId:'post-fix',hypothesisId:'D',location:'web/index.html:btn-stats-montar-tabela',message:'Montar Tabela button clicked',data:{theadHasMoveBtns:!!document.querySelector('#stats-thead button.stats-col-move-btn'),buildMarker:'thead-move-v1'},timestamp:Date.now()})}).catch(()=>{});
+      // #endregion
       toggleStatsColumnsPopover();
     });
 
@@ -5416,6 +5420,9 @@
     }
 
     async function bootstrapApp() {
+      // #region agent log
+      fetch('http://127.0.0.1:7904/ingest/86615625-6ae5-4e98-a1da-0a5f0f15fc42',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'71820e'},body:JSON.stringify({sessionId:'71820e',runId:'post-fix',hypothesisId:'D',location:'web/index.html:bootstrapApp',message:'App boot build marker',data:{buildMarker:'thead-move-v1',href:String(location.href),hasTheadMoveCss:/stats-col-move/.test(document.documentElement.innerHTML),search:String(location.search)},timestamp:Date.now()})}).catch(()=>{});
+      // #endregion
       try {
         await initAppCfg();
         const sb = await initSupabaseClient();
