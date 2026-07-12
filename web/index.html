@@ -997,7 +997,7 @@
             <th title="Clique para minutos dos escanteios">Escanteios</th>
             <th title="Clique para minutos dos chutes a gol">Chutes a gol</th>
             <th title="Clique para minutos dos chutes para fora">Chutes fora</th>
-            <th title="Chutes totais casa × fora">Chutes</th>
+            <th title="Clique para minutos dos chutes (a gol, fora e bloqueados)">Chutes</th>
             <th title="Clique para minutos das defesas">Defesas</th>
             <th title="Posse de bola %">Posse</th>
             <th title="Clique para minutos das faltas (cobranças)">Faltas</th>
@@ -2234,6 +2234,16 @@
       );
     }
 
+    function mercadoChutesTotalLabel(row) {
+      return mercadoClickablePairLabel(
+        row,
+        row.home_shots_total,
+        row.away_shots_total,
+        'data-placar-shots',
+        'Minutos dos chutes (a gol, fora e bloqueados)',
+      );
+    }
+
     function mercadoDefesasLabel(row) {
       return mercadoClickablePairLabel(
         row,
@@ -2518,6 +2528,25 @@
       );
     }
 
+    async function showShotsTotalPopover(btn, eventId) {
+      const row = mercadoCache.find((r) => String(r.event_id) === String(eventId));
+      await showTimelinePopover(
+        btn,
+        eventId,
+        'shots',
+        'Chutes',
+        ['shotontarget', 'shotofftarget', 'shotblocked'],
+        statsPairPlain(row?.home_shots_total, row?.away_shots_total) || '—',
+        (ev) => {
+          const t = String(ev.event_type || '').toLowerCase();
+          if (t === 'shotontarget') return 'A gol';
+          if (t === 'shotofftarget') return 'Fora';
+          if (t === 'shotblocked') return 'Bloqueado';
+          return '';
+        },
+      );
+    }
+
     async function showSavesPopover(btn, eventId) {
       const row = mercadoCache.find((r) => String(r.event_id) === String(eventId));
       await showTimelinePopover(
@@ -2657,7 +2686,7 @@
           <td data-label="Escanteios">${mercadoEscanteiosLabel(row)}</td>
           <td data-label="Chutes a gol">${mercadoSotLabel(row)}</td>
           <td data-label="Chutes fora">${mercadoChutesForaLabel(row)}</td>
-          <td data-label="Chutes">${statsPairLabel(row.home_shots_total, row.away_shots_total)}</td>
+          <td data-label="Chutes">${mercadoChutesTotalLabel(row)}</td>
           <td data-label="Defesas">${mercadoDefesasLabel(row)}</td>
           <td data-label="Posse">${poss}</td>
           <td data-label="Faltas">${mercadoFaltasLabel(row)}</td>
@@ -3445,6 +3474,14 @@
         if (eventId) await showShotsOffPopover(soffBtn, eventId);
         return;
       }
+      const shotsBtn = e.target.closest('[data-placar-shots]');
+      if (shotsBtn) {
+        e.preventDefault();
+        e.stopPropagation();
+        const eventId = shotsBtn.getAttribute('data-placar-shots');
+        if (eventId) await showShotsTotalPopover(shotsBtn, eventId);
+        return;
+      }
       const savesBtn = e.target.closest('[data-placar-saves]');
       if (savesBtn) {
         e.preventDefault();
@@ -3523,6 +3560,7 @@
         e.target.closest('[data-placar-corners]') ||
         e.target.closest('[data-placar-sot]') ||
         e.target.closest('[data-placar-soff]') ||
+        e.target.closest('[data-placar-shots]') ||
         e.target.closest('[data-placar-saves]') ||
         e.target.closest('[data-placar-cards]') ||
         e.target.closest('[data-placar-fouls]') ||
