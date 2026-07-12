@@ -1039,7 +1039,7 @@
   </header>
   <main id="panel-mercado">
     <p class="hint">
-      Estatísticas Sportradar por jogo. Use os filtros numéricos à vontade. Clique em ▸ para ver todas as stats e a timeline; nos contadores para o balão de minutos.
+      Estatísticas Sportradar por jogo. Use os filtros numéricos à vontade. Clique em ▸ para o detalhe; nos contadores (gols, escanteios, chutes, defesas, faltas…) para o balão de minutos.
     </p>
     <div class="stats-filters" id="stats-filters">
       <label class="filter-validados">
@@ -1081,7 +1081,9 @@
             <th title="Clique para minutos dos gols">Placar</th>
             <th title="Clique para minutos dos escanteios">Escanteios</th>
             <th title="Clique para minutos dos chutes a gol">Chutes a gol</th>
+            <th title="Clique para minutos dos chutes para fora">Chutes fora</th>
             <th title="Chutes totais casa × fora">Chutes</th>
+            <th title="Clique para minutos das defesas">Defesas</th>
             <th title="Posse de bola %">Posse</th>
             <th title="Clique para minutos das faltas (cobranças)">Faltas</th>
             <th title="Clique para minutos dos laterais">Laterais</th>
@@ -1093,7 +1095,7 @@
           </tr>
         </thead>
         <tbody id="mercado-tbody">
-          <tr><td colspan="16" class="empty">Carregando…</td></tr>
+          <tr><td colspan="18" class="empty">Carregando…</td></tr>
         </tbody>
       </table>
     </div>
@@ -2310,6 +2312,26 @@
       );
     }
 
+    function mercadoChutesForaLabel(row) {
+      return mercadoClickablePairLabel(
+        row,
+        row.home_shots_off_target,
+        row.away_shots_off_target,
+        'data-placar-soff',
+        'Minutos dos chutes para fora',
+      );
+    }
+
+    function mercadoDefesasLabel(row) {
+      return mercadoClickablePairLabel(
+        row,
+        row.home_saves,
+        row.away_saves,
+        'data-placar-saves',
+        'Minutos das defesas',
+      );
+    }
+
     function mercadoAmarelosLabel(row) {
       return mercadoClickablePairLabel(
         row,
@@ -2569,6 +2591,30 @@
         'Chutes a gol',
         ['shotontarget'],
         statsPairPlain(row?.home_shots_on_target, row?.away_shots_on_target) || '—',
+      );
+    }
+
+    async function showShotsOffPopover(btn, eventId) {
+      const row = mercadoCache.find((r) => String(r.event_id) === String(eventId));
+      await showTimelinePopover(
+        btn,
+        eventId,
+        'soff',
+        'Chutes fora',
+        ['shotofftarget'],
+        statsPairPlain(row?.home_shots_off_target, row?.away_shots_off_target) || '—',
+      );
+    }
+
+    async function showSavesPopover(btn, eventId) {
+      const row = mercadoCache.find((r) => String(r.event_id) === String(eventId));
+      await showTimelinePopover(
+        btn,
+        eventId,
+        'saves',
+        'Defesas',
+        ['goalkeepersave'],
+        statsPairPlain(row?.home_saves, row?.away_saves) || '—',
       );
     }
 
@@ -2837,7 +2883,7 @@
         return String(mercadoSortKey(b)).localeCompare(String(mercadoSortKey(a)));
       });
       if (!rows.length) {
-        tbody.innerHTML = '<tr><td colspan="16" class="empty">Nenhum jogo com esses filtros.</td></tr>';
+        tbody.innerHTML = '<tr><td colspan="18" class="empty">Nenhum jogo com esses filtros.</td></tr>';
         return;
       }
       const expandedStillVisible = rows.some(
@@ -2872,7 +2918,9 @@
           <td data-label="Placar">${mercadoPlacarLabel(row)}</td>
           <td data-label="Escanteios">${mercadoEscanteiosLabel(row)}</td>
           <td data-label="Chutes a gol">${mercadoSotLabel(row)}</td>
+          <td data-label="Chutes fora">${mercadoChutesForaLabel(row)}</td>
           <td data-label="Chutes">${statsPairLabel(row.home_shots_total, row.away_shots_total)}</td>
+          <td data-label="Defesas">${mercadoDefesasLabel(row)}</td>
           <td data-label="Posse">${poss}</td>
           <td data-label="Faltas">${mercadoFaltasLabel(row)}</td>
           <td data-label="Laterais">${mercadoLateraisLabel(row)}</td>
@@ -2884,7 +2932,7 @@
         </tr>`;
         if (!open) return main;
         const detail = `<tr class="stats-detail-row" data-stats-detail-row="${eventId}">
-          <td colspan="16">${renderStatsDetailShell(row, '<p class="muted" style="margin:0">Carregando timeline…</p>')}</td>
+          <td colspan="18">${renderStatsDetailShell(row, '<p class="muted" style="margin:0">Carregando timeline…</p>')}</td>
         </tr>`;
         return main + detail;
       }).join('');
@@ -3479,7 +3527,7 @@
           }
           if (tbody) {
             tbody.innerHTML =
-              `<tr><td colspan="16" class="empty">${msg}</td></tr>`;
+              `<tr><td colspan="18" class="empty">${msg}</td></tr>`;
           }
         }
       } finally {
@@ -3686,6 +3734,22 @@
         if (eventId) await showSotPopover(sotBtn, eventId);
         return;
       }
+      const soffBtn = e.target.closest('[data-placar-soff]');
+      if (soffBtn) {
+        e.preventDefault();
+        e.stopPropagation();
+        const eventId = soffBtn.getAttribute('data-placar-soff');
+        if (eventId) await showShotsOffPopover(soffBtn, eventId);
+        return;
+      }
+      const savesBtn = e.target.closest('[data-placar-saves]');
+      if (savesBtn) {
+        e.preventDefault();
+        e.stopPropagation();
+        const eventId = savesBtn.getAttribute('data-placar-saves');
+        if (eventId) await showSavesPopover(savesBtn, eventId);
+        return;
+      }
       const cardsBtn = e.target.closest('[data-placar-cards]');
       if (cardsBtn) {
         e.preventDefault();
@@ -3755,6 +3819,8 @@
         e.target.closest('[data-placar-goals]') ||
         e.target.closest('[data-placar-corners]') ||
         e.target.closest('[data-placar-sot]') ||
+        e.target.closest('[data-placar-soff]') ||
+        e.target.closest('[data-placar-saves]') ||
         e.target.closest('[data-placar-cards]') ||
         e.target.closest('[data-placar-fouls]') ||
         e.target.closest('[data-placar-throwins]') ||
