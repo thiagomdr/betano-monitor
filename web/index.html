@@ -467,6 +467,22 @@
       border-collapse: collapse;
       font-size: 0.84rem;
     }
+    /* Favorito: colunas compactas à esquerda (sem justificar em tela cheia) */
+    #panel-favorito .mercado-table {
+      width: max-content;
+      max-width: 100%;
+      table-layout: auto;
+    }
+    #panel-favorito .mercado-table th,
+    #panel-favorito .mercado-table td {
+      width: 1%;
+      white-space: nowrap;
+    }
+    #panel-favorito .mercado-table td[data-label="Jogo"] {
+      width: auto;
+      max-width: 22rem;
+      white-space: normal;
+    }
     th, td {
       padding: 0.5rem 0.65rem;
       text-align: left;
@@ -2117,11 +2133,6 @@
           const iniOdd = parseFavoritoOdd(r.odd_inicial);
           if (homeIni == null && favLado === 'home' && iniOdd != null) homeIni = iniOdd;
           if (awayIni == null && favLado === 'away' && iniOdd != null) awayIni = iniOdd;
-          // #region agent log
-          if (r.status === 'watching') {
-            fetch('http://127.0.0.1:7904/ingest/86615625-6ae5-4e98-a1da-0a5f0f15fc42',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'230425'},body:JSON.stringify({sessionId:'230425',runId:'post-fix',hypothesisId:'A',location:'web/index.html:loadFavoritoDrift',message:'odd-ini parsed',data:{event_id:String(r.event_id),rawHome:r.ml_home_inicial,rawAway:r.ml_away_inicial,odd_inicial:r.odd_inicial,homeIni,awayIni,favLado,branch:homeIni!=null&&awayIni!=null?'dual':homeIni!=null||awayIni!=null?'partial':'empty'},timestamp:Date.now()})}).catch(()=>{});
-          }
-          // #endregion
           let oddIniCell = '—';
           if (homeIni != null && awayIni != null) {
             const homeCls = favLado === 'home' ? 'hctg-pill' : 'hctg-pill rival';
