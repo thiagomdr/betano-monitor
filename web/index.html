@@ -887,7 +887,6 @@
           <col data-col="odd_ini" />
           <col data-col="odd_max" />
           <col data-col="odd_atual" />
-          <col data-col="delta" />
           <col data-col="resultado" />
           <col data-col="print" />
           <col data-col="status" />
@@ -900,14 +899,13 @@
             <th data-col="odd_ini">Odd ini</th>
             <th data-col="odd_max">Odd máx</th>
             <th data-col="odd_atual">Odd atual</th>
-            <th data-col="delta">Valorização</th>
             <th data-col="resultado">Resultado</th>
             <th data-col="print">Print</th>
             <th data-col="status">Status</th>
           </tr>
         </thead>
         <tbody id="favorito-tbody">
-          <tr><td colspan="10" class="muted">Carregando…</td></tr>
+          <tr><td colspan="9" class="muted">Carregando…</td></tr>
         </tbody>
       </table>
     </div>
@@ -2145,9 +2143,8 @@
       tempo: 56,
       placar: 56,
       odd_ini: 148,
-      odd_max: 96,
+      odd_max: 120,
       odd_atual: 120,
-      delta: 96,
       resultado: 80,
       print: 118,
       status: 88,
@@ -2280,7 +2277,7 @@
         }
         if (!tbody) return;
         if (!list.length) {
-          tbody.innerHTML = '<tr><td colspan="10" class="muted">Nenhum jogo ainda — aguarde o próximo cron da Edge.</td></tr>';
+          tbody.innerHTML = '<tr><td colspan="9" class="muted">Nenhum jogo ainda — aguarde o próximo cron da Edge.</td></tr>';
           initFavoritoColumnResize();
           return;
         }
@@ -2288,7 +2285,7 @@
           const ini = Number(r.odd_inicial);
           const max = Number(r.odd_max);
           const atual = Number(r.odd_atual);
-          const delta = Number.isFinite(ini) && Number.isFinite(max) ? (max - ini) : null;
+          const deltaMax = Number.isFinite(ini) && Number.isFinite(max) ? (max - ini) : null;
           const deltaAtual = Number.isFinite(ini) && Number.isFinite(atual) ? (atual - ini) : null;
           const jogo = wrapMatchHtmlWithLink(
             formatMatchHtml(r.home || '?', r.away || '?'),
@@ -2321,12 +2318,6 @@
           } else if (r.status === 'watching') {
             printCell = '<span class="muted">pendente</span>';
           }
-          let deltaCell = '—';
-          if (delta != null) {
-            const sign = delta >= 0 ? '+' : '';
-            const color = delta >= 0 ? '#5eb3ff' : '#ff6b6b';
-            deltaCell = `<span style="color:${color};font-weight:600">${sign}${delta.toFixed(2)}</span>`;
-          }
           const minIni = formatMinuteGray(r.minuto_inicial);
           const minMax = formatMinuteGray(r.minuto_odd_max);
           const parseFavoritoOdd = (v) => {
@@ -2352,9 +2343,22 @@
           } else if (iniOdd != null) {
             oddIniCell = `<span class="hctg-pill">${fmtOdd(iniOdd)}</span>${minIni ? ` ${minIni}` : ''}`;
           }
-          const oddMaxCell = Number.isFinite(max)
-            ? `<span class="hctg-pill max">${fmtOdd(max)}</span>${minMax ? ` ${minMax}` : ''}`
-            : '—';
+          let oddMaxCell = '—';
+          if (Number.isFinite(max)) {
+            let deltaMaxHtml = '';
+            if (deltaMax != null) {
+              const sign = deltaMax >= 0 ? '+' : '';
+              const cls = deltaMax >= 0 ? 'up' : 'down';
+              deltaMaxHtml =
+                `<span class="favorito-odd-atual-delta ${cls}">${sign}${deltaMax.toFixed(2)}</span>`;
+            }
+            oddMaxCell =
+              `<span class="favorito-odd-atual-wrap">` +
+              `<span class="hctg-pill max">${fmtOdd(max)}</span>` +
+              deltaMaxHtml +
+              `${minMax ? ` ${minMax}` : ''}` +
+              `</span>`;
+          }
           let oddAtualCell = '—';
           if (Number.isFinite(atual) && atual >= 1.01) {
             let deltaAtualHtml = '';
@@ -2377,7 +2381,6 @@
             <td data-label="Odd ini">${oddIniCell}</td>
             <td data-label="Odd máx">${oddMaxCell}</td>
             <td data-label="Odd atual">${oddAtualCell}</td>
-            <td data-label="Valorização">${deltaCell}</td>
             <td data-label="Resultado">${resultado}</td>
             <td data-label="Print">${printCell}</td>
             <td data-label="Status">${st}</td>
@@ -2386,7 +2389,7 @@
         initFavoritoColumnResize();
       } catch (err) {
         if (tbody) {
-          tbody.innerHTML = `<tr><td colspan="10" class="muted">Erro: ${String(err?.message || err)}</td></tr>`;
+          tbody.innerHTML = `<tr><td colspan="9" class="muted">Erro: ${String(err?.message || err)}</td></tr>`;
         }
         if (favStatus) {
           favStatus.className = 'status error';
