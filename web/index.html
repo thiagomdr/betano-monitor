@@ -1037,6 +1037,7 @@
     let supabaseClient = null;
     let mercadoPollTimer = null;
     let mercadoCache = [];
+    let favoritoCache = [];
     let mercadoGoalsCache = {};
     let mercadoLoading = false;
     let mercadoFilterValidadosOnly = localStorage.getItem('mercadoFilterValidados') === '1';
@@ -2007,11 +2008,21 @@
       return `<button type="button" class="table-tip-btn placar" data-placar-goals="${row.event_id}" title="Minutos dos gols">${score}</button>`;
     }
 
+    function favoritoPlacarLabel(row) {
+      const score = row.placar_final || row.placar_atual || '—';
+      if (!score || score === '—') return '<span class="muted">—</span>';
+      const goalsTotal = goalsTotalFromScoreText(score);
+      if (goalsTotal == null || goalsTotal <= 0) {
+        return `<span class="muted">${score}</span>`;
+      }
+      return `<button type="button" class="table-tip-btn placar" data-placar-goals="${row.event_id}" title="Minutos dos gols">${score}</button>`;
+    }
+
     function renderGoalsPopoverHtml(row, goals) {
       const match = row ? formatMatchHtml(row.home, row.away) : '';
       const score = row?.is_live && row?.live_score
         ? row.live_score
-        : (row?.placar_final || '—');
+        : (row?.placar_final || row?.placar_atual || '—');
       if (!goals?.length) {
         return `<h4>Gols · ${match}</h4><p class="muted">Nenhum gol com minuto registrado ainda (placar ${score}).</p>`;
       }
@@ -2053,7 +2064,9 @@
         hideMercadoElevatedPopover();
         return;
       }
-      const row = mercadoCache.find((r) => String(r.event_id) === String(eventId));
+      const row =
+        mercadoCache.find((r) => String(r.event_id) === String(eventId)) ||
+        favoritoCache.find((r) => String(r.event_id) === String(eventId));
       pop.innerHTML = `<h4>Gols</h4><p class="muted">Carregando…</p>`;
       pop.dataset.tipKey = tipKey;
       delete pop.dataset.eventId;
@@ -2324,7 +2337,7 @@
         formatMatchHtml(r.home || '?', r.away || '?'),
         r.betano_url,
       );
-      const placar = r.placar_final || r.placar_atual || '—';
+      const placar = favoritoPlacarLabel(r);
       let minutoAtual = r.minuto_atual != null && r.minuto_atual !== ''
         ? Number(r.minuto_atual)
         : null;
@@ -2466,6 +2479,10 @@
           'futebol_favorito_drift?select=*&order=updated_at.desc&limit=200',
         );
         const list = Array.isArray(rows) ? rows : [];
+        favoritoCache = list;
+        for (const r of list) {
+          if (r?.event_id != null) delete mercadoGoalsCache[String(r.event_id)];
+        }
         const liveList = list.filter((r) => r.status === 'watching');
         const settledList = list.filter((r) => r.status !== 'watching');
         const liveIds = liveList.map((r) => r.event_id).filter(Boolean);
@@ -2662,6 +2679,15 @@
           showMercadoElevatedPopover(popBtn, eventId);
         }
       }
+    });
+
+    document.getElementById('panel-favorito')?.addEventListener('click', async (e) => {
+      const placarBtn = e.target.closest('[data-placar-goals]');
+      if (!placarBtn) return;
+      e.preventDefault();
+      e.stopPropagation();
+      const eventId = placarBtn.getAttribute('data-placar-goals');
+      if (eventId) await showPlacarGoalsPopover(placarBtn, eventId);
     });
 
     document.addEventListener('click', (e) => {
