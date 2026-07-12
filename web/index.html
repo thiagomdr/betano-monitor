@@ -813,90 +813,6 @@
       border-bottom: 1px solid rgba(255, 255, 255, 0.06);
     }
     .mercado-elevated-popover li:last-child { border-bottom: none; }
-    .stats-expand-btn {
-      font: inherit;
-      font-size: 0.75rem;
-      padding: 0.2rem 0.4rem;
-      border: 1px solid var(--border, #333);
-      border-radius: 4px;
-      background: transparent;
-      color: var(--muted);
-      cursor: pointer;
-      line-height: 1;
-    }
-    .stats-expand-btn:hover,
-    .stats-expand-btn.open {
-      color: #fff;
-      border-color: var(--accent, #5eb3ff);
-    }
-    tr.stats-detail-row > td {
-      background: rgba(26, 35, 50, 0.85);
-      border-top: none;
-      padding: 0.75rem 1rem 1rem;
-    }
-    .stats-detail-panel {
-      display: grid;
-      gap: 0.85rem;
-    }
-    .stats-detail-grid {
-      display: grid;
-      grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
-      gap: 0.45rem 0.75rem;
-    }
-    .stats-detail-item {
-      font-size: 0.78rem;
-      line-height: 1.35;
-    }
-    .stats-detail-item .k {
-      display: block;
-      font-size: 0.68rem;
-      text-transform: uppercase;
-      letter-spacing: 0.03em;
-      color: var(--muted);
-    }
-    .stats-detail-item .v {
-      color: #fff;
-      font-variant-numeric: tabular-nums;
-    }
-    .stats-tl-toolbar {
-      display: flex;
-      flex-wrap: wrap;
-      gap: 0.35rem;
-      align-items: center;
-    }
-    .stats-tl-chip {
-      font: inherit;
-      font-size: 0.72rem;
-      padding: 0.25rem 0.55rem;
-      border-radius: 999px;
-      border: 1px solid var(--border, #333);
-      background: transparent;
-      color: var(--muted);
-      cursor: pointer;
-    }
-    .stats-tl-chip.active {
-      color: #fff;
-      border-color: var(--accent, #5eb3ff);
-      background: color-mix(in srgb, var(--accent, #5eb3ff) 18%, transparent);
-    }
-    .stats-tl-list {
-      margin: 0;
-      padding: 0;
-      list-style: none;
-      max-height: 280px;
-      overflow: auto;
-      font-size: 0.78rem;
-    }
-    .stats-tl-list li {
-      padding: 0.28rem 0;
-      border-bottom: 1px solid rgba(255, 255, 255, 0.06);
-    }
-    .stats-tl-list li:last-child { border-bottom: none; }
-    .stats-detail-title {
-      margin: 0;
-      font-size: 0.82rem;
-      color: #fff;
-    }
     .mercado-delete-btn {
       background: transparent;
       border: none;
@@ -1039,7 +955,7 @@
   </header>
   <main id="panel-mercado">
     <p class="hint">
-      Estatísticas Sportradar por jogo. Use os filtros numéricos à vontade. Clique em ▸ para o detalhe; nos contadores (gols, escanteios, chutes, defesas, faltas…) para o balão de minutos.
+      Estatísticas Sportradar por jogo. Use os filtros numéricos à vontade. Clique nos contadores (placar, escanteios, chutes, defesas, faltas…) para o balão de minutos.
     </p>
     <div class="stats-filters" id="stats-filters">
       <label class="filter-validados">
@@ -1074,7 +990,6 @@
       <table>
         <thead>
           <tr>
-            <th title="Abrir detalhe"></th>
             <th>#</th>
             <th>Jogo</th>
             <th title="Minuto do jogo">Tempo</th>
@@ -1095,7 +1010,7 @@
           </tr>
         </thead>
         <tbody id="mercado-tbody">
-          <tr><td colspan="18" class="empty">Carregando…</td></tr>
+          <tr><td colspan="17" class="empty">Carregando…</td></tr>
         </tbody>
       </table>
     </div>
@@ -1264,9 +1179,6 @@
     let favoritoDeleteBusy = false;
     let mercadoGoalsCache = {};
     let mercadoTimelineCache = {};
-    let mercadoFullTimelineCache = {};
-    let mercadoExpandedEventId = null;
-    let mercadoDetailTlFilter = localStorage.getItem('statsDetailTlFilter') || 'destaques';
     let mercadoLoading = false;
     function readStoredFilterInt(key) {
       const raw = localStorage.getItem(key);
@@ -2709,167 +2621,6 @@
       return 0;
     }
 
-    const STATS_DETAIL_FIELDS = [
-      ['Posse', 'home_possession', 'away_possession', '%'],
-      ['Chutes', 'home_shots_total', 'away_shots_total', ''],
-      ['Chutes a gol', 'home_shots_on_target', 'away_shots_on_target', ''],
-      ['Chutes fora', 'home_shots_off_target', 'away_shots_off_target', ''],
-      ['Chutes bloqueados', 'home_shots_blocked', 'away_shots_blocked', ''],
-      ['Defesas', 'home_saves', 'away_saves', ''],
-      ['Escanteios', 'home_corners', 'away_corners', ''],
-      ['Tiros de meta', 'home_goal_kicks', 'away_goal_kicks', ''],
-      ['Laterais', 'home_throw_ins', 'away_throw_ins', ''],
-      ['Faltas', 'home_fouls', 'away_fouls', ''],
-      ['Livres', 'home_free_kicks', 'away_free_kicks', ''],
-      ['Impedimentos', 'home_offsides', 'away_offsides', ''],
-      ['Amarelos', 'home_yellow_cards', 'away_yellow_cards', ''],
-      ['Vermelhos', 'home_red_cards', 'away_red_cards', ''],
-      ['Amarelo/vermelho', 'home_yellow_red_cards', 'away_yellow_red_cards', ''],
-      ['Substituições', 'home_substitutions', 'away_substitutions', ''],
-      ['Lesões', 'home_injuries', 'away_injuries', ''],
-      ['Pênaltis', 'home_penalties', 'away_penalties', ''],
-      ['Ataques', 'home_attacks', 'away_attacks', ''],
-      ['At. perigosos', 'home_dangerous_attacks', 'away_dangerous_attacks', ''],
-      ['Bola segura', 'home_ball_safe', 'away_ball_safe', ''],
-    ];
-
-    const STATS_TL_NOISE = new Set([
-      'ballcoordinates', 'possibleevent', 'possessionevent', 'matchsituation',
-      'playersonpitchevent', 'playerswarmingupevent', 'possiblegoal',
-    ]);
-
-    const STATS_TL_FILTERS = {
-      todos: null,
-      destaques: new Set(['goal', 'corner', 'shotontarget', 'shotofftarget', 'shotblocked', 'card', 'freekick', 'freekicktaken', 'goalkeepersave', 'penalty', 'substitution', 'injury']),
-      gols: new Set(['goal']),
-      escanteios: new Set(['corner']),
-      chutes: new Set(['shotontarget', 'shotofftarget', 'shotblocked', 'goalkeepersave']),
-      faltas: new Set(['freekick', 'freekicktaken']),
-      cartoes: new Set(['card']),
-      laterais: new Set(['throwin']),
-    };
-
-    function statsEventTypeLabel(type) {
-      const t = String(type || '').toLowerCase();
-      const map = {
-        goal: 'Gol',
-        corner: 'Escanteio',
-        shotontarget: 'Chute a gol',
-        shotofftarget: 'Chute fora',
-        shotblocked: 'Chute bloqueado',
-        goalkeepersave: 'Defesa',
-        freekick: 'Falta/livre',
-        freekicktaken: 'Livre cobrado',
-        card: 'Cartão',
-        throwin: 'Lateral',
-        goalkick: 'Tiro de meta',
-        offside: 'Impedimento',
-        substitution: 'Substituição',
-        injury: 'Lesão',
-        matchstarted: 'Início',
-        periodstarted: 'Início período',
-        periodscore: 'Placar período',
-        videoassistantreferee: 'VAR',
-      };
-      return map[t] || type || 'Evento';
-    }
-
-    function renderStatsDetailGrid(row) {
-      const items = STATS_DETAIL_FIELDS.map(([label, hKey, aKey, suffix]) => {
-        const text = statsPairPlain(row[hKey], row[aKey], suffix);
-        if (!text) return '';
-        return `<div class="stats-detail-item"><span class="k">${label}</span><span class="v">${text}</span></div>`;
-      }).filter(Boolean).join('');
-      if (!items) {
-        return '<p class="muted" style="margin:0">Sem contadores tipados neste snapshot.</p>';
-      }
-      return `<div class="stats-detail-grid">${items}</div>`;
-    }
-
-    function filterFullTimeline(events, filterKey) {
-      const list = Array.isArray(events) ? events : [];
-      const set = STATS_TL_FILTERS[filterKey];
-      if (filterKey === 'todos') {
-        return list.filter((ev) => !STATS_TL_NOISE.has(String(ev.event_type || '').toLowerCase()));
-      }
-      if (!set) return list;
-      return list.filter((ev) => set.has(String(ev.event_type || '').toLowerCase()));
-    }
-
-    function renderStatsTimelineListHtml(row, events, filterKey) {
-      const filtered = filterFullTimeline(events, filterKey);
-      if (!filtered.length) {
-        return '<p class="muted" style="margin:0">Nenhum evento neste filtro.</p>';
-      }
-      const items = filtered.map((ev) => {
-        const team = timelineTeamLabel(row, ev.team_side, ev.team);
-        const player = timelinePlayerLabel(ev.player);
-        const kind = statsEventTypeLabel(ev.event_type);
-        return formatTimelineListItem(ev.minute, team, player, kind);
-      }).join('');
-      return `<ul class="stats-tl-list">${items}</ul>`;
-    }
-
-    function renderStatsTlChips(active) {
-      const chips = [
-        ['destaques', 'Destaques'],
-        ['todos', 'Todos'],
-        ['gols', 'Gols'],
-        ['escanteios', 'Escanteios'],
-        ['chutes', 'Chutes'],
-        ['faltas', 'Faltas'],
-        ['cartoes', 'Cartões'],
-        ['laterais', 'Laterais'],
-      ];
-      return chips.map(([key, label]) =>
-        `<button type="button" class="stats-tl-chip${active === key ? ' active' : ''}" data-stats-tl-filter="${key}">${label}</button>`
-      ).join('');
-    }
-
-    function renderStatsDetailShell(row, timelineHtml) {
-      const match = formatMatchHtml(row.home, row.away);
-      return `<div class="stats-detail-panel" data-stats-detail="${row.event_id}">
-        <h4 class="stats-detail-title">Detalhe · ${match}</h4>
-        ${renderStatsDetailGrid(row)}
-        <div>
-          <p class="stats-detail-title" style="margin-bottom:0.45rem">Timeline</p>
-          <div class="stats-tl-toolbar">${renderStatsTlChips(mercadoDetailTlFilter)}</div>
-          <div class="stats-tl-body" style="margin-top:0.55rem">${timelineHtml}</div>
-        </div>
-      </div>`;
-    }
-
-    async function loadFullTimelineForEvent(eventId) {
-      const key = String(eventId);
-      if (Array.isArray(mercadoFullTimelineCache[key])) return mercadoFullTimelineCache[key];
-      const path =
-        `futebol_sportradar_events?event_id=eq.${encodeURIComponent(key)}` +
-        `&disabled=eq.false` +
-        `&select=minute,team,team_side,player,event_type,type_id,payload` +
-        `&order=minute.asc&limit=500`;
-      const rows = await supabaseGet(path);
-      mercadoFullTimelineCache[key] = (Array.isArray(rows) ? rows : []).map(enrichTimelinePlayer);
-      return mercadoFullTimelineCache[key];
-    }
-
-    async function fillStatsDetailTimeline(eventId) {
-      const panel = [...document.querySelectorAll('.stats-detail-panel')].find(
-        (el) => String(el.getAttribute('data-stats-detail')) === String(eventId),
-      );
-      const body = panel?.querySelector('.stats-tl-body');
-      if (!body) return;
-      const row = mercadoCache.find((r) => String(r.event_id) === String(eventId));
-      body.innerHTML = '<p class="muted" style="margin:0">Carregando timeline…</p>';
-      try {
-        const events = await loadFullTimelineForEvent(eventId);
-        if (String(mercadoExpandedEventId) !== String(eventId)) return;
-        body.innerHTML = renderStatsTimelineListHtml(row, events, mercadoDetailTlFilter);
-      } catch (err) {
-        if (String(mercadoExpandedEventId) !== String(eventId)) return;
-        body.innerHTML = `<p class="muted" style="margin:0">${err.message || String(err)}</p>`;
-      }
-    }
-
     function renderMercado() {
       const tbody = document.getElementById('mercado-tbody');
       if (!tbody) return;
@@ -2883,18 +2634,10 @@
         return String(mercadoSortKey(b)).localeCompare(String(mercadoSortKey(a)));
       });
       if (!rows.length) {
-        tbody.innerHTML = '<tr><td colspan="18" class="empty">Nenhum jogo com esses filtros.</td></tr>';
+        tbody.innerHTML = '<tr><td colspan="17" class="empty">Nenhum jogo com esses filtros.</td></tr>';
         return;
       }
-      const expandedStillVisible = rows.some(
-        (r) => String(r.event_id) === String(mercadoExpandedEventId),
-      );
-      if (mercadoExpandedEventId && !expandedStillVisible) {
-        mercadoExpandedEventId = null;
-      }
       tbody.innerHTML = rows.map((row, i) => {
-        const eventId = String(row.event_id);
-        const open = String(mercadoExpandedEventId) === eventId;
         const matchHtml = wrapMatchHtmlWithLink(
           formatMatchHtml(row.home, row.away),
           row.betano_url,
@@ -2906,12 +2649,7 @@
         const poss = (row.home_possession != null || row.away_possession != null)
           ? statsPairLabel(row.home_possession, row.away_possession, '%')
           : '<span class="muted">—</span>';
-        const main = `<tr data-stats-row="${eventId}">
-          <td data-label="">
-            <button type="button" class="stats-expand-btn${open ? ' open' : ''}"
-              data-stats-expand="${eventId}" aria-expanded="${open ? 'true' : 'false'}"
-              title="Detalhe do jogo">${open ? '▾' : '▸'}</button>
-          </td>
+        return `<tr>
           <td data-label="#">${i + 1}</td>
           <td data-label="Jogo">${matchHtml}</td>
           <td data-label="Tempo">${mercadoTempoLabel(row)}</td>
@@ -2930,15 +2668,7 @@
           <td data-label="Status">${mercadoStatusLabel(row)}</td>
           <td data-label="Link">${link}</td>
         </tr>`;
-        if (!open) return main;
-        const detail = `<tr class="stats-detail-row" data-stats-detail-row="${eventId}">
-          <td colspan="18">${renderStatsDetailShell(row, '<p class="muted" style="margin:0">Carregando timeline…</p>')}</td>
-        </tr>`;
-        return main + detail;
       }).join('');
-      if (mercadoExpandedEventId) {
-        fillStatsDetailTimeline(mercadoExpandedEventId);
-      }
     }
 
     function updateMercadoStatus(meta, visibleCount, displayCount) {
@@ -3495,7 +3225,6 @@
         mercadoCache = rows ?? [];
         mercadoGoalsCache = {};
         mercadoTimelineCache = {};
-        mercadoFullTimelineCache = {};
         mercadoMetaCache = metaRows?.[0] ?? null;
         const visible = mercadoVisibleRows(mercadoCache);
         const display = mercadoDisplayRows(mercadoCache);
@@ -3527,7 +3256,7 @@
           }
           if (tbody) {
             tbody.innerHTML =
-              `<tr><td colspan="18" class="empty">${msg}</td></tr>`;
+              `<tr><td colspan="17" class="empty">${msg}</td></tr>`;
           }
         }
       } finally {
@@ -3684,32 +3413,6 @@
     });
 
     document.getElementById('mercado-tbody')?.closest('main')?.addEventListener('click', async (e) => {
-      const expandBtn = e.target.closest('[data-stats-expand]');
-      if (expandBtn) {
-        e.preventDefault();
-        e.stopPropagation();
-        const eventId = expandBtn.getAttribute('data-stats-expand');
-        if (!eventId) return;
-        mercadoExpandedEventId =
-          String(mercadoExpandedEventId) === String(eventId) ? null : eventId;
-        renderMercado();
-        return;
-      }
-      const tlChip = e.target.closest('[data-stats-tl-filter]');
-      if (tlChip) {
-        e.preventDefault();
-        e.stopPropagation();
-        const key = tlChip.getAttribute('data-stats-tl-filter') || 'destaques';
-        mercadoDetailTlFilter = key;
-        localStorage.setItem('statsDetailTlFilter', key);
-        const panel = tlChip.closest('.stats-detail-panel');
-        const eventId = panel?.getAttribute('data-stats-detail') || mercadoExpandedEventId;
-        panel?.querySelectorAll('[data-stats-tl-filter]').forEach((btn) => {
-          btn.classList.toggle('active', btn.getAttribute('data-stats-tl-filter') === key);
-        });
-        if (eventId) await fillStatsDetailTimeline(eventId);
-        return;
-      }
       const placarBtn = e.target.closest('[data-placar-goals]');
       if (placarBtn) {
         e.preventDefault();
