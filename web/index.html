@@ -1753,7 +1753,20 @@
             return val;
           }
         case 'ataques_perig':
-          return statsPairSortValue(row.home_dangerous_attacks, row.away_dangerous_attacks);
+          // = equilibrados (menor |diff|); ≠ diferenciados (maior |diff|).
+          {
+            const home = row.home_dangerous_attacks;
+            const away = row.away_dangerous_attacks;
+            const val = statsPairAbsDiffSortValue(home, away);
+            // #region agent log
+            if (!window.__ataquesPerigSortLogCount) window.__ataquesPerigSortLogCount = 0;
+            if (window.__ataquesPerigSortLogCount < 6) {
+              window.__ataquesPerigSortLogCount += 1;
+              fetch('http://127.0.0.1:7904/ingest/86615625-6ae5-4e98-a1da-0a5f0f15fc42',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'71820e'},body:JSON.stringify({sessionId:'71820e',runId:'post-fix',hypothesisId:'J',location:'web/index.html:statsColSortValue:ataques_perig',message:'Ataques perigosos balance sort key',data:{dir:statsSort.dir,home,away,absDiff:val,event_id:row.event_id},timestamp:Date.now()})}).catch(()=>{});
+            }
+            // #endregion
+            return val;
+          }
         case 'bola_segura':
           return statsPairSortValue(row.home_ball_safe, row.away_ball_safe);
         case 'escanteios':
@@ -1938,17 +1951,22 @@
                 descTitle = 'Opções: maior placar';
                 ascAria = `Opções de ordenação menor para ${c.label}`;
                 descAria = `Opções de ordenação maior para ${c.label}`;
-              } else if (c.id === 'posse' || c.id === 'ataques') {
+              } else if (c.id === 'posse' || c.id === 'ataques' || c.id === 'ataques_perig') {
                 if (c.id === 'posse') {
                   ascTitle = 'Posse mais equilibrada (=)';
                   descTitle = 'Posse mais diferenciada (≠)';
                   ascAria = 'Ordenar por posse mais equilibrada';
                   descAria = 'Ordenar por posse mais diferenciada';
-                } else {
+                } else if (c.id === 'ataques') {
                   ascTitle = 'Ataques mais equilibrados (=)';
                   descTitle = 'Ataques mais diferenciados (≠)';
                   ascAria = 'Ordenar por ataques mais equilibrados';
                   descAria = 'Ordenar por ataques mais diferenciados';
+                } else {
+                  ascTitle = 'Ataques perigosos mais equilibrados (=)';
+                  descTitle = 'Ataques perigosos mais diferenciados (≠)';
+                  ascAria = 'Ordenar por ataques perigosos mais equilibrados';
+                  descAria = 'Ordenar por ataques perigosos mais diferenciados';
                 }
                 ascInner = '=';
                 descInner = '≠';
@@ -3844,12 +3862,23 @@
         return String(mercadoSortKey(b)).localeCompare(String(mercadoSortKey(a)));
       });
       // #region agent log
-      if (statsSort.colId === 'posse' || statsSort.colId === 'ataques') {
+      if (statsSort.colId === 'posse' || statsSort.colId === 'ataques' || statsSort.colId === 'ataques_perig') {
         window.__posseSortLogCount = 0;
         window.__ataquesSortLogCount = 0;
+        window.__ataquesPerigSortLogCount = 0;
         const top = rows.slice(0, 5).map((r) => {
-          const home = statsSort.colId === 'posse' ? r.home_possession : r.home_attacks;
-          const away = statsSort.colId === 'posse' ? r.away_possession : r.away_attacks;
+          let home;
+          let away;
+          if (statsSort.colId === 'posse') {
+            home = r.home_possession;
+            away = r.away_possession;
+          } else if (statsSort.colId === 'ataques') {
+            home = r.home_attacks;
+            away = r.away_attacks;
+          } else {
+            home = r.home_dangerous_attacks;
+            away = r.away_dangerous_attacks;
+          }
           return {
             event_id: r.event_id,
             home,
@@ -3859,7 +3888,7 @@
             minute: r.last_minute,
           };
         });
-        fetch('http://127.0.0.1:7904/ingest/86615625-6ae5-4e98-a1da-0a5f0f15fc42',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'71820e'},body:JSON.stringify({sessionId:'71820e',runId:'post-fix',hypothesisId:'I',location:'web/index.html:renderMercado',message:'Balance sort result top rows',data:{colId:statsSort.colId,dir:statsSort.dir,meaning:statsSort.dir==='asc'?'equilibrada':'diferenciada',top},timestamp:Date.now()})}).catch(()=>{});
+        fetch('http://127.0.0.1:7904/ingest/86615625-6ae5-4e98-a1da-0a5f0f15fc42',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'71820e'},body:JSON.stringify({sessionId:'71820e',runId:'post-fix',hypothesisId:'J',location:'web/index.html:renderMercado',message:'Balance sort result top rows',data:{colId:statsSort.colId,dir:statsSort.dir,meaning:statsSort.dir==='asc'?'equilibrada':'diferenciada',top},timestamp:Date.now()})}).catch(()=>{});
       }
       // #endregion
       if (!statsVisibleColCount()) {
