@@ -802,7 +802,6 @@
             <th>Odd ini</th>
             <th>Odd máx</th>
             <th>Δ</th>
-            <th>Min máx</th>
             <th>Placar</th>
             <th>Resultado</th>
             <th>Print</th>
@@ -810,7 +809,7 @@
           </tr>
         </thead>
         <tbody id="favorito-tbody">
-          <tr><td colspan="10" class="muted">Carregando…</td></tr>
+          <tr><td colspan="9" class="muted">Carregando…</td></tr>
         </tbody>
       </table>
     </div>
@@ -2052,7 +2051,7 @@
         }
         if (!tbody) return;
         if (!list.length) {
-          tbody.innerHTML = '<tr><td colspan="10" class="muted">Nenhum jogo ainda — aguarde o próximo cron da Edge.</td></tr>';
+          tbody.innerHTML = '<tr><td colspan="9" class="muted">Nenhum jogo ainda — aguarde o próximo cron da Edge.</td></tr>';
           return;
         }
         tbody.innerHTML = list.map((r) => {
@@ -2084,13 +2083,20 @@
             const color = delta >= 0 ? '#5eb3ff' : '#ff6b6b';
             deltaCell = `<span style="color:${color};font-weight:600">${sign}${delta.toFixed(2)}</span>`;
           }
+          const minIni = formatMinuteGray(r.minuto_inicial);
+          const minMax = formatMinuteGray(r.minuto_odd_max);
+          const oddIniCell = Number.isFinite(ini)
+            ? `${minIni ? `${minIni} ` : ''}<span class="hctg-pill">${fmtOdd(ini)}</span>`
+            : '—';
+          const oddMaxCell = Number.isFinite(max)
+            ? `${minMax ? `${minMax} ` : ''}<span class="hctg-pill max">${fmtOdd(max)}</span>`
+            : '—';
           return `<tr>
             <td data-label="Jogo">${jogo}${link ? ` · ${link}` : ''}</td>
             <td data-label="Favorito">${fav || '—'}</td>
-            <td data-label="Odd ini">${Number.isFinite(ini) ? `<span class="hctg-pill">${fmtOdd(ini)}</span>` : '—'}</td>
-            <td data-label="Odd máx">${Number.isFinite(max) ? `<span class="hctg-pill max">${fmtOdd(max)}</span>` : '—'}</td>
+            <td data-label="Odd ini">${oddIniCell}</td>
+            <td data-label="Odd máx">${oddMaxCell}</td>
             <td data-label="Δ">${deltaCell}</td>
-            <td data-label="Min máx">${r.minuto_odd_max != null ? r.minuto_odd_max + "'" : '—'}</td>
             <td data-label="Placar">${placar}</td>
             <td data-label="Resultado">${resultado}</td>
             <td data-label="Print">${printCell}</td>
@@ -2099,7 +2105,7 @@
         }).join('');
       } catch (err) {
         if (tbody) {
-          tbody.innerHTML = `<tr><td colspan="10" class="muted">Erro: ${String(err?.message || err)}</td></tr>`;
+          tbody.innerHTML = `<tr><td colspan="9" class="muted">Erro: ${String(err?.message || err)}</td></tr>`;
         }
         if (favStatus) {
           favStatus.className = 'status error';
