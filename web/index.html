@@ -324,17 +324,27 @@
       background: #2a323c;
     }
     #stats-table tbody tr.is-pinned td {
-      border-top: 1px solid #b8942e;
       border-bottom-color: #b8942e;
-    }
-    #stats-table tbody tr.is-pinned:first-child td {
-      border-top: 1px solid #b8942e;
     }
     #stats-table tbody tr.is-pinned td:first-child {
       border-left: 1px solid #b8942e;
     }
     #stats-table tbody tr.is-pinned td:last-child {
       border-right: 1px solid #b8942e;
+    }
+    /* border-collapse engole border-top da 1ª linha; amarelo na base do cabeçalho + inset na célula */
+    #stats-table.has-pinned-first thead tr.stats-col-row th {
+      border-bottom-color: #b8942e;
+      box-shadow: inset 0 -1px 0 #b8942e;
+    }
+    #stats-table tbody tr.is-pinned:first-child td {
+      box-shadow: inset 0 1px 0 #b8942e;
+    }
+    #stats-table tbody tr.is-pinned:first-child td:first-child {
+      box-shadow: inset 1px 0 0 #b8942e, inset 0 1px 0 #b8942e;
+    }
+    #stats-table tbody tr.is-pinned:first-child td:last-child {
+      box-shadow: inset -1px 0 0 #b8942e, inset 0 1px 0 #b8942e;
     }
     .log-detail-line {
       padding: 0.2rem 0;
@@ -3858,6 +3868,7 @@
 
     function renderMercado() {
       const tbody = document.getElementById('mercado-tbody');
+      const statsTable = document.getElementById('stats-table');
       if (!tbody) return;
       renderStatsThead();
       const colCount = Math.max(1, statsVisibleColCount());
@@ -3888,16 +3899,22 @@
         if (minB !== minA) return minB - minA;
         return String(mercadoSortKey(b)).localeCompare(String(mercadoSortKey(a)));
       });
+      const setPinnedFirst = (on) => {
+        statsTable?.classList.toggle('has-pinned-first', !!on);
+      };
       if (!statsVisibleColCount()) {
+        setPinnedFirst(false);
         tbody.innerHTML =
           `<tr><td colspan="${colCount}" class="empty">Nenhuma coluna selecionada. Use Montar Tabela.</td></tr>`;
         return;
       }
       if (!rows.length) {
+        setPinnedFirst(false);
         tbody.innerHTML =
           `<tr><td colspan="${colCount}" class="empty">Nenhum jogo com esses filtros.</td></tr>`;
         return;
       }
+      setPinnedFirst(isStatsPinned(rows[0].event_id));
       tbody.innerHTML = rows
         .map((row, i) => {
           const classes = [];
