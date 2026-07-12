@@ -495,6 +495,10 @@ async function processFavoritoDriftLive(
   if (row?.status === "settled") return "skipped";
 
   if (!row) {
+    // Odd "inicial": so abre se o jogo ainda esta nos primeiros 5 minutos.
+    // Sem minuto (kickoff / clock ausente) tambem aceita.
+    if (input.minute != null && input.minute > 5) return "skipped";
+
     const pick = pickFavoritoLado(ml_home, ml_away);
     const nome = pick.lado === "home" ? input.home : input.away;
     await supabase.from("futebol_favorito_drift").insert({
@@ -563,12 +567,13 @@ async function finalizeFavoritoDriftOffLive(
   const { data: watching } = await supabase
     .from("futebol_favorito_drift")
     .select(
-      "event_id,favorito_lado,home_score,away_score,placar_atual",
+      "event_id,favorito_lado,home_score,away_score,placar_atual,screenshot_path",
     )
     .eq("status", "watching");
 
   let settled = 0;
   const nowIso = new Date().toISOString();
+  const FAVORITO_SHOT_BUCKET = "betano-screenshot-debug";
   for (const row of watching ?? []) {
     const eventId = String(row.event_id);
     if (liveSet.has(eventId)) continue;
@@ -592,6 +597,19 @@ async function finalizeFavoritoDriftOffLive(
     const lado = row.favorito_lado === "away" ? "away" : "home";
     const venceu = favoritoVenceuFromScore(lado, homeScore, awayScore);
 
+    // Fase 2: apaga print do odd inicial apos o fim do jogo
+    const shotPath = row.screenshot_path ? String(row.screenshot_path) : null;
+    if (shotPath) {
+      try {
+        await supabase.storage.from(FAVORITO_SHOT_BUCKET).remove([shotPath]);
+      } catch (err) {
+        console.warn(
+          `[favorito] falha ao apagar screenshot ${eventId}:`,
+          err instanceof Error ? err.message : err,
+        );
+      }
+    }
+
     await supabase.from("futebol_favorito_drift").update({
       status: "settled",
       placar_final: placar,
@@ -600,6 +618,9 @@ async function finalizeFavoritoDriftOffLive(
       favorito_venceu: venceu,
       settled_at: nowIso,
       updated_at: nowIso,
+      screenshot_path: null,
+      screenshot_url: null,
+      screenshot_captured_at: null,
     }).eq("event_id", eventId);
     settled += 1;
   }

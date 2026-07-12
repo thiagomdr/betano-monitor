@@ -800,11 +800,12 @@
             <th>Min máx</th>
             <th>Placar</th>
             <th>Resultado</th>
+            <th>Print</th>
             <th>Status</th>
           </tr>
         </thead>
         <tbody id="favorito-tbody">
-          <tr><td colspan="9" class="muted">Carregando…</td></tr>
+          <tr><td colspan="10" class="muted">Carregando…</td></tr>
         </tbody>
       </table>
     </div>
@@ -2043,7 +2044,7 @@
         }
         if (!tbody) return;
         if (!list.length) {
-          tbody.innerHTML = '<tr><td colspan="9" class="muted">Nenhum jogo ainda — aguarde o próximo cron da Edge.</td></tr>';
+          tbody.innerHTML = '<tr><td colspan="10" class="muted">Nenhum jogo ainda — aguarde o próximo cron da Edge.</td></tr>';
           return;
         }
         tbody.innerHTML = list.map((r) => {
@@ -2063,6 +2064,12 @@
           const link = r.betano_url
             ? `<a href="${r.betano_url}" target="_blank" rel="noopener">Betano</a>`
             : '';
+          let printCell = '—';
+          if (r.screenshot_url) {
+            printCell = `<a href="${r.screenshot_url}" target="_blank" rel="noopener">Ver</a>`;
+          } else if (r.status === 'watching') {
+            printCell = '<span class="muted">pendente</span>';
+          }
           return `<tr>
             <td data-label="Jogo">${jogo}${link ? ` · ${link}` : ''}</td>
             <td data-label="Favorito">${fav || '—'}</td>
@@ -2072,12 +2079,13 @@
             <td data-label="Min máx">${r.minuto_odd_max != null ? r.minuto_odd_max + "'" : '—'}</td>
             <td data-label="Placar">${placar}</td>
             <td data-label="Resultado">${resultado}</td>
+            <td data-label="Print">${printCell}</td>
             <td data-label="Status">${st}</td>
           </tr>`;
         }).join('');
       } catch (err) {
         if (tbody) {
-          tbody.innerHTML = `<tr><td colspan="9" class="muted">Erro: ${String(err?.message || err)}</td></tr>`;
+          tbody.innerHTML = `<tr><td colspan="10" class="muted">Erro: ${String(err?.message || err)}</td></tr>`;
         }
         if (favStatus) {
           favStatus.className = 'status error';

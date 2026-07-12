@@ -24,6 +24,7 @@ import {
   slugFromBetanoUrl,
 } from "./lib/betano-hctg-playwright.mjs";
 import { formatLinesTable, trimHctgLinesForMatch, goalsTotalFromScoreText } from "./lib/betano-hctg-html.mjs";
+import { processPendingFavoritoScreenshots } from "./lib/favorito-odd-screenshot.mjs";
 import { insertSistemaLog, matchLabel } from "./lib/sistema-log.mjs";
 import {
   assertColetaAtiva,
@@ -63,6 +64,8 @@ const scrapeTimeoutMs = Number(process.env.HCTG_SCRAPE_TIMEOUT_MS || "120000");
 const workerSource = (process.env.HCTG_WORKER_SOURCE || "local-worker").trim() || "local-worker";
 const htmlSource = (process.env.HCTG_HTML_SOURCE || "html-dom-local").trim() || "html-dom-local";
 const headless = (process.env.HCTG_HEADLESS || "0").trim() === "1";
+/** Prints do odd inicial favorito (fase 2). Desligar: FAVORITO_SCREENSHOT=0 */
+const favoritoScreenshotOn = (process.env.FAVORITO_SCREENSHOT || "1").trim() !== "0";
 
 // #region agent log
 function dbgWorker(hypothesisId, location, message, data = {}) {
@@ -822,6 +825,46 @@ async function runCycle() {
         ? `ciclo-${cycleCount}`
         : `idade-${restartEveryMin}min`,
     );
+  }
+
+  // Browser + print favorito (prioridade) antes do HCTG — mesmo com fila HCTG vazia.
+  try {
+    await ensureBrowser(epoch);
+  } catch (err) {
+    if (err instanceof ColetaPausadaError) {
+      await closeChromeIfPausado();
+      await logScrapeAbort(err.message, epoch);
+      return;
+    }
+    const msg = String(err?.message ?? err);
+    lastCycleHadError = true;
+    if (isPlaywrightBrowserMissing(err)) {
+      console.error(`[worker] ${PLAYWRIGHT_INSTALL_HINT}`);
+      await logWorkerError(PLAYWRIGHT_INSTALL_HINT, epoch);
+    } else {
+      console.error(`[worker] FALHA ao abrir Chrome: ${msg}`);
+      await logWorkerError(`FALHA ao abrir Chrome: ${msg}`, epoch);
+    }
+    return;
+  }
+
+  if (favoritoScreenshotOn) {
+    try {
+      const page = await ensureScrapePage(epoch);
+      const shot = await processPendingFavoritoScreenshots(page, { limit: 1 });
+      if (shot.done || shot.failed) {
+        console.log(
+          `[worker] favorito-shot ciclo ${cycleCount}: done=${shot.done} failed=${shot.failed}`,
+        );
+      }
+    } catch (err) {
+      if (err instanceof ColetaPausadaError) {
+        await closeChromeIfPausado();
+        await logScrapeAbort(err.message, epoch);
+        return;
+      }
+      console.error(`[worker] favorito-shot:`, err?.message ?? err);
+    }
   }
 
   if (!queue.length) {

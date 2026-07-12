@@ -21,16 +21,18 @@ Projeto vigente: **betano-monitor**. Toda documentação, regras Cursor, scripts
 
 - **Fonte da verdade = PostgreSQL (Supabase)**. Painel só lê tabelas.
 - **Odds Total de Gols (HCTG)** = scrape DOM Playwright → `hctg_lines` (worker Kubmix; análise legada).
-- **Análise favorito 1X2 (fase atual):** Edge lê `ml_home`/`ml_away` do overview JSON → tabela `futebol_favorito_drift` (odd inicial → máximo + minuto → se o favorito venceu). Sem Playwright.
+- **Análise favorito 1X2 (fase atual):** Edge lê `ml_home`/`ml_away` do overview JSON → tabela `futebol_favorito_drift` (odd inicial → máximo + minuto → se o favorito venceu). Print do odd inicial via worker Playwright (Kubmix).
 - Edge `betano-futebol-live`: placar, lista, mercado +0,5, **favorito drift**; **não** gera odds HCTG.
+- **Print favorito:** worker Kubmix captura screenshot → Storage `betano-screenshot-debug`; Edge apaga no settle.
 
 ## Análise favorito 1X2 (fase atual)
 
 - Fonte: overview JSON Betano na Edge (`extractMlOdds`) — lote, sem worker.
 - Tabela: `futebol_favorito_drift`.
-- Favorito = menor odd Casa/Fora na 1ª leitura; rastreia **odd_max** + minuto; no fim `favorito_venceu`.
-- Painel: aba **Favorito 1X2**.
-- Fase 2 (não feita): print do odd inicial via worker Playwright.
+- Favorito = menor odd Casa/Fora na 1ª leitura **com minuto ≤ 5** (ou sem minuto); rastreia **odd_max** + minuto; no fim `favorito_venceu`.
+- Jogos que só aparecem depois dos 5' não entram na amostra.
+- Print (prova): worker Playwright (Kubmix) grava `screenshot_url` enquanto `watching`; Edge apaga no settle.
+- Painel: aba **Favorito 1X2** (coluna Print).
 
 ## HCTG — fonte e proibições
 
