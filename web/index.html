@@ -2107,11 +2107,23 @@
           }
           const minIni = formatMinuteGray(r.minuto_inicial);
           const minMax = formatMinuteGray(r.minuto_odd_max);
-          const homeIni = Number(r.ml_home_inicial);
-          const awayIni = Number(r.ml_away_inicial);
+          const parseFavoritoOdd = (v) => {
+            const n = Number(v);
+            return Number.isFinite(n) && n >= 1.01 ? n : null;
+          };
           const favLado = r.favorito_lado === 'away' ? 'away' : 'home';
+          let homeIni = parseFavoritoOdd(r.ml_home_inicial);
+          let awayIni = parseFavoritoOdd(r.ml_away_inicial);
+          const iniOdd = parseFavoritoOdd(r.odd_inicial);
+          if (homeIni == null && favLado === 'home' && iniOdd != null) homeIni = iniOdd;
+          if (awayIni == null && favLado === 'away' && iniOdd != null) awayIni = iniOdd;
+          // #region agent log
+          if (r.status === 'watching') {
+            fetch('http://127.0.0.1:7904/ingest/86615625-6ae5-4e98-a1da-0a5f0f15fc42',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'230425'},body:JSON.stringify({sessionId:'230425',runId:'post-fix',hypothesisId:'A',location:'web/index.html:loadFavoritoDrift',message:'odd-ini parsed',data:{event_id:String(r.event_id),rawHome:r.ml_home_inicial,rawAway:r.ml_away_inicial,odd_inicial:r.odd_inicial,homeIni,awayIni,favLado,branch:homeIni!=null&&awayIni!=null?'dual':homeIni!=null||awayIni!=null?'partial':'empty'},timestamp:Date.now()})}).catch(()=>{});
+          }
+          // #endregion
           let oddIniCell = '—';
-          if (Number.isFinite(homeIni) && Number.isFinite(awayIni)) {
+          if (homeIni != null && awayIni != null) {
             const homeCls = favLado === 'home' ? 'hctg-pill' : 'hctg-pill rival';
             const awayCls = favLado === 'away' ? 'hctg-pill' : 'hctg-pill rival';
             oddIniCell =
@@ -2120,9 +2132,8 @@
               `<span class="${awayCls}" title="${escapeHtml(r.away || 'Fora')}">${fmtOdd(awayIni)}</span>` +
               `${minIni ? ` ${minIni}` : ''}` +
               `</span>`;
-          } else if (Number.isFinite(ini)) {
-            // Linhas antigas sem ml_*_inicial: so odd do favorito
-            oddIniCell = `<span class="hctg-pill">${fmtOdd(ini)}</span>${minIni ? ` ${minIni}` : ''}`;
+          } else if (iniOdd != null) {
+            oddIniCell = `<span class="hctg-pill">${fmtOdd(iniOdd)}</span>${minIni ? ` ${minIni}` : ''}`;
           }
           const oddMaxCell = Number.isFinite(max)
             ? `<span class="hctg-pill max">${fmtOdd(max)}</span>${minMax ? ` ${minMax}` : ''}`

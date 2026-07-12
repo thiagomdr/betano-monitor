@@ -487,7 +487,7 @@ async function processFavoritoDriftLive(
   const nowIso = new Date().toISOString();
   const { data: prev } = await supabase
     .from("futebol_favorito_drift")
-    .select("event_id,favorito_lado,odd_inicial,odd_max,status")
+    .select("event_id,favorito_lado,odd_inicial,odd_max,status,ml_home_inicial,ml_away_inicial")
     .eq("event_id", input.event_id)
     .maybeSingle();
 
@@ -562,6 +562,16 @@ async function processFavoritoDriftLive(
     away_score: input.away_score,
     updated_at: nowIso,
   };
+  // Backfill odds iniciais (linhas abertas antes das colunas existirem).
+  const homeIniPrev = Number(row.ml_home_inicial);
+  const awayIniPrev = Number(row.ml_away_inicial);
+  const missingIni =
+    !(Number.isFinite(homeIniPrev) && homeIniPrev >= 1.01) ||
+    !(Number.isFinite(awayIniPrev) && awayIniPrev >= 1.01);
+  if (missingIni) {
+    patch.ml_home_inicial = ml_home;
+    patch.ml_away_inicial = ml_away;
+  }
   if (minutoMax !== undefined) patch.minuto_odd_max = minutoMax;
 
   await supabase.from("futebol_favorito_drift").update(patch).eq("event_id", input.event_id);
