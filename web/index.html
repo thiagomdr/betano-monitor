@@ -997,20 +997,31 @@
             <th title="Clique para minutos dos escanteios">Escanteios</th>
             <th title="Clique para minutos dos chutes a gol">Chutes a gol</th>
             <th title="Clique para minutos dos chutes para fora">Chutes fora</th>
+            <th title="Clique para minutos dos chutes bloqueados">Bloqueados</th>
             <th title="Clique para minutos dos chutes (a gol, fora e bloqueados)">Chutes</th>
             <th title="Clique para minutos das defesas">Defesas</th>
-            <th title="Posse de bola %">Posse</th>
+            <th title="Posse de bola % (sem timeline individual)">Posse</th>
             <th title="Clique para minutos das faltas (cobranças)">Faltas</th>
+            <th title="Clique para minutos dos livres">Livres</th>
+            <th title="Clique para minutos dos impedimentos">Impedimentos</th>
             <th title="Clique para minutos dos laterais">Laterais</th>
+            <th title="Clique para minutos dos tiros de meta">Tiros de meta</th>
+            <th title="Ataques (contador; sem timeline individual)">Ataques</th>
             <th title="Ataques perigosos (contador; sem timeline individual)">At. perigosos</th>
-            <th title="Clique para minutos dos cartões">Amarelos</th>
+            <th title="Bola segura (contador; sem timeline individual)">Bola segura</th>
+            <th title="Clique para minutos dos cartões amarelos">Amarelos</th>
+            <th title="Clique para minutos dos cartões vermelhos">Vermelhos</th>
+            <th title="Clique para minutos amarelo/vermelho">A/V</th>
+            <th title="Clique para minutos das substituições">Subs</th>
+            <th title="Clique para minutos das lesões">Lesões</th>
+            <th title="Pênaltis (contador)">Pênaltis</th>
             <th>Liga</th>
             <th title="Ao Vivo ou Finalizado">Status</th>
             <th>Link</th>
           </tr>
         </thead>
         <tbody id="mercado-tbody">
-          <tr><td colspan="17" class="empty">Carregando…</td></tr>
+          <tr><td colspan="28" class="empty">Carregando…</td></tr>
         </tbody>
       </table>
     </div>
@@ -2260,7 +2271,27 @@
         row.home_yellow_cards,
         row.away_yellow_cards,
         'data-placar-cards',
-        'Minutos dos cartões',
+        'Minutos dos cartões amarelos',
+      );
+    }
+
+    function mercadoVermelhosLabel(row) {
+      return mercadoClickablePairLabel(
+        row,
+        row.home_red_cards,
+        row.away_red_cards,
+        'data-placar-reds',
+        'Minutos dos cartões vermelhos',
+      );
+    }
+
+    function mercadoAmareloVermelhoLabel(row) {
+      return mercadoClickablePairLabel(
+        row,
+        row.home_yellow_red_cards,
+        row.away_yellow_red_cards,
+        'data-placar-yr',
+        'Minutos amarelo/vermelho',
       );
     }
 
@@ -2274,6 +2305,26 @@
       );
     }
 
+    function mercadoLivresLabel(row) {
+      return mercadoClickablePairLabel(
+        row,
+        row.home_free_kicks,
+        row.away_free_kicks,
+        'data-placar-freekicks',
+        'Minutos dos livres',
+      );
+    }
+
+    function mercadoImpedimentosLabel(row) {
+      return mercadoClickablePairLabel(
+        row,
+        row.home_offsides,
+        row.away_offsides,
+        'data-placar-offsides',
+        'Minutos dos impedimentos',
+      );
+    }
+
     function mercadoLateraisLabel(row) {
       return mercadoClickablePairLabel(
         row,
@@ -2284,8 +2335,60 @@
       );
     }
 
+    function mercadoTirosMetaLabel(row) {
+      return mercadoClickablePairLabel(
+        row,
+        row.home_goal_kicks,
+        row.away_goal_kicks,
+        'data-placar-gk',
+        'Minutos dos tiros de meta',
+      );
+    }
+
+    function mercadoBloqueadosLabel(row) {
+      return mercadoClickablePairLabel(
+        row,
+        row.home_shots_blocked,
+        row.away_shots_blocked,
+        'data-placar-blocked',
+        'Minutos dos chutes bloqueados',
+      );
+    }
+
+    function mercadoAtaquesLabel(row) {
+      return statsPairLabel(row.home_attacks, row.away_attacks);
+    }
+
     function mercadoAtaquesPerigososLabel(row) {
       return statsPairLabel(row.home_dangerous_attacks, row.away_dangerous_attacks);
+    }
+
+    function mercadoBolaSeguraLabel(row) {
+      return statsPairLabel(row.home_ball_safe, row.away_ball_safe);
+    }
+
+    function mercadoSubsLabel(row) {
+      return mercadoClickablePairLabel(
+        row,
+        row.home_substitutions,
+        row.away_substitutions,
+        'data-placar-subs',
+        'Minutos das substituições',
+      );
+    }
+
+    function mercadoLesoesLabel(row) {
+      return mercadoClickablePairLabel(
+        row,
+        row.home_injuries,
+        row.away_injuries,
+        'data-placar-injuries',
+        'Minutos das lesões',
+      );
+    }
+
+    function mercadoPenaltisLabel(row) {
+      return statsPairLabel(row.home_penalties, row.away_penalties);
     }
 
     function favoritoPlacarLabel(row) {
@@ -2463,7 +2566,7 @@
       }
     }
 
-    async function showTimelinePopover(btn, eventId, tipPrefix, title, types, totalLabel, kindFn) {
+    async function showTimelinePopover(btn, eventId, tipPrefix, title, types, totalLabel, kindFn, filterFn) {
       const pop = document.getElementById('mercado-elevated-popover');
       if (!pop) return;
       const tipKey = `${tipPrefix}-${eventId}`;
@@ -2477,7 +2580,8 @@
       delete pop.dataset.eventId;
       positionMercadoPopover(btn, pop);
       try {
-        const events = await loadTimelineEventsForTypes(eventId, types);
+        let events = await loadTimelineEventsForTypes(eventId, types);
+        if (typeof filterFn === 'function') events = events.filter(filterFn);
         if (pop.dataset.tipKey !== tipKey) return;
         pop.innerHTML = renderTimelinePopoverHtml(row, events, {
           title,
@@ -2596,6 +2700,111 @@
       );
     }
 
+    async function showBlockedPopover(btn, eventId) {
+      const row = mercadoCache.find((r) => String(r.event_id) === String(eventId));
+      await showTimelinePopover(
+        btn,
+        eventId,
+        'blocked',
+        'Chutes bloqueados',
+        ['shotblocked'],
+        statsPairPlain(row?.home_shots_blocked, row?.away_shots_blocked) || '—',
+      );
+    }
+
+    async function showFreeKicksPopover(btn, eventId) {
+      const row = mercadoCache.find((r) => String(r.event_id) === String(eventId));
+      await showTimelinePopover(
+        btn,
+        eventId,
+        'freekicks',
+        'Livres',
+        ['freekick', 'freekicktaken'],
+        statsPairPlain(row?.home_free_kicks, row?.away_free_kicks) || '—',
+      );
+    }
+
+    async function showOffsidesPopover(btn, eventId) {
+      const row = mercadoCache.find((r) => String(r.event_id) === String(eventId));
+      await showTimelinePopover(
+        btn,
+        eventId,
+        'offsides',
+        'Impedimentos',
+        ['offside'],
+        statsPairPlain(row?.home_offsides, row?.away_offsides) || '—',
+      );
+    }
+
+    async function showGoalKicksPopover(btn, eventId) {
+      const row = mercadoCache.find((r) => String(r.event_id) === String(eventId));
+      await showTimelinePopover(
+        btn,
+        eventId,
+        'gk',
+        'Tiros de meta',
+        ['goalkick'],
+        statsPairPlain(row?.home_goal_kicks, row?.away_goal_kicks) || '—',
+      );
+    }
+
+    async function showRedsPopover(btn, eventId) {
+      const row = mercadoCache.find((r) => String(r.event_id) === String(eventId));
+      await showTimelinePopover(
+        btn,
+        eventId,
+        'reds',
+        'Vermelhos',
+        ['card'],
+        statsPairPlain(row?.home_red_cards, row?.away_red_cards) || '—',
+        cardKindFromEvent,
+        (ev) => {
+          const k = cardKindFromEvent(ev);
+          return k === 'Vermelho' || k === 'Amarelo/vermelho';
+        },
+      );
+    }
+
+    async function showYellowRedPopover(btn, eventId) {
+      const row = mercadoCache.find((r) => String(r.event_id) === String(eventId));
+      await showTimelinePopover(
+        btn,
+        eventId,
+        'yr',
+        'Amarelo/vermelho',
+        ['card'],
+        statsPairPlain(row?.home_yellow_red_cards, row?.away_yellow_red_cards) || '—',
+        cardKindFromEvent,
+        (ev) => cardKindFromEvent(ev) === 'Amarelo/vermelho',
+      );
+    }
+
+    async function showSubsPopover(btn, eventId) {
+      const row = mercadoCache.find((r) => String(r.event_id) === String(eventId));
+      await showTimelinePopover(
+        btn,
+        eventId,
+        'subs',
+        'Substituições',
+        ['substitution', 'playersubstitution'],
+        statsPairPlain(row?.home_substitutions, row?.away_substitutions) || '—',
+      );
+    }
+
+    async function showInjuriesPopover(btn, eventId) {
+      const row = mercadoCache.find((r) => String(r.event_id) === String(eventId));
+      await showTimelinePopover(
+        btn,
+        eventId,
+        'injuries',
+        'Lesões',
+        ['injury', 'backfrominjury'],
+        statsPairPlain(row?.home_injuries, row?.away_injuries) || '—',
+        (ev) => String(ev.event_type || '').toLowerCase() === 'backfrominjury' ? 'Retorno' : 'Lesão',
+      );
+    }
+
+
     function mercadoValidacaoLabel(row) {
       if (row.telegram_confirmacao === 'confirmada' || row.telegram_confirmacao === 'correta') {
         return '<span class="validacao-badge ok">Aposta ✓</span>';
@@ -2663,7 +2872,7 @@
         return String(mercadoSortKey(b)).localeCompare(String(mercadoSortKey(a)));
       });
       if (!rows.length) {
-        tbody.innerHTML = '<tr><td colspan="17" class="empty">Nenhum jogo com esses filtros.</td></tr>';
+        tbody.innerHTML = '<tr><td colspan="28" class="empty">Nenhum jogo com esses filtros.</td></tr>';
         return;
       }
       tbody.innerHTML = rows.map((row, i) => {
@@ -2686,13 +2895,24 @@
           <td data-label="Escanteios">${mercadoEscanteiosLabel(row)}</td>
           <td data-label="Chutes a gol">${mercadoSotLabel(row)}</td>
           <td data-label="Chutes fora">${mercadoChutesForaLabel(row)}</td>
+          <td data-label="Bloqueados">${mercadoBloqueadosLabel(row)}</td>
           <td data-label="Chutes">${mercadoChutesTotalLabel(row)}</td>
           <td data-label="Defesas">${mercadoDefesasLabel(row)}</td>
           <td data-label="Posse">${poss}</td>
           <td data-label="Faltas">${mercadoFaltasLabel(row)}</td>
+          <td data-label="Livres">${mercadoLivresLabel(row)}</td>
+          <td data-label="Impedimentos">${mercadoImpedimentosLabel(row)}</td>
           <td data-label="Laterais">${mercadoLateraisLabel(row)}</td>
+          <td data-label="Tiros de meta">${mercadoTirosMetaLabel(row)}</td>
+          <td data-label="Ataques">${mercadoAtaquesLabel(row)}</td>
           <td data-label="At. perigosos">${mercadoAtaquesPerigososLabel(row)}</td>
+          <td data-label="Bola segura">${mercadoBolaSeguraLabel(row)}</td>
           <td data-label="Amarelos">${mercadoAmarelosLabel(row)}</td>
+          <td data-label="Vermelhos">${mercadoVermelhosLabel(row)}</td>
+          <td data-label="A/V">${mercadoAmareloVermelhoLabel(row)}</td>
+          <td data-label="Subs">${mercadoSubsLabel(row)}</td>
+          <td data-label="Lesões">${mercadoLesoesLabel(row)}</td>
+          <td data-label="Pênaltis">${mercadoPenaltisLabel(row)}</td>
           <td data-label="Liga">${league}</td>
           <td data-label="Status">${mercadoStatusLabel(row)}</td>
           <td data-label="Link">${link}</td>
@@ -3285,7 +3505,7 @@
           }
           if (tbody) {
             tbody.innerHTML =
-              `<tr><td colspan="17" class="empty">${msg}</td></tr>`;
+              `<tr><td colspan="28" class="empty">${msg}</td></tr>`;
           }
         }
       } finally {
@@ -3442,76 +3662,32 @@
     });
 
     document.getElementById('mercado-tbody')?.closest('main')?.addEventListener('click', async (e) => {
-      const placarBtn = e.target.closest('[data-placar-goals]');
-      if (placarBtn) {
+      const balloonMap = [
+        ['data-placar-goals', showPlacarGoalsPopover],
+        ['data-placar-corners', showCornersPopover],
+        ['data-placar-sot', showSotPopover],
+        ['data-placar-soff', showShotsOffPopover],
+        ['data-placar-blocked', showBlockedPopover],
+        ['data-placar-shots', showShotsTotalPopover],
+        ['data-placar-saves', showSavesPopover],
+        ['data-placar-fouls', showFoulsPopover],
+        ['data-placar-freekicks', showFreeKicksPopover],
+        ['data-placar-offsides', showOffsidesPopover],
+        ['data-placar-throwins', showThrowInsPopover],
+        ['data-placar-gk', showGoalKicksPopover],
+        ['data-placar-cards', showCardsPopover],
+        ['data-placar-reds', showRedsPopover],
+        ['data-placar-yr', showYellowRedPopover],
+        ['data-placar-subs', showSubsPopover],
+        ['data-placar-injuries', showInjuriesPopover],
+      ];
+      for (const [attr, fn] of balloonMap) {
+        const el = e.target.closest('[' + attr + ']');
+        if (!el) continue;
         e.preventDefault();
         e.stopPropagation();
-        const eventId = placarBtn.getAttribute('data-placar-goals');
-        if (eventId) await showPlacarGoalsPopover(placarBtn, eventId);
-        return;
-      }
-      const cornersBtn = e.target.closest('[data-placar-corners]');
-      if (cornersBtn) {
-        e.preventDefault();
-        e.stopPropagation();
-        const eventId = cornersBtn.getAttribute('data-placar-corners');
-        if (eventId) await showCornersPopover(cornersBtn, eventId);
-        return;
-      }
-      const sotBtn = e.target.closest('[data-placar-sot]');
-      if (sotBtn) {
-        e.preventDefault();
-        e.stopPropagation();
-        const eventId = sotBtn.getAttribute('data-placar-sot');
-        if (eventId) await showSotPopover(sotBtn, eventId);
-        return;
-      }
-      const soffBtn = e.target.closest('[data-placar-soff]');
-      if (soffBtn) {
-        e.preventDefault();
-        e.stopPropagation();
-        const eventId = soffBtn.getAttribute('data-placar-soff');
-        if (eventId) await showShotsOffPopover(soffBtn, eventId);
-        return;
-      }
-      const shotsBtn = e.target.closest('[data-placar-shots]');
-      if (shotsBtn) {
-        e.preventDefault();
-        e.stopPropagation();
-        const eventId = shotsBtn.getAttribute('data-placar-shots');
-        if (eventId) await showShotsTotalPopover(shotsBtn, eventId);
-        return;
-      }
-      const savesBtn = e.target.closest('[data-placar-saves]');
-      if (savesBtn) {
-        e.preventDefault();
-        e.stopPropagation();
-        const eventId = savesBtn.getAttribute('data-placar-saves');
-        if (eventId) await showSavesPopover(savesBtn, eventId);
-        return;
-      }
-      const cardsBtn = e.target.closest('[data-placar-cards]');
-      if (cardsBtn) {
-        e.preventDefault();
-        e.stopPropagation();
-        const eventId = cardsBtn.getAttribute('data-placar-cards');
-        if (eventId) await showCardsPopover(cardsBtn, eventId);
-        return;
-      }
-      const foulsBtn = e.target.closest('[data-placar-fouls]');
-      if (foulsBtn) {
-        e.preventDefault();
-        e.stopPropagation();
-        const eventId = foulsBtn.getAttribute('data-placar-fouls');
-        if (eventId) await showFoulsPopover(foulsBtn, eventId);
-        return;
-      }
-      const throwInsBtn = e.target.closest('[data-placar-throwins]');
-      if (throwInsBtn) {
-        e.preventDefault();
-        e.stopPropagation();
-        const eventId = throwInsBtn.getAttribute('data-placar-throwins');
-        if (eventId) await showThrowInsPopover(throwInsBtn, eventId);
+        const eventId = el.getAttribute(attr);
+        if (eventId) await fn(el, eventId);
         return;
       }
       const tipBtn = e.target.closest('[data-table-tip]');
@@ -3560,11 +3736,19 @@
         e.target.closest('[data-placar-corners]') ||
         e.target.closest('[data-placar-sot]') ||
         e.target.closest('[data-placar-soff]') ||
+        e.target.closest('[data-placar-blocked]') ||
         e.target.closest('[data-placar-shots]') ||
         e.target.closest('[data-placar-saves]') ||
-        e.target.closest('[data-placar-cards]') ||
         e.target.closest('[data-placar-fouls]') ||
+        e.target.closest('[data-placar-freekicks]') ||
+        e.target.closest('[data-placar-offsides]') ||
         e.target.closest('[data-placar-throwins]') ||
+        e.target.closest('[data-placar-gk]') ||
+        e.target.closest('[data-placar-cards]') ||
+        e.target.closest('[data-placar-reds]') ||
+        e.target.closest('[data-placar-yr]') ||
+        e.target.closest('[data-placar-subs]') ||
+        e.target.closest('[data-placar-injuries]') ||
         e.target.closest('[data-log-detail]') ||
         e.target.closest('#mercado-elevated-popover')
       ) {
