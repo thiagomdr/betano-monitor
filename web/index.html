@@ -992,7 +992,7 @@
           <tr>
             <th>#</th>
             <th>Jogo</th>
-            <th title="Minuto do jogo">Tempo</th>
+            <th title="Minuto do jogo (+acréscimos quando anunciados)">Tempo</th>
             <th title="Clique para minutos dos gols">Placar</th>
             <th title="Clique para minutos dos escanteios">Escanteios</th>
             <th title="Clique para minutos dos chutes a gol">Chutes a gol</th>
@@ -2171,9 +2171,16 @@
       if (row.last_minute == null || row.last_minute === '') {
         return '<span class="muted">—</span>';
       }
+      const injury = Number(row.injury_time);
+      const hasInjury = Number.isFinite(injury) && injury > 0;
+      const label = hasInjury
+        ? `${row.last_minute}'+${injury}`
+        : `${row.last_minute}'`;
       const coletado = formatDate(row.updated_at);
-      const tip = tipLinesHtml([`Coletado em: ${coletado}`]);
-      return `<button type="button" class="table-tip-btn" data-table-tip="tempo-${row.event_id}" data-tip-html="${encodeURIComponent(tip)}">${row.last_minute}'</button>`;
+      const tipLines = [`Coletado em: ${coletado}`];
+      if (hasInjury) tipLines.push(`Acréscimos: +${injury}`);
+      const tip = tipLinesHtml(tipLines);
+      return `<button type="button" class="table-tip-btn" data-table-tip="tempo-${row.event_id}" data-tip-html="${encodeURIComponent(tip)}">${label}</button>`;
     }
 
     function statsScoreText(row) {

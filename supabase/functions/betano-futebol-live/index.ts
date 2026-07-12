@@ -2731,6 +2731,7 @@ async function persistSportradarStats(
     country: string | null;
     betano_url: string | null;
     last_minute: number | null;
+    injury_time?: number | null;
     home_score: number | null;
     away_score: number | null;
     is_live?: boolean;
@@ -2752,6 +2753,7 @@ async function persistSportradarStats(
     betano_url: input.betano_url,
     is_live: input.is_live !== false,
     last_minute: input.last_minute,
+    injury_time: input.injury_time ?? null,
     home_score: input.home_score,
     away_score: input.away_score,
     home_shots_on_target: s.home_shots_on_target,
@@ -4009,6 +4011,7 @@ Deno.serve(async (req) => {
           country: league.country,
           betano_url: url,
           last_minute: minute,
+          injury_time: injury,
           home_score: score.home,
           away_score: score.away,
           is_live: true,
