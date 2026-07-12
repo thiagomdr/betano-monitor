@@ -1936,7 +1936,20 @@ type MatchMeta = {
   wind: number | null;
   season_name: string | null;
   tournament_name: string | null;
+  home_team_uid: string | null;
+  away_team_uid: string | null;
+  home_lastx: LastXMatch[];
+  away_lastx: LastXMatch[];
   available: boolean;
+};
+
+type LastXMatch = {
+  date: string | null;
+  home: string | null;
+  away: string | null;
+  score: string | null;
+  side: "home" | "away" | "unk";
+  outcome: "W" | "D" | "L" | "?";
 };
 
 function emptyMatchMeta(): MatchMeta {
@@ -1956,8 +1969,100 @@ function emptyMatchMeta(): MatchMeta {
     wind: null,
     season_name: null,
     tournament_name: null,
+    home_team_uid: null,
+    away_team_uid: null,
+    home_lastx: [],
+    away_lastx: [],
     available: false,
   };
+}
+
+function teamUidFromMatchTeam(team: unknown): string | null {
+  const rec = asRecord(team);
+  if (!rec) return null;
+  const uid = rec.uid ?? rec._uid ?? rec.uniqueteamid;
+  if (uid != null && String(uid).trim() !== "") return String(uid);
+  return null;
+}
+
+function teamDisplayName(team: unknown): string | null {
+  const rec = asRecord(team);
+  if (!rec) return typeof team === "string" ? textOrNull(team) : null;
+  return textOrNull(rec.mediumname) ?? textOrNull(rec.name);
+}
+
+function outcomeForTeam(
+  winner: string | null,
+  side: "home" | "away" | "unk",
+  homeScore: number | null,
+  awayScore: number | null,
+): "W" | "D" | "L" | "?" {
+  if (side === "unk") return "?";
+  const w = (winner || "").toLowerCase();
+  if (w === "draw" || w === "drawn") return "D";
+  if (homeScore != null && awayScore != null && homeScore === awayScore) return "D";
+  if (w === "home") return side === "home" ? "W" : "L";
+  if (w === "away") return side === "away" ? "W" : "L";
+  if (homeScore != null && awayScore != null) {
+    if (homeScore > awayScore) return side === "home" ? "W" : "L";
+    if (awayScore > homeScore) return side === "away" ? "W" : "L";
+  }
+  return "?";
+}
+
+/** Ultimos N jogos do time (unique team id). */
+async function tryFetchTeamLastX(
+  uniqueTeamId: string | null,
+  limit = 5,
+): Promise<LastXMatch[]> {
+  if (!uniqueTeamId) return [];
+  const url =
+    `https://stats.fn.sportradar.com/common/en/Europe:Berlin/gismo/stats_team_lastx/${uniqueTeamId}/${limit}`;
+  try {
+    const res = await fetch(url, { headers: SPORTRADAR_FETCH_HEADERS });
+    if (!res.ok) return [];
+    const data = asRecord(await res.json());
+    const doc0 = Array.isArray(data?.doc) ? asRecord(data.doc[0]) : null;
+    if (String(doc0?.event ?? "") === "exception") return [];
+    const payload = asRecord(doc0?.data) ?? {};
+    const matches = Array.isArray(payload.matches) ? payload.matches : [];
+    const out: LastXMatch[] = [];
+    for (const item of matches) {
+      const rec = asRecord(item);
+      if (!rec) continue;
+      const teams = asRecord(rec.teams) ?? {};
+      const homeTeam = teams.home;
+      const awayTeam = teams.away;
+      const homeUid = teamUidFromMatchTeam(homeTeam);
+      const awayUid = teamUidFromMatchTeam(awayTeam);
+      let side: "home" | "away" | "unk" = "unk";
+      if (homeUid === uniqueTeamId) side = "home";
+      else if (awayUid === uniqueTeamId) side = "away";
+      const result = asRecord(rec.result) ?? {};
+      const homeScore = toInt(result.home);
+      const awayScore = toInt(result.away);
+      const time = asRecord(rec.time) ?? asRecord(rec._dt) ?? {};
+      const score = homeScore != null && awayScore != null
+        ? `${homeScore}-${awayScore}`
+        : null;
+      out.push({
+        date: textOrNull(time.date),
+        home: teamDisplayName(homeTeam),
+        away: teamDisplayName(awayTeam),
+        score,
+        side,
+        outcome: outcomeForTeam(
+          result.winner != null ? String(result.winner) : null,
+          side,
+          homeScore,
+          awayScore,
+        ),
+      });
+    }
+    return out;
+  } catch {
+    return [];
+  }
 }
 
 /** Metadados do jogo (estadio, arbitro, clima) via match_info. */
@@ -1984,12 +2089,20 @@ async function tryFetchMatchInfo(
     const season = asRecord(payload.season) ?? {};
     const tournament = asRecord(payload.tournament) ?? {};
     const stadiumCc = asRecord(stadium.cc) ?? {};
+    const matchTeams = asRecord(match.teams) ?? {};
 
     const weatherCode = toInt(match.weather);
     const pitchCode = toInt(match.pitchcondition ?? match.pitch_condition);
     const capacityRaw = stadium.capacity;
     const capacity = toInt(capacityRaw) ??
       (typeof capacityRaw === "string" ? toInt(capacityRaw.replace(/\D/g, "")) : null);
+
+    const homeTeamUid = teamUidFromMatchTeam(matchTeams.home);
+    const awayTeamUid = teamUidFromMatchTeam(matchTeams.away);
+    const [homeLastx, awayLastx] = await Promise.all([
+      tryFetchTeamLastX(homeTeamUid, 5),
+      tryFetchTeamLastX(awayTeamUid, 5),
+    ]);
 
     const meta: MatchMeta = {
       stadium_name: textOrNull(stadium.name),
@@ -2007,6 +2120,10 @@ async function tryFetchMatchInfo(
       wind: toInt(match.wind),
       season_name: textOrNull(season.name),
       tournament_name: textOrNull(tournament.name),
+      home_team_uid: homeTeamUid,
+      away_team_uid: awayTeamUid,
+      home_lastx: homeLastx,
+      away_lastx: awayLastx,
       available: false,
     };
     meta.available = [
@@ -2018,7 +2135,9 @@ async function tryFetchMatchInfo(
       meta.pitch,
       meta.season_name,
       meta.tournament_name,
-    ].some((v) => v != null);
+      meta.home_team_uid,
+      meta.away_team_uid,
+    ].some((v) => v != null) || meta.home_lastx.length > 0 || meta.away_lastx.length > 0;
     return meta;
   } catch {
     return emptyMatchMeta();
@@ -2820,6 +2939,10 @@ async function persistSportradarStats(
     row.wind = m.wind;
     row.season_name = m.season_name;
     row.tournament_name = m.tournament_name;
+    row.home_team_uid = m.home_team_uid;
+    row.away_team_uid = m.away_team_uid;
+    if (m.home_lastx.length) row.home_lastx_json = m.home_lastx;
+    if (m.away_lastx.length) row.away_lastx_json = m.away_lastx;
   }
   await supabase.from("futebol_sportradar_stats").upsert(row, { onConflict: "event_id" });
 }

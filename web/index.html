@@ -817,8 +817,8 @@
       display: none;
       position: fixed;
       z-index: 1000;
-      max-width: 360px;
-      max-height: 280px;
+      max-width: 420px;
+      max-height: 360px;
       overflow: auto;
       padding: 0.65rem 0.75rem;
       background: #1a2332;
@@ -844,6 +844,34 @@
       border-bottom: 1px solid rgba(255, 255, 255, 0.06);
     }
     .mercado-elevated-popover li:last-child { border-bottom: none; }
+    .mercado-elevated-popover .lastx-section {
+      margin-top: 0.55rem;
+    }
+    .mercado-elevated-popover .lastx-section:first-child {
+      margin-top: 0;
+    }
+    .mercado-elevated-popover .lastx-title {
+      font-weight: 700;
+      color: #e8eef7;
+      margin-bottom: 0.25rem;
+    }
+    .lastx-outcome {
+      display: inline-block;
+      min-width: 1.1rem;
+      font-weight: 800;
+      text-align: center;
+      margin-right: 0.3rem;
+    }
+    .lastx-outcome.W { color: #3dd68c; }
+    .lastx-outcome.D { color: #ffd166; }
+    .lastx-outcome.L { color: #ff6b6b; }
+    .lastx-outcome.q { color: var(--muted); }
+    button.table-tip-btn.match-tip {
+      text-align: left;
+      font-weight: inherit;
+      text-decoration: underline dotted rgba(94, 179, 255, 0.35);
+      max-width: 100%;
+    }
     .mercado-delete-btn {
       background: transparent;
       border: none;
@@ -986,7 +1014,7 @@
   </header>
   <main id="panel-mercado">
     <p class="hint">
-      Estatísticas Sportradar por jogo (inclui estádio, árbitro, clima via match_info). Clique nos contadores (placar, escanteios, chutes, defesas, faltas…) para o balão de minutos.
+      Estatísticas Sportradar por jogo (inclui estádio, árbitro, clima via match_info). Clique no jogo para últimos resultados; nos contadores para balões de minutos.
     </p>
     <div class="stats-filters" id="stats-filters">
       <label class="filter-validados">
@@ -1014,7 +1042,7 @@
           </tr>
           <tr class="stats-col-row">
             <th class="stats-group-start">#</th>
-            <th>Jogo</th>
+            <th title="Clique para últimos resultados dos times">Jogo</th>
             <th title="Minuto do jogo (+acréscimos quando anunciados)">Tempo</th>
             <th title="Clique para minutos dos gols">Placar</th>
             <th>Liga</th>
@@ -1310,6 +1338,51 @@
       const h = escapeHtml(home || '—');
       const a = escapeHtml(away || '—');
       return `<span class="team-home">${h}</span> <span class="match-vs">x</span> <span class="team-away">${a}</span>`;
+    }
+
+    function parseLastxList(raw) {
+      if (Array.isArray(raw)) return raw;
+      if (typeof raw === 'string') {
+        try {
+          const parsed = JSON.parse(raw);
+          return Array.isArray(parsed) ? parsed : [];
+        } catch {
+          return [];
+        }
+      }
+      return [];
+    }
+
+    function formatLastxListHtml(teamName, list) {
+      const rows = parseLastxList(list);
+      const title = escapeHtml(teamName || 'Time');
+      if (!rows.length) {
+        return `<div class="lastx-section"><div class="lastx-title">${title}</div><div class="muted">Sem histórico recente</div></div>`;
+      }
+      const items = rows.map((m) => {
+        const outcome = String(m.outcome || '?');
+        const ocClass = outcome === 'W' || outcome === 'D' || outcome === 'L' ? outcome : 'q';
+        const date = m.date ? escapeHtml(String(m.date)) : '—';
+        const score = m.score ? escapeHtml(String(m.score)) : '—';
+        const home = escapeHtml(m.home || '?');
+        const away = escapeHtml(m.away || '?');
+        return `<li><span class="lastx-outcome ${ocClass}">${escapeHtml(outcome)}</span>${date} · ${home} ${score} ${away}</li>`;
+      }).join('');
+      return `<div class="lastx-section"><div class="lastx-title">${title}</div><ul>${items}</ul></div>`;
+    }
+
+    function mercadoJogoLastxLabel(row) {
+      const matchHtml = formatMatchHtml(row.home, row.away);
+      const homeList = parseLastxList(row.home_lastx_json);
+      const awayList = parseLastxList(row.away_lastx_json);
+      if (!homeList.length && !awayList.length) {
+        return wrapMatchHtmlWithLink(matchHtml, row.betano_url);
+      }
+      const tip = [
+        formatLastxListHtml(row.home, homeList),
+        formatLastxListHtml(row.away, awayList),
+      ].join('');
+      return `<button type="button" class="table-tip-btn match-tip" data-table-tip="lastx-${row.event_id}" data-tip-html="${encodeURIComponent(tip)}" title="Últimos resultados dos times">${matchHtml}</button>`;
     }
 
     function wrapMatchHtmlWithLink(matchHtml, url) {
@@ -2963,10 +3036,7 @@
         return;
       }
       tbody.innerHTML = rows.map((row, i) => {
-        const matchHtml = wrapMatchHtmlWithLink(
-          formatMatchHtml(row.home, row.away),
-          row.betano_url,
-        );
+        const matchHtml = mercadoJogoLastxLabel(row);
         const league = [row.country, row.league].filter(Boolean).join(' · ') || '—';
         const link = row.betano_url
           ? `<a href="${row.betano_url}" target="_blank" rel="noopener">abrir</a>`
