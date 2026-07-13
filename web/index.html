@@ -551,66 +551,73 @@
     }
     #stats-columns-popover {
       display: none;
-      position: absolute;
-      z-index: 1100;
-      top: calc(100% + 0.55rem);
-      left: 0;
-      width: min(760px, 96vw);
-      max-height: min(85vh, 680px);
-      overflow: auto;
-      padding: 1rem 1.1rem 0;
+      position: fixed;
+      inset: 0;
+      z-index: 2400;
+      align-items: center;
+      justify-content: center;
+      padding: 1.25rem;
+      background: rgba(4, 10, 18, 0.72);
+      backdrop-filter: blur(2px);
+      -webkit-backdrop-filter: blur(2px);
+      box-sizing: border-box;
+    }
+    #stats-columns-popover.open {
+      display: flex;
+    }
+    #stats-columns-popover .scb-balloon {
+      width: min(860px, 96vw);
+      max-height: min(90vh, 760px);
+      display: flex;
+      flex-direction: column;
+      overflow: hidden;
+      padding: 0;
       background: #152033;
-      border: 1px solid rgba(94, 179, 255, 0.4);
+      border: 1px solid rgba(94, 179, 255, 0.45);
       border-radius: 18px;
-      box-shadow: 0 16px 40px rgba(0, 0, 0, 0.55);
+      box-shadow: 0 22px 56px rgba(0, 0, 0, 0.6);
       font-size: 0.84rem;
+    }
+    #stats-columns-popover .scb-balloon-body {
+      flex: 1 1 auto;
+      overflow: auto;
+      padding: 1.05rem 1.15rem 0.35rem;
       scrollbar-width: thin;
       scrollbar-color: #4a9de8 #1a2a3d;
     }
-    #stats-columns-popover::-webkit-scrollbar {
+    #stats-columns-popover .scb-balloon-body::-webkit-scrollbar {
       width: 10px;
       height: 10px;
     }
-    #stats-columns-popover::-webkit-scrollbar-track {
+    #stats-columns-popover .scb-balloon-body::-webkit-scrollbar-track {
       background: #1a2a3d;
-      border-radius: 0 18px 18px 0;
+      border-radius: 8px;
     }
-    #stats-columns-popover::-webkit-scrollbar-thumb {
+    #stats-columns-popover .scb-balloon-body::-webkit-scrollbar-thumb {
       background: #4a9de8;
       border-radius: 8px;
       border: 2px solid #1a2a3d;
     }
-    #stats-columns-popover::-webkit-scrollbar-thumb:hover {
+    #stats-columns-popover .scb-balloon-body::-webkit-scrollbar-thumb:hover {
       background: #6bb4f5;
     }
-    #stats-columns-popover::before {
-      content: '';
-      position: absolute;
-      top: -8px;
-      left: 1.4rem;
-      width: 14px;
-      height: 14px;
-      background: #152033;
-      border-left: 1px solid rgba(94, 179, 255, 0.4);
-      border-top: 1px solid rgba(94, 179, 255, 0.4);
-      transform: rotate(45deg);
-    }
-    #stats-columns-popover.open { display: block; }
     #stats-columns-popover .scb-title {
-      margin: 0 0 0.85rem;
-      font-size: 1.05rem;
+      margin: 0 0 0.95rem;
+      font-size: 1.12rem;
       color: #fff;
       font-weight: 700;
       letter-spacing: 0.01em;
     }
     #stats-columns-popover .scb-group {
-      margin-bottom: 0.85rem;
-      padding-bottom: 0.75rem;
-      border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+      margin-bottom: 0.75rem;
+      padding: 0.85rem 0.9rem;
+      background: rgba(8, 16, 28, 0.55);
+      border: 1px solid rgba(94, 179, 255, 0.22);
+      border-radius: 14px;
+      box-shadow: 0 4px 14px rgba(0, 0, 0, 0.18);
     }
     #stats-columns-popover .scb-group:last-of-type {
-      border-bottom: none;
-      margin-bottom: 0.45rem;
+      margin-bottom: 0.55rem;
     }
     #stats-columns-popover .scb-group-head {
       display: flex;
@@ -756,13 +763,11 @@
       display: flex;
       justify-content: flex-end;
       gap: 0.5rem;
-      margin: 0.65rem -1.1rem 0;
-      padding: 0.7rem 1.1rem 1rem;
+      margin: 0;
+      padding: 0.85rem 1.15rem 1.05rem;
       border-top: 1px solid rgba(255, 255, 255, 0.1);
-      border-radius: 0 0 18px 18px;
-      position: sticky;
-      bottom: 0;
       background: #152033;
+      flex: 0 0 auto;
     }
     #stats-columns-popover .scb-actions #btn-scb-reset-colors {
       margin-right: auto;
@@ -1361,7 +1366,6 @@
         <button type="button" class="btn-secondary" id="btn-stats-montar-tabela" aria-haspopup="dialog" aria-expanded="false">
           Montar Tabela
         </button>
-        <div id="stats-columns-popover" role="dialog" aria-label="Montar Colunas da Tabela" hidden></div>
       </div>
     </div>
     <div class="coleta-countdown" id="coleta-countdown-mercado" aria-live="polite">
@@ -1526,7 +1530,8 @@
       </table>
     </div>
   </main>
-  <div id="mercado-elevated-popover" class="mercado-elevated-popover" role="dialog" aria-hidden="true"></div>
+    <div id="mercado-elevated-popover" class="mercado-elevated-popover" role="dialog" aria-hidden="true"></div>
+    <div id="stats-columns-popover" role="dialog" aria-modal="true" aria-label="Montar Colunas da Tabela" hidden></div>
   </div>
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
   <script>
@@ -3993,6 +3998,7 @@
         pop.innerHTML = '';
       }
       if (btn) btn.setAttribute('aria-expanded', 'false');
+      document.body.style.removeProperty('overflow');
     }
 
     function syncStatsBuilderGroupChecks(root) {
@@ -4065,15 +4071,21 @@
         </div>`;
       }).join('');
       pop.innerHTML =
-        `<h3 class="scb-title">Montar Tabela</h3>${groupsHtml}` +
-        `<div class="scb-actions">
-          <button type="button" class="btn-secondary" id="btn-scb-reset-colors" title="Restaurar cores padrão de todas as colunas">Reset</button>
-          <button type="button" class="btn-secondary" id="btn-scb-cancel">Cancelar</button>
-          <button type="button" class="btn-primary" id="btn-scb-apply">Aplicar</button>
+        `<div class="scb-balloon" role="document">
+          <div class="scb-balloon-body">
+            <h3 class="scb-title">Montar Tabela</h3>
+            ${groupsHtml}
+          </div>
+          <div class="scb-actions">
+            <button type="button" class="btn-secondary" id="btn-scb-reset-colors" title="Restaurar cores padrão de todas as colunas">Reset</button>
+            <button type="button" class="btn-secondary" id="btn-scb-cancel">Cancelar</button>
+            <button type="button" class="btn-primary" id="btn-scb-apply">Aplicar</button>
+          </div>
         </div>`;
       pop.hidden = false;
       pop.classList.add('open');
       if (btn) btn.setAttribute('aria-expanded', 'true');
+      document.body.style.overflow = 'hidden';
       syncStatsBuilderGroupChecks(pop);
 
       const toggleChip = (chip) => {
@@ -4810,11 +4822,12 @@
 
     document.getElementById('stats-columns-popover')?.addEventListener('click', (e) => {
       e.stopPropagation();
+      if (e.target === e.currentTarget) closeStatsColumnsPopover();
     });
 
     document.addEventListener('click', (e) => {
       if (!isStatsColumnsPopoverOpen()) return;
-      if (e.target.closest('.stats-col-builder-wrap')) return;
+      if (e.target.closest('#stats-columns-popover, #btn-stats-montar-tabela')) return;
       closeStatsColumnsPopover();
     });
 
