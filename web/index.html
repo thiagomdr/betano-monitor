@@ -664,6 +664,7 @@
       padding: 0.65rem 0.7rem 0.7rem;
     }
     #stats-columns-popover .scb-chip {
+      position: relative;
       display: inline-flex;
       align-items: center;
       gap: 0.4rem;
@@ -701,22 +702,34 @@
       background: rgba(94, 179, 255, 0.08);
     }
     #stats-columns-popover .scb-dot {
-      width: 0.55rem;
-      height: 0.55rem;
+      position: absolute;
+      right: 0.32rem;
+      bottom: 0.28rem;
+      width: 0.38rem;
+      height: 0.38rem;
       border-radius: 50%;
       flex: 0 0 auto;
-      background: rgba(143, 163, 191, 0.32);
-      box-shadow: inset 0 0 0 1px rgba(0, 0, 0, 0.25);
+      background: rgba(100, 118, 140, 0.45);
+      box-shadow: inset 0 0 0 1px rgba(0, 0, 0, 0.3);
       transition: background 0.15s ease, box-shadow 0.15s ease;
+      pointer-events: none;
+    }
+    #stats-columns-popover .scb-group-head .scb-dot {
+      position: absolute;
+      right: 0.55rem;
+      bottom: 0.38rem;
+    }
+    #stats-columns-popover .scb-group-head {
+      position: relative;
     }
     #stats-columns-popover .scb-chip.is-on .scb-dot,
     #stats-columns-popover .scb-group-head.is-on .scb-dot {
-      background: #4a9de8;
-      box-shadow: 0 0 0 2px rgba(74, 157, 232, 0.28);
+      background: #1f6fbf;
+      box-shadow: 0 0 0 1px rgba(31, 111, 191, 0.35);
     }
     #stats-columns-popover .scb-group-head.is-partial .scb-dot {
-      background: rgba(74, 157, 232, 0.45);
-      box-shadow: 0 0 0 2px rgba(74, 157, 232, 0.15);
+      background: rgba(31, 111, 191, 0.55);
+      box-shadow: 0 0 0 1px rgba(31, 111, 191, 0.2);
     }
     #stats-columns-popover .scb-chip-label {
       flex: 1 1 auto;
