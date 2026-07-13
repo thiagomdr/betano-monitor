@@ -711,6 +711,9 @@
       bottom: 0;
       background: #1a2332;
     }
+    #stats-columns-popover .scb-actions #btn-scb-reset-colors {
+      margin-right: auto;
+    }
     #stats-columns-popover .scb-actions .btn-primary {
       font-size: 0.82rem;
       padding: 0.4rem 0.85rem;
@@ -1670,6 +1673,11 @@
       } else {
         delete statsColumnColors[colId];
       }
+      persistStatsColumnColors();
+    }
+
+    function resetAllStatsColumnColors() {
+      statsColumnColors = {};
       persistStatsColumnColors();
     }
 
@@ -3997,6 +4005,7 @@
       pop.innerHTML =
         `<h3 class="scb-title">Montar Tabela</h3>${groupsHtml}` +
         `<div class="scb-actions">
+          <button type="button" class="btn-secondary" id="btn-scb-reset-colors" title="Restaurar cores padrão de todas as colunas">Reset cores</button>
           <button type="button" class="btn-secondary" id="btn-scb-cancel">Cancelar</button>
           <button type="button" class="btn-primary" id="btn-scb-apply">Aplicar</button>
         </div>`;
@@ -4064,6 +4073,16 @@
           e.stopPropagation();
           applyColorUi(null);
         });
+      });
+      pop.querySelector('#btn-scb-reset-colors')?.addEventListener('click', () => {
+        resetAllStatsColumnColors();
+        pop.querySelectorAll('input.scb-color-input').forEach((input) => {
+          const wrap = input.closest('.scb-color');
+          input.value = STATS_COL_COLOR_FALLBACK;
+          wrap?.classList.remove('has-custom');
+          wrap?.style.removeProperty('color');
+        });
+        renderMercado();
       });
       pop.querySelector('#btn-scb-cancel')?.addEventListener('click', () => {
         closeStatsColumnsPopover();
