@@ -557,9 +557,7 @@
       align-items: center;
       justify-content: center;
       padding: 1.25rem;
-      background: rgba(4, 10, 18, 0.72);
-      backdrop-filter: blur(2px);
-      -webkit-backdrop-filter: blur(2px);
+      background: rgba(4, 10, 18, 0.78);
       box-sizing: border-box;
     }
     #stats-columns-popover.open {
@@ -751,7 +749,56 @@
       min-width: 0;
       white-space: nowrap;
     }
+    #stats-columns-popover .scb-color {
+      position: relative;
+      flex: 0 0 auto;
+      width: 1.25rem;
+      height: 1.25rem;
+      padding: 0;
+      border-radius: 5px;
+      border: 1px solid rgba(94, 179, 255, 0.4);
+      background: rgba(10, 18, 30, 0.35);
+      color: #9ecfff;
+      cursor: pointer;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      overflow: hidden;
+      appearance: none;
+      font: inherit;
+    }
+    #stats-columns-popover .scb-color:hover {
+      background: rgba(94, 179, 255, 0.18);
+      border-color: rgba(94, 179, 255, 0.9);
+      color: #fff;
+    }
+    #stats-columns-popover .scb-color.has-custom {
+      border-color: currentColor;
+    }
+    #stats-columns-popover .scb-color-icon {
+      width: 0.78rem;
+      height: 0.78rem;
+      display: block;
+      pointer-events: none;
+      background: currentColor;
+      -webkit-mask: url(assets/pincel.png) center / contain no-repeat;
+      mask: url(assets/pincel.png) center / contain no-repeat;
+      transform: rotate(180deg);
+    }
+    #stats-columns-popover .scb-color-input {
+      position: absolute;
+      width: 1px;
+      height: 1px;
+      opacity: 0;
+      border: 0;
+      padding: 0;
+      margin: 0;
+      overflow: hidden;
+      clip: rect(0 0 0 0);
+      pointer-events: none;
+    }
     #stats-columns-popover .scb-chip-tools {
+      position: relative;
       display: inline-flex;
       align-items: center;
       gap: 0.28rem;
@@ -779,50 +826,6 @@
       background: rgba(94, 179, 255, 0.18);
       border-color: rgba(94, 179, 255, 0.9);
       color: #fff;
-    }
-    #stats-columns-popover .scb-color {
-      position: relative;
-      flex: 0 0 auto;
-      width: 1.25rem;
-      height: 1.25rem;
-      padding: 0;
-      border-radius: 5px;
-      border: 1px solid rgba(94, 179, 255, 0.4);
-      background: rgba(10, 18, 30, 0.35);
-      color: #9ecfff;
-      cursor: pointer;
-      display: inline-flex;
-      align-items: center;
-      justify-content: center;
-      overflow: hidden;
-    }
-    #stats-columns-popover .scb-color:hover {
-      background: rgba(94, 179, 255, 0.18);
-      border-color: rgba(94, 179, 255, 0.9);
-      color: #fff;
-    }
-    #stats-columns-popover .scb-color.has-custom {
-      border-color: currentColor;
-    }
-    #stats-columns-popover .scb-color-icon {
-      width: 0.78rem;
-      height: 0.78rem;
-      display: block;
-      pointer-events: none;
-      background: currentColor;
-      -webkit-mask: url(assets/pincel.png) center / contain no-repeat;
-      mask: url(assets/pincel.png) center / contain no-repeat;
-      transform: rotate(180deg);
-    }
-    #stats-columns-popover .scb-color-input {
-      position: absolute;
-      inset: 0;
-      width: 100%;
-      height: 100%;
-      opacity: 0;
-      border: 0;
-      padding: 0;
-      cursor: pointer;
     }
     #stats-columns-popover .scb-actions {
       display: flex;
@@ -1803,6 +1806,10 @@
       statsColumnColors = {};
       persistStatsColumnColors();
     }
+
+    /** True while native color picker is open (avoids closing Montar Tabela). */
+    let scbColorPicking = false;
+    let scbColorPickGuardUntil = 0;
 
     function withStatsColTextColor(html, colId) {
       const color = getStatsColTextColor(colId);
@@ -4092,10 +4099,10 @@
       const colorCls = customColor ? 'scb-color has-custom' : 'scb-color';
       const colorStyle = customColor ? ` style="color:${escapeHtml(customColor)}"` : '';
       return `<span class="scb-chip-tools">
-        <label class="${colorCls}"${colorStyle} title="Cor do texto (duplo clique = padrão)" aria-label="Cor do texto de ${escapeHtml(label)}">
+        <button type="button" class="${colorCls}"${colorStyle} title="Cor do texto (duplo clique = padrão)" aria-label="Cor do texto de ${escapeHtml(label)}">
           <span class="scb-color-icon" aria-hidden="true"></span>
-          <input type="color" class="scb-color-input" data-scb-color="${escapeHtml(id)}" value="${escapeHtml(pickerValue)}" />
-        </label>`;
+        </button>
+        <input type="color" class="scb-color-input" data-scb-color="${escapeHtml(id)}" value="${escapeHtml(pickerValue)}" tabindex="-1" aria-hidden="true" />`;
     }
 
     function openStatsColumnsPopover() {
@@ -4208,37 +4215,79 @@
         });
       });
       pop.querySelectorAll('input.scb-color-input').forEach((colorInput) => {
-        const wrap = colorInput.closest('.scb-color');
-        const applyColorUi = (hex) => {
-          const colId = colorInput.getAttribute('data-scb-color');
+        const tools = colorInput.closest('.scb-chip-tools');
+        const brushBtn = tools?.querySelector('button.scb-color');
+        const colId = colorInput.getAttribute('data-scb-color');
+
+        const syncBrushPreview = (hex) => {
+          if (!brushBtn) return;
+          if (typeof hex === 'string' && /^#[0-9a-fA-F]{6}$/i.test(hex)) {
+            brushBtn.classList.add('has-custom');
+            brushBtn.style.color = hex;
+          } else {
+            brushBtn.classList.remove('has-custom');
+            brushBtn.style.removeProperty('color');
+          }
+        };
+
+        const commitColor = (hex) => {
           if (!colId) return;
           setStatsColTextColor(colId, hex);
           const custom = getStatsColTextColor(colId);
-          if (wrap) {
-            wrap.classList.toggle('has-custom', !!custom);
-            if (custom) wrap.style.color = custom;
-            else wrap.style.removeProperty('color');
-          }
+          syncBrushPreview(custom);
           colorInput.value = custom || STATS_COL_COLOR_FALLBACK;
           renderMercado();
         };
-        colorInput.addEventListener('click', (e) => e.stopPropagation());
-        colorInput.addEventListener('input', () => applyColorUi(colorInput.value));
-        colorInput.addEventListener('change', () => applyColorUi(colorInput.value));
-        wrap?.addEventListener('click', (e) => e.stopPropagation());
-        wrap?.addEventListener('dblclick', (e) => {
+
+        const openColorPicker = (e) => {
           e.preventDefault();
           e.stopPropagation();
-          applyColorUi(null);
+          hideMercadoElevatedPopover();
+          scbColorPicking = true;
+          scbColorPickGuardUntil = Date.now() + 500;
+          try {
+            if (typeof colorInput.showPicker === 'function') colorInput.showPicker();
+            else colorInput.click();
+          } catch {
+            colorInput.click();
+          }
+        };
+
+        brushBtn?.addEventListener('click', openColorPicker);
+        brushBtn?.addEventListener('mousedown', (e) => e.stopPropagation());
+        brushBtn?.addEventListener('pointerdown', (e) => e.stopPropagation());
+        brushBtn?.addEventListener('dblclick', (e) => {
+          e.preventDefault();
+          e.stopPropagation();
+          scbColorPicking = false;
+          commitColor(null);
+        });
+
+        colorInput.addEventListener('input', () => {
+          const hex = colorInput.value;
+          syncBrushPreview(hex);
+          if (colId && isStatsColorTargetId(colId) && /^#[0-9a-fA-F]{6}$/i.test(hex)) {
+            statsColumnColors[colId] = hex.toLowerCase();
+          }
+        });
+        colorInput.addEventListener('change', () => {
+          scbColorPicking = false;
+          scbColorPickGuardUntil = Date.now() + 300;
+          commitColor(colorInput.value);
+        });
+        colorInput.addEventListener('blur', () => {
+          window.setTimeout(() => {
+            scbColorPicking = false;
+          }, 200);
         });
       });
       pop.querySelector('#btn-scb-reset-colors')?.addEventListener('click', () => {
         resetAllStatsColumnColors();
         pop.querySelectorAll('input.scb-color-input').forEach((input) => {
-          const wrap = input.closest('.scb-color');
+          const brushBtn = input.closest('.scb-chip-tools')?.querySelector('button.scb-color');
           input.value = STATS_COL_COLOR_FALLBACK;
-          wrap?.classList.remove('has-custom');
-          wrap?.style.removeProperty('color');
+          brushBtn?.classList.remove('has-custom');
+          brushBtn?.style.removeProperty('color');
         });
         renderMercado();
       });
@@ -4889,17 +4938,25 @@
 
     document.getElementById('stats-columns-popover')?.addEventListener('click', (e) => {
       e.stopPropagation();
+      if (scbColorPicking || Date.now() < scbColorPickGuardUntil) return;
       if (e.target === e.currentTarget) closeStatsColumnsPopover();
     });
 
     document.addEventListener('click', (e) => {
       if (!isStatsColumnsPopoverOpen()) return;
-      if (e.target.closest('#stats-columns-popover, #btn-stats-montar-tabela')) return;
+      if (scbColorPicking || Date.now() < scbColorPickGuardUntil) return;
+      if (e.target.closest('#stats-columns-popover, #btn-stats-montar-tabela, .scb-color, .scb-color-input')) return;
       closeStatsColumnsPopover();
     });
 
     document.addEventListener('keydown', (e) => {
-      if (e.key === 'Escape' && isStatsColumnsPopoverOpen()) closeStatsColumnsPopover();
+      if (e.key === 'Escape' && isStatsColumnsPopoverOpen()) {
+        if (scbColorPicking) {
+          scbColorPicking = false;
+          return;
+        }
+        closeStatsColumnsPopover();
+      }
     });
 
     renderStatsThead();
@@ -5083,6 +5140,8 @@
         e.target.closest('[data-placar-injuries]') ||
         e.target.closest('[data-log-detail]') ||
         e.target.closest('.scb-info') ||
+        e.target.closest('.scb-color') ||
+        e.target.closest('.scb-color-input') ||
         e.target.closest('#mercado-elevated-popover')
       ) {
         return;
