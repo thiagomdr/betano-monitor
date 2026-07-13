@@ -717,9 +717,22 @@
       z-index: 1;
     }
     #stats-columns-popover .scb-group-head .scb-dot {
-      position: absolute;
-      right: 0.4rem;
-      bottom: 0.32rem;
+      position: static;
+      right: auto;
+      bottom: auto;
+      margin: 0;
+      flex: 0 0 auto;
+      align-self: center;
+    }
+    #stats-columns-popover .scb-group-title {
+      display: inline-flex;
+      align-items: center;
+      gap: 0.4rem;
+      flex: 1 1 auto;
+      min-width: 0;
+    }
+    #stats-columns-popover .scb-group-head .scb-chip-label {
+      flex: 0 1 auto;
     }
     #stats-columns-popover .scb-chip.is-on .scb-dot,
     #stats-columns-popover .scb-group-head.is-on .scb-dot {
@@ -4110,8 +4123,10 @@
         const groupPickerValue = groupCustomColor || STATS_COL_COLOR_FALLBACK;
         return `<div class="scb-group" data-group-id="${escapeHtml(g.id)}">
           <div class="scb-group-head" role="button" tabindex="0" data-scb-group="${escapeHtml(g.id)}" aria-pressed="false" title="Marcar ou desmarcar todo o grupo">
-            <span class="scb-dot" aria-hidden="true"></span>
-            <span class="scb-chip-label">${escapeHtml(g.label)}</span>
+            <span class="scb-group-title">
+              <span class="scb-chip-label">${escapeHtml(g.label)}</span>
+              <span class="scb-dot" aria-hidden="true"></span>
+            </span>
             ${scbColorToolsHtml(g.id, g.label, groupCustomColor, groupPickerValue)}
               <button type="button" class="scb-info" data-scb-info-group="${escapeHtml(g.id)}" title="${escapeHtml(groupInfo)}" aria-label="Sobre ${escapeHtml(g.label)}">i</button>
             </span>
