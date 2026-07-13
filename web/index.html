@@ -564,6 +564,24 @@
       border-radius: 18px;
       box-shadow: 0 16px 40px rgba(0, 0, 0, 0.55);
       font-size: 0.84rem;
+      scrollbar-width: thin;
+      scrollbar-color: #4a9de8 #1a2a3d;
+    }
+    #stats-columns-popover::-webkit-scrollbar {
+      width: 10px;
+      height: 10px;
+    }
+    #stats-columns-popover::-webkit-scrollbar-track {
+      background: #1a2a3d;
+      border-radius: 0 18px 18px 0;
+    }
+    #stats-columns-popover::-webkit-scrollbar-thumb {
+      background: #4a9de8;
+      border-radius: 8px;
+      border: 2px solid #1a2a3d;
+    }
+    #stats-columns-popover::-webkit-scrollbar-thumb:hover {
+      background: #6bb4f5;
     }
     #stats-columns-popover::before {
       content: '';
