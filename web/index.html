@@ -728,11 +728,14 @@
       display: inline-flex;
       align-items: center;
       gap: 0.4rem;
-      flex: 1 1 auto;
+      flex: 0 1 auto;
       min-width: 0;
     }
     #stats-columns-popover .scb-group-head .scb-chip-label {
       flex: 0 1 auto;
+    }
+    #stats-columns-popover .scb-group-head .scb-chip-tools {
+      margin-left: 0;
     }
     #stats-columns-popover .scb-chip.is-on .scb-dot,
     #stats-columns-popover .scb-group-head.is-on .scb-dot {
@@ -1219,7 +1222,7 @@
     .mercado-elevated-popover {
       display: none;
       position: fixed;
-      z-index: 1200;
+      z-index: 2600;
       max-width: 420px;
       max-height: 360px;
       overflow: auto;
@@ -4126,9 +4129,9 @@
             <span class="scb-group-title">
               <span class="scb-chip-label">${escapeHtml(g.label)}</span>
               <span class="scb-dot" aria-hidden="true"></span>
-            </span>
-            ${scbColorToolsHtml(g.id, g.label, groupCustomColor, groupPickerValue)}
-              <button type="button" class="scb-info" data-scb-info-group="${escapeHtml(g.id)}" title="${escapeHtml(groupInfo)}" aria-label="Sobre ${escapeHtml(g.label)}">i</button>
+              ${scbColorToolsHtml(g.id, g.label, groupCustomColor, groupPickerValue)}
+                <button type="button" class="scb-info" data-scb-info-group="${escapeHtml(g.id)}" title="${escapeHtml(groupInfo)}" aria-label="Sobre ${escapeHtml(g.label)}">i</button>
+              </span>
             </span>
           </div>
           <div class="scb-cols">${colsHtml}</div>
@@ -5079,6 +5082,7 @@
         e.target.closest('[data-placar-subs]') ||
         e.target.closest('[data-placar-injuries]') ||
         e.target.closest('[data-log-detail]') ||
+        e.target.closest('.scb-info') ||
         e.target.closest('#mercado-elevated-popover')
       ) {
         return;
