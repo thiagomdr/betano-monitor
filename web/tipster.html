@@ -378,6 +378,10 @@
     }
     .team-home { color: #5b9fd4; }
     .team-away { color: #e85d5d; }
+    .team-nick {
+      color: var(--esports);
+      font-weight: 600;
+    }
     .match-meta {
       display: flex;
       flex-wrap: wrap;
@@ -730,6 +734,16 @@
         .replace(/\s{2,}/g, " ")
         .trim();
     }
+    function formatTeamHtml(name, teamClass) {
+      const cleaned = stripEsportsLabel(name);
+      const m = cleaned.match(/^(.*)\s*\(([^()]+)\)\s*$/);
+      if (m && m[1].trim()) {
+        const team = m[1].trim();
+        const nick = m[2].trim();
+        return `<span class="${teamClass}">${escapeHtml(team)} <span class="team-nick">[${escapeHtml(nick)}]</span></span>`;
+      }
+      return `<span class="${teamClass}">${escapeHtml(cleaned)}</span>`;
+    }
     function startOfLocalDayIso() {
       const d = new Date();
       d.setHours(0, 0, 0, 0);
@@ -1063,7 +1077,7 @@
         </div>
         <div class="match-block">
           <div class="match-title-row">
-            <div class="match-name" title="${escapeHtml(home)} × ${escapeHtml(away)}"><span class="team-home">${escapeHtml(home)}</span><span class="vs"> × </span><span class="team-away">${escapeHtml(away)}</span></div>
+            <div class="match-name" title="${escapeHtml(home)} × ${escapeHtml(away)}">${formatTeamHtml(ev.home, "team-home")}<span class="vs"> × </span>${formatTeamHtml(ev.away, "team-away")}</div>
             ${esportsBadge}
           </div>
           <div class="match-meta-line">
