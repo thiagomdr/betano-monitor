@@ -177,9 +177,18 @@
 
     /* —— Terminal board —— */
     .board {
-      border: 1px solid var(--line);
-      background: var(--bg-2);
+      border: none;
+      background: transparent;
       overflow: visible;
+      display: flex;
+      flex-direction: column;
+      gap: 0.85rem;
+    }
+    #events {
+      display: flex;
+      flex-direction: column;
+      gap: 0.85rem;
+      background: transparent;
     }
     .board-head {
       display: grid;
@@ -187,7 +196,7 @@
         52px 56px minmax(160px, 1.4fr) minmax(280px, 2.2fr);
       gap: 0.5rem 0.65rem;
       padding: 0.4rem 0.7rem;
-      border-bottom: 1px solid var(--line);
+      border: 1px solid var(--line);
       background: var(--bg-3);
       color: var(--muted);
       font-size: 0.65rem;
@@ -215,7 +224,7 @@
     .row:last-child { border-bottom: 0; }
     .section {
       border: 1px solid var(--line);
-      margin-bottom: 0.85rem;
+      margin-bottom: 0;
       background: var(--bg-2);
       overflow: hidden;
     }
