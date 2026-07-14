@@ -249,7 +249,7 @@
     .section-head.esports:hover {
       background: color-mix(in srgb, var(--esports) 38%, #1a1228);
     }
-    .section-head.esports .esports-text {
+    .section-head.esports .country {
       color: color-mix(in srgb, var(--esports) 75%, #fff);
     }
     .section-head.esports .league {
@@ -387,18 +387,6 @@
       color: var(--muted);
       font-size: 0.72rem;
     }
-    .esports-text {
-      font-family: "IBM Plex Sans", system-ui, sans-serif;
-      font-size: 0.78rem;
-      font-weight: 600;
-      font-style: normal;
-      letter-spacing: -0.01em;
-      line-height: 1.15;
-      text-transform: none;
-      font-synthesis: none;
-      -webkit-font-smoothing: antialiased;
-      -moz-osx-font-smoothing: grayscale;
-    }
     .badge {
       display: inline-flex;
       align-items: center;
@@ -407,10 +395,14 @@
       border: none;
       border-radius: 0;
       background: var(--esports);
-      flex: 0 0 auto;
-    }
-    .badge .esports-text {
       color: #000000;
+      font-family: "IBM Plex Sans", system-ui, sans-serif;
+      font-size: 0.62rem;
+      font-weight: 700;
+      letter-spacing: 0.04em;
+      text-transform: uppercase;
+      line-height: 1.2;
+      flex: 0 0 auto;
     }
     .match-title-row {
       display: flex;
@@ -966,7 +958,7 @@
         return `<section class="section" data-section-key="${escapeHtml(g.key)}">
           <div class="section-head ${g.esports ? "esports" : ""}" role="button" tabindex="0" aria-expanded="true">
             <button type="button" class="section-toggle" aria-label="Recolher liga">−</button>
-            <span class="country${g.esports ? " esports-text" : ""}">${escapeHtml(g.country)}</span>
+            <span class="country">${escapeHtml(g.country)}</span>
             <span class="league">${escapeHtml(g.league)}</span>
             <span class="count">${g.events.length}</span>
           </div>
@@ -1064,9 +1056,7 @@
         isEsports(ev.home, ev.away, ev.country);
       const home = stripEsportsLabel(ev.home);
       const away = stripEsportsLabel(ev.away);
-      const esportsBadge = esports
-        ? `<span class="badge"><span class="esports-text">Esports</span></span>`
-        : "";
+      const esportsBadge = esports ? `<span class="badge">Esports</span>` : "";
       return `<article class="row">
         <div class="cell-min-wrap">
           ${betanoBtn}
