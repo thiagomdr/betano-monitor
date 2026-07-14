@@ -378,6 +378,8 @@
     }
     .team-home { color: #5b9fd4; }
     .team-away { color: #e85d5d; }
+    .team-home.esports-team { color: #f0c93a; }
+    .team-away.esports-team { color: #ff7eb6; }
     .team-nick {
       color: var(--esports);
       font-weight: 600;
@@ -1077,7 +1079,7 @@
         </div>
         <div class="match-block">
           <div class="match-title-row">
-            <div class="match-name" title="${escapeHtml(home)} × ${escapeHtml(away)}">${formatTeamHtml(ev.home, "team-home")}<span class="vs"> × </span>${formatTeamHtml(ev.away, "team-away")}</div>
+            <div class="match-name" title="${escapeHtml(home)} × ${escapeHtml(away)}">${formatTeamHtml(ev.home, esports ? "team-home esports-team" : "team-home")}<span class="vs"> × </span>${formatTeamHtml(ev.away, esports ? "team-away esports-team" : "team-away")}</div>
             ${esportsBadge}
           </div>
           <div class="match-meta-line">
