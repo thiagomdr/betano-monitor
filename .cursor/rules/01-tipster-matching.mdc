@@ -1,0 +1,42 @@
+---
+description: Arena Tipster — matching Betano/SuperBet e validação Sportradar
+globs: supabase/functions/tipster-*/**/*.{ts,mjs},supabase/functions/_shared/live-feed/**/*.{ts,mjs},docs/tipster-arena.md,web/tipster.html
+alwaysApply: false
+---
+
+# Matching e validação Sportradar
+
+## Normalização de nomes
+
+- NFD + remover diacríticos; lower-case; só `[a-z0-9 ]`.
+- Trocar `,` por espaço (`Irwanto, Jonathan` → `jonathan irwanto`).
+- Tokens; descartar partículas curtas (`jr`, `de`, `da`, `van` se desejado).
+- Duplas (`A/B`): tokens de ambos os lados.
+
+## Score do par
+
+| Critério | Efeito |
+|---|---|
+| Esporte diferente | rejeitar |
+| `\|Δ starts_at\| > 15 min` | rejeitar (pré); live pode afrouxar com placar |
+| `betradar_id` igual | aceitar (ainda assim validar GISMO) |
+| Tokens home/away overlap direto ou swapped | pontos |
+| Torneio/liga similar | bônus opcional |
+| 2º candidato com score próximo | `ambiguous` — não linkar |
+
+Limiar sugerido: aceitar se `score >= 0.72` e `score - secondBest >= 0.12`.
+
+## Validação GISMO (`sr_validated`)
+
+Antes de marcar link como validado:
+
+1. `GET .../gismo/match_info/{betradar_id}` (headers tipo Betano Referer).
+2. Extrair `match.teams.home/away.name`.
+3. Comparar com home/away do link (normalizado, permitir swap).
+4. Logar em `tipster_validation_logs`: `ok` / `reject` / `error`, payload resumido (sem secrets).
+
+Sem resposta GISMO ou nomes incompatíveis → **não** `sr_validated`.
+
+## Logs
+
+Toda tentativa de match/validação: uma linha em `tipster_validation_logs` (`action`, `status`, `betradar_id`, `betano_provider_id`, `superbet_offer_id`, `detail` jsonb).

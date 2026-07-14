@@ -1,93 +1,98 @@
 # Tipster Arena (paper trading)
 
-Terminal de apostas simuladas + ranking de tipsters. Isolado do monitor Mercado +0,5 / HCTG / Favorito 1X2.
+Projeto vigente: catálogo **Betano + SuperBet**, matching determinístico,
+validação **Sportradar GISMO** (`betradar_id`), picks paper, ranking.
 
-## O que o MVP faz
+Monitor legado Mercado +0,5 / HCTG / Favorito **não é prioridade**.
 
-1. Collector periodico grava jogos/odds live (`live_events`, `live_markets`, `live_selections`)
-2. Tipster autenticado faz pick de **1 unidade** (`place_pick` — odd snapshot no servidor)
-3. Settler liquida picks em eventos `finished` (ou force no teste)
-4. Ranking por `pnl_u` (`v_tipster_ranking`)
+## Fonte da verdade
 
-Mercados v1: `1x2`, `total` (linha absoluta), `btts`, `double_chance`.
+PostgreSQL (Supabase): `live_events`, `tipster_event_links`, `tipster_validation_logs`,
+`picks`, ranking.
 
-## Deploy
+Odds Arena = feed × **0,855**.
+
+## Matching pré-jogo (fase atual)
+
+1. Coleta Betano pré (`tipster-prematch-collector`) → `live_events` `scheduled` + `betradar_id`
+2. Coleta SuperBet `offerState=prematch`
+3. **`tipster-prematch-bridge`**:
+   - Pareia por **mesmo `betradar_id`**, ou esporte + horário (±15 min) + nomes normalizados
+   - Ambíguo → não linka (log `ambiguous`)
+   - Valida GISMO `match_info/{id}` (times compatíveis) → `sr_validated` / `sr_rejected`
+   - Tudo registrado em `tipster_validation_logs`
 
 ```powershell
-# 1) Migration
-npx supabase db query --linked -f supabase/migrations/20260723120000_tipster_arena.sql
+npx supabase db query --linked -f supabase/migrations/20260725120000_tipster_event_links.sql
+npx supabase functions deploy tipster-prematch-collector --no-verify-jwt
+npx supabase functions deploy tipster-prematch-bridge --no-verify-jwt
+```
 
-# 2) Secrets do live feed (NAO commitar valores)
-npx supabase secrets set LIVE_FEED_BASE_URL="https://<host-do-feed>"
-npx supabase secrets set LIVE_FEED_OVERVIEW_PATH="/caminho/do/overview?..."
-npx supabase secrets set LIVE_FEED_ORIGIN="https://<host-do-feed>"
-npx supabase secrets set LIVE_FEED_REFERER="https://<host-do-feed>/live/"
-# opcional:
-# npx supabase secrets set LIVE_FEED_USER_AGENT="Mozilla/5.0 ..."
-# npx supabase secrets set CRON_SECRET="..."
+Invocar bridge (cron ou manual):
 
-# 3) Edge functions
-npx supabase functions deploy tipster-live-collector --no-verify-jwt
+```http
+POST /functions/v1/tipster-prematch-bridge
+x-cron-secret: <CRON_SECRET>
+```
+
+Body opcional: `{ "betano_from": "both" }` para também puxar hot feed Betano se o DB estiver vazio.
+
+Após o jogo começar: `tipster-link-sync` lê GISMO, atualiza placar nos links e marca
+`live_events` como `finished` → `tipster-settle` liquida picks abertos.
+
+### Crons (pg_cron)
+
+| Job | Intervalo | Função |
+|---|---|---|
+| tipster-prematch-tick | */5 | prematch collector Betano |
+| tipster-bridge-tick | */10 | match Betano↔SuperBet + GISMO validate |
+| tipster-link-sync-tick | */2 | placar/status GISMO nos links |
+| tipster-settle (existente) | ver setup | liquida picks |
+
+```powershell
+npx supabase db query --linked -f supabase/migrations/20260725130000_tipster_bridge_sync_cron.sql
+npx supabase functions deploy tipster-prematch-bridge --no-verify-jwt
+npx supabase functions deploy tipster-link-sync --no-verify-jwt
 npx supabase functions deploy tipster-settle --no-verify-jwt
-
-# 4) Apontar cron (URLs do projeto)
 powershell -File scripts/setup-tipster-arena.ps1
 ```
 
-## Variaveis de ambiente
+## Regras Cursor
 
-| Variavel | Obrigatorio | Descricao |
-|---|---|---|
-| `LIVE_FEED_BASE_URL` | sim | Base HTTPS do provedor de odds live |
-| `LIVE_FEED_OVERVIEW_PATH` | sim | Path (+ query) do overview JSON |
-| `LIVE_FEED_ORIGIN` | recomendado | Header `Origin` |
-| `LIVE_FEED_REFERER` | recomendado | Header `Referer` |
-| `LIVE_FEED_USER_AGENT` | nao | Default `TipsterArena/1.0` |
-| `CRON_SECRET` | recomendado | Exige header `x-cron-secret` nas Edges |
-| `SUPABASE_URL` / `SERVICE_ROLE` | automatico | Persistencia nas Edges |
+- `.cursor/rules/00-betano-monitor.mdc` — visão Arena Tipster
+- `.cursor/rules/01-tipster-matching.mdc` — matching / GISMO / logs
 
-Nao documente hostnames de marca em issues/PRs publicos; trate o feed como `live_feed` generico.
+## Fora de escopo
 
-## UI
+- **1xBet** (Cloudflare + odds ofuscadas)
+- Matching ou settle por **IA**
+- Expandir monitores HCTG / Favorito 1X2 salvo pedido explícito
 
-Arquivo: `web/tipster.html` (Auth + abas Terminal / Meus picks / Ranking).
+## Outras Edges (legado Tipster)
 
-```powershell
-powershell -File scripts/serve-monitor.ps1
-# abrir http://localhost:<porta>/tipster.html
-```
-
-Usuario: o mesmo Auth do painel (`scripts/setup-panel-auth.ps1`) ou novo tipster no Dashboard.
-
-## Teste
-
-```powershell
-powershell -File scripts/test-tipster-arena.ps1
-```
-
-Fluxo manual:
-
-1. Login na UI → pick em um jogo live
-2. Anote o `event_id` (script lista a amostra)
-3. Force settle:
-
-```powershell
-powershell -File scripts/test-tipster-arena.ps1 -SkipInvoke -ForceSettle -EventId "<uuid>" -HomeScore 2 -AwayScore 1
-```
-
-4. Confira PnL: GREEN = `odd_snapshot - 1`; RED = `-1`; void = `0`
-
-## Arquivos
-
-| Path | Papel |
+| Função | Papel |
 |---|---|
-| `supabase/migrations/20260723120000_tipster_arena.sql` | Tabelas, RLS, RPC, cron |
-| `supabase/functions/_shared/live-feed/` | Normalize + settle rules |
-| `supabase/functions/tipster-live-collector/` | Upsert catalogo |
-| `supabase/functions/tipster-settle/` | Liquidacao |
-| `web/tipster.html` | Terminal |
-| `scripts/test-tipster-arena.ps1` | Checklist |
+| `tipster-live-collector` | Live Betano → catálogo |
+| `tipster-event-markets` | Mercados sob demanda (+) |
+| `tipster-settle` | Liquida picks por placar (+ links finished) |
+| `tipster-prematch-bridge` | Match pré + validação Sportradar |
+| `tipster-link-sync` | Placar GISMO → live/finished |
+| `tipster-superbet-live` | Tênis 2 (UI SuperBet) |
+| `tipster-superbet-probe` | Compare SuperBet no + |
 
-## Fora de escopo (v1)
+## Deploy base
 
-Pix/assinatura real, arb multi-casa, scrape HTML, todos os mercados do feed, auto-bet em casa real.
+```powershell
+npx supabase db query --linked -f supabase/migrations/20260723120000_tipster_arena.sql
+npx supabase db query --linked -f supabase/migrations/20260724120000_tipster_prematch.sql
+npx supabase db query --linked -f supabase/migrations/20260725120000_tipster_event_links.sql
+npx supabase db query --linked -f supabase/migrations/20260725130000_tipster_bridge_sync_cron.sql
+npx supabase functions deploy tipster-live-collector --no-verify-jwt
+npx supabase functions deploy tipster-prematch-collector --no-verify-jwt
+npx supabase functions deploy tipster-prematch-bridge --no-verify-jwt
+npx supabase functions deploy tipster-link-sync --no-verify-jwt
+npx supabase functions deploy tipster-settle --no-verify-jwt
+powershell -File scripts/setup-tipster-arena.ps1
+```
+
+Secrets: `LIVE_FEED_*`, `CRON_SECRET`, opcional `SUPERBET_OFFER_BASE`.

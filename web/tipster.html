@@ -174,6 +174,86 @@
       padding: 0.28rem 0.4rem;
       font: inherit;
     }
+    .sport-nav {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 0.35rem;
+      margin-bottom: 0.65rem;
+      padding: 0.45rem 0.5rem;
+      border: 1px solid var(--line);
+      background: var(--bg-2);
+    }
+    .sport-nav[hidden] { display: none; }
+    .sport-nav-btn {
+      display: inline-flex;
+      align-items: center;
+      gap: 0.4rem;
+      border: 1px solid var(--line);
+      background: var(--bg);
+      color: var(--muted);
+      padding: 0.38rem 0.65rem 0.38rem 0.5rem;
+      font-family: "IBM Plex Sans", system-ui, sans-serif;
+      font-size: 0.78rem;
+      font-weight: 600;
+      cursor: pointer;
+      line-height: 1.1;
+    }
+    .sport-nav-btn .ico {
+      width: 1.35rem;
+      height: 1.35rem;
+      flex: 0 0 auto;
+      display: block;
+    }
+    .sport-nav-btn .ico.svg-draw svg {
+      width: 100%;
+      height: 100%;
+      display: block;
+      overflow: visible;
+    }
+    .sport-nav-btn .ico img {
+      width: 100%;
+      height: 100%;
+      display: block;
+      object-fit: contain;
+    }
+    .sport-nav-btn:hover {
+      border-color: var(--accent);
+      color: var(--text);
+    }
+    .sport-nav-btn.active {
+      border-color: var(--accent);
+      background: var(--accent-dim);
+      color: var(--text);
+    }
+    .sport-nav-btn .n {
+      font-family: "IBM Plex Mono", monospace;
+      font-size: 0.7rem;
+      color: var(--accent);
+      font-weight: 700;
+    }
+    .sport-nav-btn:not(.active) .n { color: var(--muted); }
+    .catalog-nav {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 0.35rem;
+      margin-bottom: 0.45rem;
+    }
+    .catalog-nav-btn {
+      border: 1px solid var(--line);
+      background: var(--bg-2);
+      color: var(--muted);
+      padding: 0.4rem 0.75rem;
+      font-family: "IBM Plex Sans", system-ui, sans-serif;
+      font-size: 0.8rem;
+      font-weight: 700;
+      cursor: pointer;
+    }
+    .catalog-nav-btn:hover { color: var(--text); border-color: var(--accent); }
+    .catalog-nav-btn.active {
+      border-color: var(--accent);
+      background: var(--accent-dim);
+      color: var(--text);
+    }
 
     /* —— Terminal board —— */
     .board {
@@ -190,38 +270,148 @@
       gap: 0.85rem;
       background: transparent;
     }
-    .board-head {
-      display: grid;
-      grid-template-columns:
-        64px minmax(200px, 1.6fr) minmax(280px, 2.2fr);
-      gap: 0.5rem 0.65rem;
-      padding: 0.4rem 0.7rem;
-      border: 1px solid var(--line);
-      background: var(--bg-3);
-      color: var(--muted);
-      font-size: 0.65rem;
-      text-transform: uppercase;
-      letter-spacing: 0.06em;
-      position: relative;
-      z-index: 1;
+    .event-card {
+      border-bottom: 1px solid var(--line-soft);
+      transition: background 0.15s ease;
     }
-    .odds-cols {
-      display: grid;
-      grid-template-columns: repeat(4, minmax(0, 1fr));
-      gap: 0.35rem;
+    .event-card:last-child { border-bottom: 0; }
+    .event-card:hover > .row {
+      background: color-mix(in srgb, var(--accent) 4%, transparent);
+    }
+    .event-card.expanded {
+      background: color-mix(in srgb, var(--bg-3) 55%, var(--bg-2));
+      box-shadow: inset 3px 0 0 var(--accent);
+    }
+    .event-card.expanded > .row {
+      background: transparent;
     }
     .row {
       display: grid;
       grid-template-columns:
-        64px minmax(200px, 1.6fr) minmax(280px, 2.2fr);
-      gap: 0.5rem 0.65rem;
+        minmax(220px, 1.5fr) minmax(300px, 2.4fr);
+      gap: 0.5rem 0.75rem;
       align-items: center;
-      padding: 0.45rem 0.7rem;
+      padding: 0.5rem 0.7rem;
       min-height: var(--row-h);
-      border-bottom: 1px solid var(--line-soft);
     }
-    .row:hover { background: color-mix(in srgb, var(--accent) 4%, transparent); }
-    .row:last-child { border-bottom: 0; }
+    .odds-main {
+      display: grid;
+      grid-template-columns: minmax(0, 1fr) 3.9rem;
+      gap: 0.45rem;
+      align-items: end;
+      min-width: 0;
+    }
+    .odds-group {
+      display: grid;
+      grid-template-columns: minmax(0, 1.15fr) minmax(0, 1.35fr);
+      gap: 0.35rem;
+      min-width: 0;
+    }
+    .btn-more-mkts {
+      flex: 0 0 auto;
+      display: inline-flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      gap: 0.06rem;
+      width: 3.9rem;
+      min-height: 2.7rem;
+      padding: 0.3rem 0.25rem;
+      border: 1px solid var(--line);
+      background: color-mix(in srgb, var(--accent) 8%, var(--bg));
+      color: var(--text);
+      font-family: "IBM Plex Mono", monospace;
+      cursor: pointer;
+      line-height: 1.05;
+      transition: border-color 0.12s ease, background 0.12s ease;
+    }
+    .btn-more-mkts:hover {
+      border-color: var(--accent);
+      background: var(--accent-dim);
+    }
+    .btn-more-mkts .more-k {
+      color: var(--muted);
+      font-size: 0.52rem;
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+    }
+    .btn-more-mkts .more-n {
+      color: var(--accent);
+      font-weight: 700;
+      font-size: 0.95rem;
+    }
+    .event-card.expanded .btn-more-mkts {
+      border-color: var(--accent);
+      background: var(--accent-dim);
+    }
+    .markets-extra {
+      display: none;
+      grid-template-columns:
+        minmax(220px, 1.5fr) minmax(300px, 2.4fr);
+      gap: 0.5rem 0.75rem;
+      padding: 0 0.7rem 0.75rem;
+      animation: markets-in 0.16s ease;
+    }
+    .event-card.expanded .markets-extra { display: grid; }
+    .markets-extra-body {
+      grid-column: 2;
+      min-width: 0;
+      border: 1px solid var(--line-soft);
+      background: color-mix(in srgb, var(--bg) 70%, var(--bg-2));
+      padding: 0.55rem 0.6rem 0.6rem;
+    }
+    .markets-extra-head {
+      display: flex;
+      align-items: baseline;
+      justify-content: space-between;
+      gap: 0.5rem;
+      margin-bottom: 0.45rem;
+    }
+    .markets-extra-head .title {
+      font-size: 0.62rem;
+      text-transform: uppercase;
+      letter-spacing: 0.06em;
+      color: var(--muted);
+      font-weight: 600;
+    }
+    .markets-extra-head .meta {
+      font-family: "IBM Plex Mono", monospace;
+      font-size: 0.62rem;
+      color: var(--accent);
+    }
+    .markets-extra-head.probe-sb .title { color: #5b9fd4; }
+    .markets-extra-head.probe-sb .meta { color: #8ec5f0; }
+    .probe-sb-block {
+      margin-top: 0.65rem;
+      padding-top: 0.55rem;
+      border-top: 1px dashed var(--line-soft);
+    }
+    .chip.probe {
+      cursor: default;
+      border-color: color-mix(in srgb, #5b9fd4 40%, var(--line));
+    }
+    .chip.probe .o { color: #8ec5f0; }
+    .odds-group.odds-extra {
+      grid-template-columns: repeat(3, minmax(0, 1fr));
+      gap: 0.45rem;
+    }
+    .mkt-col.soon .label { color: color-mix(in srgb, var(--muted) 80%, transparent); }
+    .mkt-col.soon .chip {
+      border-style: dashed;
+      opacity: 0.55;
+    }
+    .markets-soon {
+      display: grid;
+      grid-template-columns: repeat(3, minmax(0, 1fr));
+      gap: 0.45rem;
+      margin-top: 0.5rem;
+      padding-top: 0.5rem;
+      border-top: 1px dashed var(--line-soft);
+    }
+    @keyframes markets-in {
+      from { opacity: 0; transform: translateY(-3px); }
+      to { opacity: 1; transform: translateY(0); }
+    }
     .section {
       border: 1px solid var(--line);
       margin-bottom: 0;
@@ -285,6 +475,13 @@
       color: var(--muted);
       letter-spacing: -0.01em;
     }
+    .section-head .sport {
+      font-weight: 700;
+      font-size: 0.72rem;
+      color: var(--accent);
+      text-transform: uppercase;
+      letter-spacing: 0.04em;
+    }
     .section-head .league {
       color: var(--accent);
       font-size: 0.88rem;
@@ -299,17 +496,8 @@
     }
     .section-body { display: block; }
     .section.collapsed .section-body { display: none; }
-    .section .row { border-bottom: 1px solid var(--line-soft); }
-    .section .row:last-child { border-bottom: 0; }
-    .cell-min-wrap {
-      display: flex;
-      flex-direction: column;
-      align-items: center;
-      justify-content: center;
-      gap: 0.28rem;
-      min-width: 0;
-      text-align: center;
-    }
+    .section .event-card { border-bottom: 1px solid var(--line-soft); }
+    .section .event-card:last-child { border-bottom: 0; }
     .cell-min {
       font-family: "IBM Plex Mono", monospace;
       font-size: 0.85rem;
@@ -318,25 +506,6 @@
       line-height: 1.1;
       white-space: nowrap;
     }
-    .btn-betano {
-      flex: 0 0 auto;
-      display: inline-flex;
-      align-items: center;
-      justify-content: center;
-      padding: 0.16rem 0.4rem;
-      border: none;
-      border-radius: 2px;
-      background: #ff5500;
-      color: #fff;
-      font-family: "IBM Plex Sans", system-ui, sans-serif;
-      font-size: 0.62rem;
-      font-weight: 700;
-      letter-spacing: 0.02em;
-      text-decoration: none;
-      line-height: 1.15;
-      white-space: nowrap;
-    }
-    .btn-betano:hover { filter: brightness(1.08); color: #fff; }
     .cell-score {
       font-family: "IBM Plex Mono", monospace;
       font-size: 0.95rem;
@@ -378,8 +547,14 @@
     }
     .team-home { color: #5b9fd4; }
     .team-away { color: #e85d5d; }
-    .team-home.esports-team { color: #f0c93a; }
-    .team-away.esports-team { color: #ff7eb6; }
+    .team-home.esports-team {
+      color: #dfff00;
+      text-shadow: 0 0 6px rgba(223, 255, 0, 0.55), 0 0 14px rgba(223, 255, 0, 0.35);
+    }
+    .team-away.esports-team {
+      color: #ff2bd6;
+      text-shadow: 0 0 6px rgba(255, 43, 214, 0.55), 0 0 14px rgba(255, 43, 214, 0.35);
+    }
     .team-nick {
       color: var(--esports);
       font-weight: 600;
@@ -419,12 +594,6 @@
     }
     .match-title-row .match-name {
       flex: 1 1 auto;
-      min-width: 0;
-    }
-    .odds-group {
-      display: grid;
-      grid-template-columns: repeat(4, minmax(0, 1fr));
-      gap: 0.35rem;
       min-width: 0;
     }
     .mkt-col {
@@ -532,28 +701,33 @@
       position: fixed;
       left: 50%;
       bottom: 1.1rem;
-      transform: translateX(-50%) translateY(120%);
+      transform: translateX(-50%) translateY(calc(100% + 2rem));
       z-index: 50;
       min-width: min(420px, calc(100vw - 1.5rem));
       border: 1px solid var(--accent);
       background: var(--bg-2);
       padding: 0.7rem 0.9rem;
       box-shadow: 0 12px 40px rgba(0, 0, 0, 0.45);
-      transition: transform 0.22s ease;
+      transition: transform 0.22s ease, visibility 0.22s;
       display: flex;
       align-items: center;
       justify-content: space-between;
       gap: 0.75rem;
+      visibility: hidden;
+      pointer-events: none;
     }
-    .toast.show { transform: translateX(-50%) translateY(0); }
+    .toast.show {
+      transform: translateX(-50%) translateY(0);
+      visibility: visible;
+      pointer-events: auto;
+    }
     .toast .msg { font-size: 0.86rem; }
     .toast .msg strong { color: var(--accent); font-family: "IBM Plex Mono", monospace; }
     .toast.error { border-color: var(--loss); }
     .toast.error .msg strong { color: var(--loss); }
 
     @media (max-width: 960px) {
-      .board-head { display: none; }
-      .row, .odds-group {
+      .row, .odds-main, .odds-group, .markets-extra {
         grid-template-columns: 1fr;
       }
       .row {
@@ -565,7 +739,30 @@
         display: inline-block;
         margin-right: 0.55rem;
       }
+      .odds-main { gap: 0.45rem; align-items: stretch; }
       .odds-group { gap: 0.55rem; }
+      .btn-more-mkts {
+        width: 100%;
+        flex-direction: row;
+        gap: 0.45rem;
+        min-height: 2.2rem;
+      }
+      .markets-extra {
+        padding: 0 0.7rem 0.75rem;
+      }
+      .markets-extra-body {
+        grid-column: 1;
+      }
+      .odds-group.odds-extra,
+      .markets-soon {
+        grid-template-columns: 1fr 1fr;
+      }
+    }
+    @media (max-width: 520px) {
+      .odds-group.odds-extra,
+      .markets-soon {
+        grid-template-columns: 1fr;
+      }
     }
     @media (max-width: 640px) {
       header.app-bar {
@@ -615,21 +812,12 @@
 
     <main>
       <section id="panel-terminal">
-        <div class="toolbar">
-          <span id="feed-meta" class="mono">Carregando feed…</span>
-          <button type="button" class="btn" id="btn-refresh">Atualizar</button>
-        </div>
+        <nav class="catalog-nav" aria-label="Catálogo">
+          <button type="button" class="catalog-nav-btn active" data-catalog="live">Ao vivo</button>
+          <button type="button" class="catalog-nav-btn" data-catalog="scheduled">Pré-jogos</button>
+        </nav>
+        <nav class="sport-nav" id="sport-nav" aria-label="Esportes ao vivo" hidden></nav>
         <div class="board" id="board">
-          <div class="board-head">
-            <div></div>
-            <div>Jogo</div>
-            <div class="odds-cols">
-              <div>1X2</div>
-              <div>Ambas</div>
-              <div>Total</div>
-              <div>Dupla</div>
-            </div>
-          </div>
           <div id="events"></div>
         </div>
       </section>
@@ -701,12 +889,66 @@
       btts: "Ambas",
       double_chance: "Dupla",
     };
-    const MKT_ORDER = ["1x2", "btts", "total", "double_chance"];
+    const MKT_COMPACT = ["1x2", "total"];
+    const MKT_EXTRA = ["btts", "double_chance"];
+    const TOTAL_COMPACT_LINES = 2;
+    const SPORT_LABEL = {
+      football: "Futebol",
+      basketball: "Basquete",
+      tennis: "Tênis",
+      tennis_sb: "Tênis 2",
+      volleyball: "Vôlei",
+      hockey: "Hockey",
+      handball: "Handebol",
+      baseball: "Baseball",
+      american_football: "Futebol americano",
+      rugby: "Rugby",
+      table_tennis: "Tênis de mesa",
+      badminton: "Badminton",
+      darts: "Darts",
+      snooker: "Snooker",
+      boxing: "Boxe",
+      mma: "MMA",
+      futsal: "Futsal",
+      other: "Outros",
+    };
+    const SPORT_ALIASES = {
+      tabl: "table_tennis",
+      badm: "badminton",
+      foot: "football",
+      bask: "basketball",
+      tenn: "tennis",
+      voll: "volleyball",
+      iceh: "hockey",
+    };
+    const SPORT_ORDER = [
+      "football", "basketball", "tennis", "tennis_sb", "volleyball", "hockey",
+      "handball", "futsal", "table_tennis", "badminton",
+      "baseball", "american_football", "rugby",
+      "darts", "snooker", "boxing", "mma", "other",
+    ];
 
     let sb = null;
     let tipster = null;
     let pollTimer = null;
     let toastTimer = null;
+    const expandedEventIds = new Set();
+    const detailFetchedIds = new Set();
+    const detailLoadingIds = new Set();
+    const detailErrorById = new Map();
+    const superbetByEventId = new Map();
+    const superbetLoadingIds = new Set();
+    let selectedSport = null;
+    let catalogMode = "live"; // live | scheduled
+    let terminalCache = { events: [], mktsByEvent: new Map() };
+    let superbetTennisCache = {
+      events: [],
+      mktsByEvent: new Map(),
+      loading: false,
+      error: null,
+      fetchedAt: 0,
+    };
+    const SUPERBET_TENNIS_TTL_MS = 45_000;
 
     function fmtOdd(n) {
       const x = Number(n);
@@ -726,9 +968,70 @@
       if (!iso) return "—";
       return new Date(iso).toLocaleTimeString("pt-BR", { hour12: false });
     }
+    function isEsportsSport(sport) {
+      const s = String(sport || "").toLowerCase().replace(/[^a-z0-9]/g, "");
+      return s === "esps" || s === "esport" || s === "esports" || s.includes("esport");
+    }
     function isEsports(home, away, league) {
       const t = `${home || ""} ${away || ""} ${league || ""}`.toLowerCase();
-      return t.includes("esports") || t.includes("e-sports");
+      if (t.includes("esports") || t.includes("e-sports") || t.includes("e sports")) return true;
+      if (t.includes("minutos de jogo") || t.includes("nba 2k")) return true;
+      if (t.includes("eadriatic") || t.includes("h2h gg") || t.includes("gt leagues")) return true;
+      if (t.includes("king growth")) return true;
+      if (/\bgaming\b/.test(t) || /\bbattle\b/.test(t)) return true;
+      return false;
+    }
+    function isVirtualCatalog(home, away, league, country) {
+      const t = `${home || ""} ${away || ""} ${league || ""} ${country || ""}`.toLowerCase();
+      return (
+        t.includes("virtual") ||
+        t.includes("virtuais") ||
+        t.includes("simulado") ||
+        t.includes("vrts")
+      );
+    }
+    /** Exclude virtual + Esports / short-format sims from the Terminal. */
+    function isExcludedLiveEvent(ev) {
+      if (
+        isEsportsSport(ev.sport) ||
+        isEsports(ev.home, ev.away, ev.league) ||
+        isEsports(ev.home, ev.away, ev.country) ||
+        isVirtualCatalog(ev.home, ev.away, ev.league, ev.country)
+      ) {
+        return true;
+      }
+      return isLowPriorityCompetition(ev.league, ev.country, ev.sport);
+    }
+
+    function isLowPriorityCompetition(league, country, sport) {
+      const norm = (s) => String(s || "")
+        .normalize("NFD")
+        .replace(/[\u0300-\u036f]/g, "")
+        .toLowerCase()
+        .replace(/\s+/g, " ")
+        .trim();
+      const blob = `${norm(league)} ${norm(country)} ${norm(sport)}`;
+      if (!blob.trim()) return false;
+      const keep = [
+        /\bserie\s*a\b/, /\bserie\s*b\b/, /\bbrasileirao\b/, /\bpremier\s*league\b/,
+        /\bla\s*liga\b/, /\bbundesliga\b/, /\bligue\s*1\b/, /\bchampions\s*league\b/,
+        /\beuropa\s*league\b/, /\bcopa\s*libertadores\b/, /\bnba\b/, /\batp\b/, /\bwta\b/,
+      ];
+      if (keep.some((re) => re.test(blob))) return false;
+      const drop = [
+        /\bserie\s*c\b/, /\bserie\s*d\b/, /\b3a\s*divis/, /\bterceira\s*divis/,
+        /\b4a\s*divis/, /\bu-?\s*1[5-9]\b/, /\bu-?\s*2[01]\b/, /\bsub-?\s*1[5-9]\b/,
+        /\bjuvenil\b/, /\byouth\b/, /\bamistoso/, /\bfriendly\b/, /\bamador\b/,
+        /\bamateur\b/, /\breservas?\b/, /\breserves?\b/, /\bliga\s*regional\b/,
+        /\bcampeonato\s*regional\b/, /\bsegunda\s*b\b/,
+      ];
+      if (drop.some((re) => re.test(blob))) return true;
+      const sp = norm(sport);
+      const lg = norm(league);
+      if ((sp === "football" || sp === "soccer" || !sp) && /^(masculino|feminino|women|men)$/.test(lg)) {
+        return true;
+      }
+      return false;
     }
     function stripEsportsLabel(name) {
       return String(name || "")
@@ -844,7 +1147,8 @@
       return (mkt?.selections || []).find((s) => s.selection_key === key) || null;
     }
 
-    function chipHtml(evId, m, sel, label) {
+    function chipHtml(evId, m, sel, label, opts = {}) {
+      if (opts.readonly) return chipHtmlProbe(m, sel, label);
       if (!m || !sel) {
         return `<button type="button" class="chip" disabled><span class="k">${label}</span><span class="o">—</span></button>`;
       }
@@ -857,131 +1161,358 @@
       </button>`;
     }
 
-    function renderMarketColumns(evId, markets) {
+    function isTennisSbSport(sport) {
+      return normalizeSportKey(sport) === "tennis_sb";
+    }
+
+    function groupMarketsByKey(markets) {
       const byKey = new Map();
       for (const m of markets || []) {
         if (!byKey.has(m.market_key)) byKey.set(m.market_key, []);
         byKey.get(m.market_key).push(m);
       }
+      return byKey;
+    }
 
-      return MKT_ORDER.map((key) => {
-        const items = byKey.get(key) || [];
-        let chips = "";
+    function sortedTotals(items) {
+      return [...(items || [])].sort((a, b) => (a.line ?? 99) - (b.line ?? 99));
+    }
+
+    function pickCompactTotals(items, homeScore, awayScore) {
+      const all = sortedTotals(items);
+      if (all.length <= TOTAL_COMPACT_LINES) return all;
+      const need = (Number(homeScore) || 0) + (Number(awayScore) || 0) + 0.5;
+      return [...all]
+        .sort((a, b) => Math.abs((a.line ?? 99) - need) - Math.abs((b.line ?? 99) - need))
+        .slice(0, TOTAL_COMPACT_LINES)
+        .sort((a, b) => (a.line ?? 99) - (b.line ?? 99));
+    }
+
+    function totalChipsHtml(evId, items, opts = {}) {
+      const chips = (items || []).map((m) => {
+        const lineLabel = m.line != null ? String(m.line).replace(".", ",") : "";
+        return ["over", "under"].map((k) => {
+          const prefix = k === "over" ? "+" : "−";
+          return chipHtml(evId, m, findSelection(m, k), `${prefix}${lineLabel}`, opts);
+        }).join("");
+      }).join("");
+      return chips || chipHtml(evId, null, null, "—", opts);
+    }
+
+    function renderMktCol(evId, key, items, { totalsSlice = null, label = null, readonly = false } = {}) {
+      let chips = "";
+      if (key === "1x2") {
+        const m = items[0];
+        chips = ["home", "draw", "away"].map((k) =>
+          chipHtml(evId, m, findSelection(m, k), SEL_LABEL[k], { readonly })
+        ).join("");
+      } else if (key === "btts") {
+        const m = items[0];
+        chips = ["yes", "no"].map((k) =>
+          chipHtml(evId, m, findSelection(m, k), SEL_LABEL[k], { readonly })
+        ).join("");
+      } else if (key === "double_chance") {
+        const m = items[0];
+        chips = ["1x", "x2", "12"].map((k) =>
+          chipHtml(evId, m, findSelection(m, k), SEL_LABEL[k], { readonly })
+        ).join("");
+      } else if (key === "total") {
+        const sorted = sortedTotals(items);
+        const use = totalsSlice ? totalsSlice(sorted) : sorted;
+        chips = totalChipsHtml(evId, use, { readonly });
+      }
+      if (!chips && key !== "total") {
+        chips = chipHtml(evId, null, null, "—", { readonly });
+      }
+      return `<div class="mkt-col">
+        <div class="label">${label || MKT_LABEL[key] || key}</div>
+        <div class="chips">${chips}</div>
+      </div>`;
+    }
+
+    function soonCol(label, keys) {
+      const chips = keys.map((k) =>
+        `<button type="button" class="chip" disabled><span class="k">${k}</span><span class="o">—</span></button>`
+      ).join("");
+      return `<div class="mkt-col soon">
+        <div class="label">${label}</div>
+        <div class="chips">${chips}</div>
+      </div>`;
+    }
+
+    function extrasForSport(sport) {
+      const key = normalizeSportKey(sport);
+      if (key === "football" || key === "futsal") return ["btts", "double_chance"];
+      return [];
+    }
+
+    function countExtraMarkets(byKey, homeScore, awayScore, sport) {
+      let n = 0;
+      for (const key of extrasForSport(sport)) {
+        if ((byKey.get(key) || []).length) n += 1;
+      }
+      const compact = pickCompactTotals(byKey.get("total") || [], homeScore, awayScore);
+      const compactLines = new Set(compact.map((m) => m.line));
+      n += sortedTotals(byKey.get("total") || []).filter((m) => !compactLines.has(m.line)).length;
+      return n;
+    }
+
+    function renderCompactMarkets(evId, byKey, homeScore, awayScore, sport) {
+      const readonly = isTennisSbSport(sport);
+      return MKT_COMPACT.map((key) => {
         if (key === "1x2") {
-          const m = items[0];
-          chips = ["home", "draw", "away"].map((k) =>
-            chipHtml(evId, m, findSelection(m, k), SEL_LABEL[k])
+          const m = (byKey.get(key) || [])[0];
+          const sportKey = normalizeSportKey(sport);
+          const sides = (sportKey === "football" || sportKey === "futsal")
+            ? ["home", "draw", "away"]
+            : ["home", "away"];
+          const chips = sides.map((k) =>
+            chipHtml(evId, m, findSelection(m, k), SEL_LABEL[k], { readonly })
           ).join("");
-        } else if (key === "btts") {
-          const m = items[0];
-          chips = ["yes", "no"].map((k) =>
-            chipHtml(evId, m, findSelection(m, k), SEL_LABEL[k])
-          ).join("");
-        } else if (key === "double_chance") {
-          const m = items[0];
-          chips = ["1x", "x2", "12"].map((k) =>
-            chipHtml(evId, m, findSelection(m, k), SEL_LABEL[k])
-          ).join("");
-        } else if (key === "total") {
-          // Prefer line closest to current score + 0.5 when multiple
-          const sorted = [...items].sort((a, b) => (a.line ?? 99) - (b.line ?? 99));
-          chips = sorted.slice(0, 2).map((m) => {
-            const lineLabel = m.line != null ? String(m.line).replace(".", ",") : "";
-            return ["over", "under"].map((k) => {
-              const prefix = k === "over" ? "+" : "−";
-              return chipHtml(evId, m, findSelection(m, k), `${prefix}${lineLabel}`);
-            }).join("");
-          }).join("");
-          if (!chips) {
-            chips = chipHtml(evId, null, null, "—");
-          }
+          return `<div class="mkt-col">
+            <div class="label">${MKT_LABEL[key] || key}</div>
+            <div class="chips">${chips}</div>
+          </div>`;
         }
+        if (key === "total") {
+          const picked = pickCompactTotals(byKey.get(key) || [], homeScore, awayScore);
+          return renderMktCol(evId, key, picked, { readonly });
+        }
+        return renderMktCol(evId, key, byKey.get(key) || [], { readonly });
+      }).join("");
+    }
+
+    function renderExtraMarkets(evId, byKey, homeScore, awayScore, sport) {
+      const readonly = isTennisSbSport(sport);
+      const cols = [];
+      for (const key of extrasForSport(sport)) {
+        const items = byKey.get(key) || [];
+        if (!items.length) continue;
+        cols.push(renderMktCol(evId, key, items, { readonly }));
+      }
+      const compact = pickCompactTotals(byKey.get("total") || [], homeScore, awayScore);
+      const compactLines = new Set(compact.map((m) => m.line));
+      const extraTotals = sortedTotals(byKey.get("total") || []).filter((m) => !compactLines.has(m.line));
+      if (extraTotals.length) {
+        cols.push(renderMktCol(evId, "total", extraTotals, { label: "Total + linhas", readonly }));
+      }
+      return cols.join("");
+    }
+
+    function chipHtmlProbe(m, sel, label) {
+      if (!m || !sel) {
+        return `<button type="button" class="chip probe" disabled><span class="k">${label}</span><span class="o">—</span></button>`;
+      }
+      return `<button type="button" class="chip probe" disabled title="Probe SuperBet (somente comparação)">
+        <span class="k">${label}</span>
+        <span class="o">${fmtOdd(sel.odd)}</span>
+      </button>`;
+    }
+
+    function renderProbeMarkets(markets) {
+      const byKey = groupMarketsByKey(markets || []);
+      const cols = [];
+      const ml = byKey.get("1x2") || [];
+      if (ml.length) {
+        const m = ml[0];
+        const chips = ["home", "away"].map((k) =>
+          chipHtmlProbe(m, findSelection(m, k), SEL_LABEL[k])
+        ).join("");
+        cols.push(`<div class="mkt-col"><div class="label">1X2</div><div class="chips">${chips}</div></div>`);
+      }
+      const totals = sortedTotals(byKey.get("total") || []).slice(0, 4);
+      if (totals.length) {
+        const chips = totals.map((m) => {
+          const lineLabel = m.line != null ? String(m.line).replace(".", ",") : "";
+          return ["over", "under"].map((k) => {
+            const prefix = k === "over" ? "+" : "−";
+            return chipHtmlProbe(m, findSelection(m, k), `${prefix}${lineLabel}`);
+          }).join("");
+        }).join("");
+        cols.push(`<div class="mkt-col"><div class="label">Total</div><div class="chips">${chips}</div></div>`);
+      }
+      return cols.join("") || `<div class="empty" style="padding:0.4rem 0;text-align:left">Sem 1X2/Total no JSON SuperBet.</div>`;
+    }
+
+    async function fetchSuperbetProbe(ev) {
+      const body = { home: ev.home, away: ev.away };
+      const blob = `${ev.home} ${ev.away}`.toLowerCase();
+      if (blob.includes("ferguson") && blob.includes("mochizuki")) {
+        body.offer_id = "14030958";
+      }
+      const { data, error } = await sb.functions.invoke("tipster-superbet-probe", { body });
+      if (error) throw error;
+      if (data?.error && !data?.ok) throw new Error(data.error);
+      // #region agent log
+      const mk = (data?.event?.markets)||[];
+      fetch('http://127.0.0.1:7904/ingest/86615625-6ae5-4e98-a1da-0a5f0f15fc42',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'6e4f91'},body:JSON.stringify({sessionId:'6e4f91',runId:'pre-fix',hypothesisId:'C',location:'tipster.html:fetchSuperbetProbe',message:'superbet probe result',data:{ok:!!data?.ok,matched:data?.matched,offer:data?.offer_id,home:data?.event?.home,away:data?.event?.away,meta:data?.event?.meta||null,keys:mk.map(m=>({k:m.market_key,line:m.line,sels:(m.selections||[]).map(s=>s.selection_key)}))},timestamp:Date.now()})}).catch(()=>{});
+      // #endregion
+      return data;
+    }
+
+    function renderSoonMarkets(sport) {
+      const key = normalizeSportKey(sport);
+      if (key === "football" || key === "futsal") {
+        return [
+          soonCol("Handicap", ["-0,5", "+0,5"]),
+          soonCol("Cantos", ["+8,5", "−8,5"]),
+          soonCol("Próx. gol", ["Casa", "Fora"]),
+        ].join("");
+      }
+      // tennis_sb mostra offer_groups reais — sem placeholders vazios
+      if (key === "tennis") {
+        return [
+          soonCol("Set", ["1", "2"]),
+          soonCol("Games", ["+0,5", "−0,5"]),
+        ].join("");
+      }
+      return "";
+    }
+
+    function renderSuperbetOfferGroups(ev) {
+      const groups = Array.isArray(ev.offer_groups) ? ev.offer_groups : [];
+      if (!groups.length) {
+        return `<div class="empty" style="padding:0.4rem 0;text-align:left">Sem grupos de odds no JSON normalizado.</div>`;
+      }
+      return groups.map((g) => {
+        const chips = (g.selections || []).map((s) =>
+          `<button type="button" class="chip probe" disabled title="SuperBet (somente leitura)">
+            <span class="k">${escapeHtml(s.label)}</span>
+            <span class="o">${fmtOdd(s.odd)}</span>
+          </button>`
+        ).join("");
         return `<div class="mkt-col">
-          <div class="label">${MKT_LABEL[key]}</div>
+          <div class="label">${escapeHtml(g.title)}</div>
           <div class="chips">${chips}</div>
         </div>`;
       }).join("");
     }
 
-    async function loadTerminal() {
-      const feedEl = document.getElementById("feed-meta");
-      const root = document.getElementById("events");
-      const feedStat = document.getElementById("stat-feed");
-
-      const { data: meta } = await sb
-        .from("tipster_live_meta")
-        .select("fetched_at,live_total,last_error")
-        .eq("id", 1)
-        .maybeSingle();
-
-      if (meta?.last_error) {
-        feedEl.textContent = `Erro feed: ${meta.last_error}`;
-        feedStat.innerHTML = `Feed <b>erro</b>`;
-      } else if (meta?.fetched_at) {
-        feedEl.textContent =
-          `${meta.live_total || 0} jogos · atualizado ${fmtWhen(meta.fetched_at)}`;
-        feedStat.innerHTML = `Feed <b>${fmtTimeShort(meta.fetched_at)}</b>`;
-      } else {
-        feedEl.textContent = "Aguardando collector…";
-        feedStat.innerHTML = `Feed <b>—</b>`;
-      }
-
-      const { data: events, error } = await sb
-        .from("live_events")
-        .select("id,home,away,league,country,league_id,minute,home_score,away_score,status,updated_at,event_url,provider_event_id")
-        .eq("status", "live")
-        .order("minute", { ascending: true, nullsFirst: false });
-
-      if (error) {
-        root.innerHTML = `<div class="empty">Erro: ${error.message}</div>`;
-        return;
-      }
-      if (!events?.length) {
-        root.innerHTML = `<div class="empty">Nenhum jogo de futebol no catálogo agora.<br>
-          Virtuais e outros esportes ficam de fora. Clique em Atualizar após o collector.</div>`;
-        return;
-      }
-
-      const ids = events.map((e) => e.id);
-      const { data: markets } = await sb
-        .from("live_markets")
-        .select("id,event_id,market_key,line,status")
-        .in("event_id", ids);
-
-      const mktIds = (markets || []).map((m) => m.id);
-      const { data: selections } = mktIds.length
-        ? await sb
-          .from("live_selections")
-          .select("market_id,selection_key,odd,status")
-          .in("market_id", mktIds)
-        : { data: [] };
-
-      const selsByMkt = new Map();
-      for (const s of selections || []) {
-        if (!selsByMkt.has(s.market_id)) selsByMkt.set(s.market_id, []);
-        selsByMkt.get(s.market_id).push(s);
-      }
-      const mktsByEvent = new Map();
-      for (const m of markets || []) {
-        const full = { ...m, selections: selsByMkt.get(m.id) || [] };
-        if (!mktsByEvent.has(m.event_id)) mktsByEvent.set(m.event_id, []);
-        mktsByEvent.get(m.event_id).push(full);
-      }
-
-      const groups = groupEventsByCountryLeague(events);
-      root.innerHTML = groups.map((g) => {
-        const rows = g.events.map((ev) => renderEventRow(ev, mktsByEvent.get(ev.id) || [])).join("");
-        return `<section class="section" data-section-key="${escapeHtml(g.key)}">
-          <div class="section-head ${g.esports ? "esports" : ""}" role="button" tabindex="0" aria-expanded="true">
-            <button type="button" class="section-toggle" aria-label="Recolher liga">−</button>
-            <span class="country">${escapeHtml(g.country)}</span>
-            <span class="league">${escapeHtml(g.league)}</span>
-            <span class="count">${g.events.length}</span>
+    function renderSuperbetCompareBlock(ev) {
+      if (isTennisSbSport(ev.sport)) return "";
+      if (superbetLoadingIds.has(ev.id)) {
+        return `<div class="probe-sb-block">
+          <div class="markets-extra-head probe-sb">
+            <span class="title">Probe SuperBet</span>
+            <span class="meta">Carregando…</span>
           </div>
-          <div class="section-body">${rows}</div>
-        </section>`;
-      }).join("");
+        </div>`;
+      }
+      const probe = superbetByEventId.get(ev.id);
+      if (!probe) {
+        return `<div class="probe-sb-block">
+          <div class="markets-extra-head probe-sb">
+            <span class="title">Probe SuperBet</span>
+            <span class="meta">Aguardando…</span>
+          </div>
+        </div>`;
+      }
+      if (probe.error) {
+        return `<div class="probe-sb-block">
+          <div class="markets-extra-head probe-sb">
+            <span class="title">Probe SuperBet</span>
+            <span class="meta">${escapeHtml(probe.error)}</span>
+          </div>
+        </div>`;
+      }
+      const evSb = probe.event || {};
+      const meta = evSb.meta || {};
+      const score = (evSb.home_score != null)
+        ? `${evSb.home_score}×${evSb.away_score}`
+        : "—";
+      const status = meta.match_status || meta.game_score || "";
+      const mkts = Array.isArray(evSb.markets) ? evSb.markets : [];
+      return `<div class="probe-sb-block">
+        <div class="markets-extra-head probe-sb">
+          <span class="title">Probe SuperBet</span>
+          <span class="meta">${escapeHtml(String(meta.odds_count || mkts.length))} odds · ${escapeHtml(score)} ${escapeHtml(String(status))}</span>
+        </div>
+        <div class="odds-group odds-extra">${renderProbeMarkets(mkts)}</div>
+      </div>`;
+    }
 
+    function normalizeSportKey(sport) {
+      const raw = String(sport || "other").trim().toLowerCase();
+      return SPORT_ALIASES[raw] || raw || "other";
+    }
+
+    function sportIconSvg(sport) {
+      const key = normalizeSportKey(sport);
+      const fileKey = key === "futsal" ? "football" : (key === "tennis_sb" ? "tennis" : key);
+      const known = [
+        "football", "basketball", "tennis", "volleyball", "hockey", "handball",
+        "baseball", "american_football", "rugby", "table_tennis", "badminton",
+        "darts", "snooker", "boxing", "mma", "other",
+      ];
+      const file = known.includes(fileKey) ? fileKey : "other";
+      return `<span class="ico" aria-hidden="true"><img src="./assets/sports/${file}.svg" alt="" width="22" height="22" decoding="async" /></span>`;
+    }
+
+    function sportLabelOf(sport) {
+      const key = normalizeSportKey(sport);
+      return SPORT_LABEL[key] || key.replace(/_/g, " ");
+    }
+
+    function listSportsWithCounts(events) {
+      const counts = new Map();
+      for (const ev of events) {
+        const key = normalizeSportKey(ev.sport);
+        if (key === "tennis_sb") continue;
+        counts.set(key, (counts.get(key) || 0) + 1);
+      }
+      const keys = [...counts.keys()].sort((a, b) => {
+        const ia = SPORT_ORDER.indexOf(a);
+        const ib = SPORT_ORDER.indexOf(b);
+        const oa = ia === -1 ? 999 : ia;
+        const ob = ib === -1 ? 999 : ib;
+        if (oa !== ob) return oa - ob;
+        return sportLabelOf(a).localeCompare(sportLabelOf(b), "pt-BR");
+      });
+      const sports = keys.map((key) => ({ key, label: sportLabelOf(key), count: counts.get(key) }));
+      if (catalogMode === "live") {
+        const sbCount = superbetTennisCache.events.length;
+        const sbItem = {
+          key: "tennis_sb",
+          label: sportLabelOf("tennis_sb"),
+          count: sbCount || (superbetTennisCache.loading ? "…" : 0),
+        };
+        const ti = sports.findIndex((s) => s.key === "tennis");
+        if (ti >= 0) sports.splice(ti + 1, 0, sbItem);
+        else sports.push(sbItem);
+      }
+      return sports;
+    }
+
+    function renderSportNav(sports) {
+      const nav = document.getElementById("sport-nav");
+      if (!sports.length) {
+        nav.hidden = true;
+        nav.innerHTML = "";
+        return;
+      }
+      if (!selectedSport || !sports.some((s) => s.key === selectedSport)) {
+        selectedSport = sports[0].key;
+      }
+      nav.hidden = false;
+      nav.innerHTML = sports.map((s) =>
+        `<button type="button" class="sport-nav-btn${s.key === selectedSport ? " active" : ""}" data-sport="${escapeHtml(s.key)}" aria-pressed="${s.key === selectedSport ? "true" : "false"}">
+          ${sportIconSvg(s.key)}<span>${escapeHtml(s.label)}</span><span class="n">${s.count}</span>
+        </button>`
+      ).join("");
+      nav.querySelectorAll(".sport-nav-btn").forEach((btn) => {
+        btn.addEventListener("click", () => {
+          selectedSport = btn.dataset.sport;
+          renderSportNav(sports);
+          if (selectedSport === "tennis_sb") {
+            loadSuperbetTennis();
+          } else {
+            renderTerminalBoard();
+          }
+        });
+      });
+    }
+
+    function bindTerminalInteractions(root) {
       root.querySelectorAll(".section-head").forEach((head) => {
         const toggleSection = () => {
           const section = head.closest(".section");
@@ -1016,6 +1547,369 @@
         });
       });
 
+      async function fetchEventDetailMarkets(ev) {
+      if (!ev?.id || !ev.provider_event_id) {
+        throw new Error("evento sem provider_event_id");
+      }
+      const before = terminalCache.mktsByEvent.get(ev.id) || [];
+      // #region agent log
+      fetch('http://127.0.0.1:7904/ingest/86615625-6ae5-4e98-a1da-0a5f0f15fc42',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'6e4f91'},body:JSON.stringify({sessionId:'6e4f91',runId:'pre-fix',hypothesisId:'A',location:'tipster.html:fetchEventDetailMarkets:before',message:'markets before betano detail fetch',data:{sport:ev.sport,home:ev.home,away:ev.away,provider:ev.provider_event_id,beforeKeys:(before||[]).map(m=>({k:m.market_key,line:m.line,sels:(m.selections||[]).map(s=>s.selection_key)}))},timestamp:Date.now()})}).catch(()=>{});
+      // #endregion
+      const { data, error } = await sb.functions.invoke("tipster-event-markets", {
+        body: {
+          event_id: ev.id,
+          provider_event_id: ev.provider_event_id,
+        },
+      });
+      if (error) throw error;
+      if (data?.error) throw new Error(data.error);
+      const markets = Array.isArray(data?.markets) ? data.markets : [];
+      // #region agent log
+      fetch('http://127.0.0.1:7904/ingest/86615625-6ae5-4e98-a1da-0a5f0f15fc42',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'6e4f91'},body:JSON.stringify({sessionId:'6e4f91',runId:'post-fix2',hypothesisId:'G',location:'tipster.html:fetchEventDetailMarkets:after',message:'markets after betano detail fetch',data:{sport:ev.sport,provider:ev.provider_event_id,home:ev.home,away:ev.away,sources:data?.sources||null,purged:data?.purged_football_mkts??null,draft_count:data?.draft_count??null,market_count:data?.market_count??null,fingerprint:markets.filter(m=>m.market_key==='total').map(m=>({line:m.line,over:(m.selections||[]).find(s=>s.selection_key==='over')?.odd,under:(m.selections||[]).find(s=>s.selection_key==='under')?.odd})),hasBtts:markets.some(m=>m.market_key==='btts'),hasDc:markets.some(m=>m.market_key==='double_chance'),keys:markets.map(m=>({k:m.market_key,line:m.line}))},timestamp:Date.now()})}).catch(()=>{});
+      // #endregion
+      terminalCache.mktsByEvent.set(ev.id, markets);
+      detailFetchedIds.add(ev.id);
+      detailErrorById.delete(ev.id);
+      if (!data?.sources?.offers && (data?.draft_count ?? 0) <= 1) {
+        console.warn("tipster-event-markets thin payload", data?.sources, data?.draft_count);
+      }
+      return markets;
+    }
+
+    function findCachedEvent(eventId) {
+      return (terminalCache.events || []).find((e) => e.id === eventId)
+        || (superbetTennisCache.events || []).find((e) => e.id === eventId)
+        || null;
+    }
+
+    root.querySelectorAll(".btn-more-mkts").forEach((btn) => {
+        btn.addEventListener("click", (e) => {
+          e.stopPropagation();
+          const card = btn.closest(".event-card");
+          if (!card) return;
+          const id = card.dataset.eventId;
+          const willOpen = !card.classList.contains("expanded");
+
+          const applyCollapsedLabel = (button) => {
+            button.setAttribute("aria-expanded", "false");
+            button.setAttribute("aria-label", "Mais mercados");
+            const k = button.querySelector(".more-k");
+            const n = button.querySelector(".more-n");
+            const count = Number(button.dataset.extraCount || 0);
+            if (k) k.textContent = "Mais";
+            if (n) n.textContent = count > 0 ? `+${count}` : "+";
+          };
+
+          if (willOpen) {
+            root.querySelectorAll(".event-card.expanded").forEach((other) => {
+              if (other === card) return;
+              other.classList.remove("expanded");
+              const otherId = other.dataset.eventId;
+              if (otherId) expandedEventIds.delete(otherId);
+              const otherBtn = other.querySelector(".btn-more-mkts");
+              if (otherBtn) applyCollapsedLabel(otherBtn);
+            });
+            card.classList.add("expanded");
+            if (id) expandedEventIds.add(id);
+            btn.setAttribute("aria-expanded", "true");
+            btn.setAttribute("aria-label", "Recolher mercados");
+            const k = btn.querySelector(".more-k");
+            const n = btn.querySelector(".more-n");
+            if (k) k.textContent = "Menos";
+            if (n) n.textContent = "−";
+
+            const ev = findCachedEvent(id);
+            if (ev && isTennisSbSport(ev.sport)) {
+              detailFetchedIds.add(id);
+              renderTerminalBoard();
+              return;
+            }
+
+            if (id && !detailLoadingIds.has(id)) {
+              const metaEl = card.querySelector(".markets-extra-head .meta");
+              const firstLoad = !detailFetchedIds.has(id);
+              if (firstLoad && metaEl) metaEl.textContent = "Carregando mercados…";
+              detailLoadingIds.add(id);
+              const tasks = [fetchEventDetailMarkets(ev)];
+              if (ev && !superbetByEventId.has(id) && !superbetLoadingIds.has(id)) {
+                superbetLoadingIds.add(id);
+                tasks.push(
+                  fetchSuperbetProbe(ev)
+                    .then((data) => {
+                      superbetByEventId.set(id, data);
+                    })
+                    .catch((err) => {
+                      superbetByEventId.set(id, { error: err?.message || String(err) });
+                    })
+                    .finally(() => {
+                      superbetLoadingIds.delete(id);
+                    }),
+                );
+              }
+              Promise.allSettled(tasks)
+                .then((results) => {
+                  detailLoadingIds.delete(id);
+                  const detailResult = results[0];
+                  if (detailResult && detailResult.status === "rejected") {
+                    const err = detailResult.reason;
+                    detailErrorById.set(id, err?.message || String(err));
+                    if (firstLoad) {
+                      showToast(`<strong>Mercados</strong> · ${err?.message || err}`, { error: true });
+                    }
+                  }
+                  renderTerminalBoard();
+                });
+            }
+          } else {
+            card.classList.remove("expanded");
+            if (id) expandedEventIds.delete(id);
+            applyCollapsedLabel(btn);
+          }
+        });
+      });
+    }
+
+    function renderTerminalBoard() {
+      const root = document.getElementById("events");
+      if (selectedSport === "tennis_sb") {
+        renderSuperbetTennisBoard(root);
+        return;
+      }
+      const { events, mktsByEvent } = terminalCache;
+      if (!events.length) {
+        root.innerHTML = `<div class="empty">Nenhum jogo ao vivo real no catálogo agora.<br>
+          Virtuais e Esports ficam de fora.</div>`;
+        return;
+      }
+      const filtered = events.filter((ev) => normalizeSportKey(ev.sport) === selectedSport);
+      if (!filtered.length) {
+        root.innerHTML = `<div class="empty">Nenhum jogo neste esporte agora.<br>
+          Escolha outro no menu acima.</div>`;
+        return;
+      }
+
+      const groups = groupEventsByCountryLeague(filtered);
+      root.innerHTML = groups.map((g) => {
+        const rows = g.events.map((ev) => renderEventRow(ev, mktsByEvent.get(ev.id) || [])).join("");
+        const leagueUi = formatSectionLeague(g.league, g.events.length, false);
+        const countHtml = leagueUi.showCount
+          ? `<span class="count">${g.events.length}</span>`
+          : "";
+        return `<section class="section" data-section-key="${escapeHtml(g.key)}">
+          <div class="section-head" role="button" tabindex="0" aria-expanded="true">
+            <button type="button" class="section-toggle" aria-label="Recolher liga">−</button>
+            <span class="country">${escapeHtml(g.country)}</span>
+            <span class="league">${escapeHtml(leagueUi.label)}</span>
+            ${countHtml}
+          </div>
+          <div class="section-body">${rows}</div>
+        </section>`;
+      }).join("");
+
+      bindTerminalInteractions(root);
+    }
+
+    function renderSuperbetTennisBoard(root) {
+      if (superbetTennisCache.loading && !superbetTennisCache.events.length) {
+        root.innerHTML = `<div class="empty">Carregando Tênis 2 (SuperBet)…</div>`;
+        return;
+      }
+      if (superbetTennisCache.error && !superbetTennisCache.events.length) {
+        root.innerHTML = `<div class="empty">Falha SuperBet: ${escapeHtml(superbetTennisCache.error)}</div>`;
+        return;
+      }
+      const { events, mktsByEvent } = superbetTennisCache;
+      if (!events.length) {
+        root.innerHTML = `<div class="empty">Nenhum tênis ao vivo na SuperBet agora.</div>`;
+        return;
+      }
+      const groups = groupEventsByCountryLeague(events);
+      root.innerHTML = groups.map((g) => {
+        const rows = g.events.map((ev) => renderEventRow(ev, mktsByEvent.get(ev.id) || [])).join("");
+        const leagueUi = formatSectionLeague(g.league, g.events.length, false);
+        return `<section class="section" data-section-key="${escapeHtml(g.key)}">
+          <div class="section-head" role="button" tabindex="0" aria-expanded="true">
+            <button type="button" class="section-toggle" aria-label="Recolher liga">−</button>
+            <span class="country">${escapeHtml(g.country)}</span>
+            <span class="league">${escapeHtml(leagueUi.label)}</span>
+            <span class="count">${g.events.length}</span>
+          </div>
+          <div class="section-body">${rows}</div>
+        </section>`;
+      }).join("");
+      bindTerminalInteractions(root);
+    }
+
+    async function loadSuperbetTennis(force = false) {
+      const fresh = superbetTennisCache.fetchedAt
+        && (Date.now() - superbetTennisCache.fetchedAt) < SUPERBET_TENNIS_TTL_MS
+        && superbetTennisCache.events.length;
+      if (!force && fresh) {
+        renderTerminalBoard();
+        return;
+      }
+      if (superbetTennisCache.loading) return;
+      superbetTennisCache.loading = true;
+      superbetTennisCache.error = null;
+      if (selectedSport === "tennis_sb") {
+        renderSportNav(listSportsWithCounts(terminalCache.events || []));
+        renderTerminalBoard();
+      }
+      // #region agent log
+      fetch('http://127.0.0.1:7904/ingest/86615625-6ae5-4e98-a1da-0a5f0f15fc42',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'6e4f91'},body:JSON.stringify({sessionId:'6e4f91',runId:'tennis2',hypothesisId:'H1',location:'tipster.html:loadSuperbetTennis:start',message:'invoke tipster-superbet-live',data:{force,selectedSport},timestamp:Date.now()})}).catch(()=>{});
+      // #endregion
+      try {
+        const { data, error } = await sb.functions.invoke("tipster-superbet-live", {
+          body: { sport_id: 2 },
+        });
+        if (error) throw error;
+        if (data?.error && !data?.ok) throw new Error(data.error);
+        const events = Array.isArray(data?.events) ? data.events : [];
+        const mktsByEvent = new Map();
+        for (const ev of events) {
+          mktsByEvent.set(ev.id, Array.isArray(ev.markets) ? ev.markets : []);
+        }
+        superbetTennisCache = {
+          events,
+          mktsByEvent,
+          loading: false,
+          error: null,
+          fetchedAt: Date.now(),
+        };
+        // #region agent log
+        fetch('http://127.0.0.1:7904/ingest/86615625-6ae5-4e98-a1da-0a5f0f15fc42',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'6e4f91'},body:JSON.stringify({sessionId:'6e4f91',runId:'tennis2-fix',hypothesisId:'H5',location:'tipster.html:loadSuperbetTennis:ok',message:'superbet tennis catalog loaded',data:{ok:!!data?.ok,listed:data?.listed??null,n:events.length,cached:!!data?.cached,sample:events.slice(0,2).map(e=>({id:e.id,home:e.home,away:e.away,meta:e.meta||null,groups:(e.offer_groups||[]).length,groupTitles:(e.offer_groups||[]).slice(0,8).map(g=>g.title),firstGroupSels:((e.offer_groups||[])[0]?.selections||[]).slice(0,4),mkts:(e.markets||[]).map(m=>({k:m.market_key,line:m.line,sels:(m.selections||[]).length}))}))},timestamp:Date.now()})}).catch(()=>{});
+        // #endregion
+      } catch (err) {
+        superbetTennisCache.loading = false;
+        superbetTennisCache.error = err?.message || String(err);
+        // #region agent log
+        fetch('http://127.0.0.1:7904/ingest/86615625-6ae5-4e98-a1da-0a5f0f15fc42',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'6e4f91'},body:JSON.stringify({sessionId:'6e4f91',runId:'tennis2',hypothesisId:'H4',location:'tipster.html:loadSuperbetTennis:err',message:'superbet tennis load failed',data:{error:superbetTennisCache.error},timestamp:Date.now()})}).catch(()=>{});
+        // #endregion
+      }
+      renderSportNav(listSportsWithCounts(terminalCache.events || []));
+      if (selectedSport === "tennis_sb") renderTerminalBoard();
+    }
+
+    async function loadTerminal() {
+      const root = document.getElementById("events");
+      const feedStat = document.getElementById("stat-feed");
+      const sportNav = document.getElementById("sport-nav");
+      const statusFilter = catalogMode === "scheduled" ? "scheduled" : "live";
+
+      if (catalogMode === "scheduled") {
+        const { data: meta } = await sb
+          .from("tipster_prematch_meta")
+          .select("fetched_at,scheduled_total,last_error")
+          .eq("id", 1)
+          .maybeSingle();
+        if (meta?.last_error) {
+          feedStat.innerHTML = `Feed <b>erro</b>`;
+        } else if (meta?.fetched_at) {
+          feedStat.innerHTML = `Pré <b>${fmtTimeShort(meta.fetched_at)}</b>`;
+        } else {
+          feedStat.innerHTML = `Pré <b>—</b>`;
+        }
+      } else {
+        const { data: meta } = await sb
+          .from("tipster_live_meta")
+          .select("fetched_at,live_total,last_error")
+          .eq("id", 1)
+          .maybeSingle();
+        if (meta?.last_error) {
+          feedStat.innerHTML = `Feed <b>erro</b>`;
+        } else if (meta?.fetched_at) {
+          feedStat.innerHTML = `Feed <b>${fmtTimeShort(meta.fetched_at)}</b>`;
+        } else {
+          feedStat.innerHTML = `Feed <b>—</b>`;
+        }
+      }
+
+      const { data: events, error } = await sb
+        .from("live_events")
+        .select("id,sport,home,away,league,country,league_id,minute,home_score,away_score,starts_at,status,updated_at,provider_event_id")
+        .eq("status", statusFilter)
+        .order(catalogMode === "scheduled" ? "starts_at" : "minute", {
+          ascending: true,
+          nullsFirst: false,
+        });
+
+      if (error) {
+        sportNav.hidden = true;
+        root.innerHTML = `<div class="empty">Erro: ${error.message}</div>`;
+        return;
+      }
+      if (!events?.length) {
+        terminalCache = { events: [], mktsByEvent: new Map() };
+        if (catalogMode === "live") {
+          const sports = listSportsWithCounts([]);
+          renderSportNav(sports);
+          if (selectedSport === "tennis_sb") {
+            await loadSuperbetTennis();
+            return;
+          }
+          root.innerHTML = `<div class="empty">Nenhum jogo ao vivo no catálogo agora.<br>
+            Use <strong>Tênis 2</strong> para SuperBet.</div>`;
+          return;
+        }
+        sportNav.hidden = true;
+        root.innerHTML = `<div class="empty">Nenhum pré-jogo no catálogo agora.</div>`;
+        return;
+      }
+
+      const realEvents = events.filter((ev) => !isExcludedLiveEvent(ev));
+      if (!realEvents.length) {
+        terminalCache = { events: [], mktsByEvent: new Map() };
+        if (catalogMode === "live") {
+          const sports = listSportsWithCounts([]);
+          renderSportNav(sports);
+          if (selectedSport === "tennis_sb") {
+            await loadSuperbetTennis();
+            return;
+          }
+          root.innerHTML = `<div class="empty">Nenhum jogo relevante no catálogo agora.<br>
+            Virtuais, Esports e ligas classe C ficam de fora. Use <strong>Tênis 2</strong> para SuperBet.</div>`;
+          return;
+        }
+        sportNav.hidden = true;
+        root.innerHTML = `<div class="empty">Nenhum jogo relevante no catálogo agora.<br>
+          Virtuais, Esports e ligas classe C ficam de fora.</div>`;
+        return;
+      }
+
+      const ids = realEvents.map((e) => e.id);
+      const { data: markets } = await sb
+        .from("live_markets")
+        .select("id,event_id,market_key,line,status")
+        .in("event_id", ids);
+
+      const mktIds = (markets || []).map((m) => m.id);
+      const { data: selections } = mktIds.length
+        ? await sb
+          .from("live_selections")
+          .select("market_id,selection_key,odd,status")
+          .in("market_id", mktIds)
+        : { data: [] };
+
+      const selsByMkt = new Map();
+      for (const s of selections || []) {
+        if (!selsByMkt.has(s.market_id)) selsByMkt.set(s.market_id, []);
+        selsByMkt.get(s.market_id).push(s);
+      }
+      const mktsByEvent = new Map();
+      for (const m of markets || []) {
+        const full = { ...m, selections: selsByMkt.get(m.id) || [] };
+        if (!mktsByEvent.has(m.event_id)) mktsByEvent.set(m.event_id, []);
+        mktsByEvent.get(m.event_id).push(full);
+      }
+
+      terminalCache = { events: realEvents, mktsByEvent };
+      const sports = listSportsWithCounts(realEvents);
+      renderSportNav(sports);
+      if (selectedSport === "tennis_sb") {
+        await loadSuperbetTennis();
+      } else {
+        renderTerminalBoard();
+      }
       refreshHeaderStats();
     }
 
@@ -1027,31 +1921,53 @@
         .replace(/"/g, "&quot;");
     }
 
+    /** Esports league bars: drop "minutos de jogo", put count after 2x4 as "(N jogos)". */
+    function formatSectionLeague(league, count, esports) {
+      let label = String(league || "").trim();
+      if (!esports) return { label, showCount: true };
+
+      label = label
+        .replace(/\s*minutos\s+de\s+jogo\s*/gi, " ")
+        .replace(/\s+/g, " ")
+        .replace(/\s*-\s*$/, "")
+        .trim();
+
+      const n = Number(count) || 0;
+      const countText = `(${n} ${n === 1 ? "jogo" : "jogos"})`;
+      if (/\d+\s*[xX]\s*\d+/.test(label)) {
+        label = label.replace(/(\d+\s*[xX]\s*\d+)/, `$1 ${countText}`);
+      } else {
+        label = `${label} ${countText}`.trim();
+      }
+      return { label, showCount: false };
+    }
+
     function groupEventsByCountryLeague(events) {
       const map = new Map();
       for (const ev of events) {
-        const esports = isEsports(ev.home, ev.away, ev.league) ||
-          isEsports(ev.home, ev.away, ev.country);
-        const country = esports
-          ? "Esports"
-          : (ev.country && String(ev.country).trim()) || "Outros";
+        const sport = normalizeSportKey(ev.sport);
+        const country = (ev.country && String(ev.country).trim()) || "Outros";
         const league = (ev.league && String(ev.league).trim()) || "Sem liga";
-        const key = `${esports ? "1" : "0"}|${country.toLowerCase()}|${league.toLowerCase()}`;
+        const key = `${sport}|${country.toLowerCase()}|${league.toLowerCase()}`;
         if (!map.has(key)) {
-          map.set(key, { key, esports, country, league, events: [] });
+          map.set(key, { key, sport, country, league, events: [] });
         }
         map.get(key).events.push(ev);
       }
 
       const groups = [...map.values()];
       groups.sort((a, b) => {
-        if (a.esports !== b.esports) return a.esports ? 1 : -1; // real first, esports last
         const c = a.country.localeCompare(b.country, "pt-BR");
         if (c !== 0) return c;
         return a.league.localeCompare(b.league, "pt-BR");
       });
       for (const g of groups) {
         g.events.sort((x, y) => {
+          if (x.starts_at || y.starts_at) {
+            const sx = x.starts_at ? new Date(x.starts_at).getTime() : 0;
+            const sy = y.starts_at ? new Date(y.starts_at).getTime() : 0;
+            return sx - sy;
+          }
           const mx = x.minute == null ? 999 : Number(x.minute);
           const my = y.minute == null ? 999 : Number(y.minute);
           return mx - my;
@@ -1061,33 +1977,85 @@
     }
 
     function renderEventRow(ev, markets) {
-      const score = `${ev.home_score ?? 0} x ${ev.away_score ?? 0}`;
-      const min = ev.minute != null ? `${ev.minute}'` : "—";
-      const cols = renderMarketColumns(ev.id, markets);
-      const url = ev.event_url || "";
-      const betanoBtn = url
-        ? `<a class="btn-betano" href="${escapeHtml(url)}" target="_blank" rel="noopener noreferrer" title="Abrir na Betano">Betano</a>`
-        : "";
-      const esports = isEsports(ev.home, ev.away, ev.league) ||
-        isEsports(ev.home, ev.away, ev.country);
+      const meta = ev.meta || {};
+      const score = catalogMode === "scheduled"
+        ? "vs"
+        : `${ev.home_score ?? 0} x ${ev.away_score ?? 0}`;
+      let min = catalogMode === "scheduled"
+        ? (ev.starts_at
+          ? new Date(ev.starts_at).toLocaleString("pt-BR", {
+            day: "2-digit", month: "2-digit", hour: "2-digit", minute: "2-digit", hour12: false,
+          })
+          : "—")
+        : (ev.minute != null ? `${ev.minute}'` : "—");
+      if (isTennisSbSport(ev.sport)) {
+        const bits = [meta.match_status, meta.game_score].filter(Boolean);
+        min = bits.length ? bits.join(" · ") : "Ao vivo";
+      }
+      const byKey = groupMarketsByKey(markets);
+      // #region agent log
+      if (isTennisSbSport(ev.sport) || expandedEventIds.has(ev.id) || /ferguson|mochizuki/i.test(`${ev.home} ${ev.away}`)) {
+        fetch('http://127.0.0.1:7904/ingest/86615625-6ae5-4e98-a1da-0a5f0f15fc42',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'6e4f91'},body:JSON.stringify({sessionId:'6e4f91',runId:'tennis2',hypothesisId:'H3',location:'tipster.html:renderEventRow',message:'render row',data:{sport:ev.sport,sportNorm:normalizeSportKey(ev.sport),home:ev.home,away:ev.away,score,min,marketKeys:[...byKey.keys()],totalLines:(byKey.get('total')||[]).map(m=>m.line),mlSels:((byKey.get('1x2')||[])[0]?.selections||[]).map(s=>({k:s.selection_key,o:s.odd})),expanded:expandedEventIds.has(ev.id)},timestamp:Date.now()})}).catch(()=>{});
+      }
+      // #endregion
+      const compact = renderCompactMarkets(ev.id, byKey, ev.home_score, ev.away_score, ev.sport);
+      const extra = renderExtraMarkets(ev.id, byKey, ev.home_score, ev.away_score, ev.sport);
+      const extraCount = countExtraMarkets(byKey, ev.home_score, ev.away_score, ev.sport);
+      const moreLabel = extraCount > 0 ? `+${extraCount}` : "+";
+      const isOpen = expandedEventIds.has(ev.id);
       const home = stripEsportsLabel(ev.home);
       const away = stripEsportsLabel(ev.away);
-      const esportsBadge = esports ? `<span class="badge">Esports</span>` : "";
-      return `<article class="row">
-        <div class="cell-min-wrap">
-          ${betanoBtn}
-        </div>
-        <div class="match-block">
-          <div class="match-title-row">
-            <div class="match-name" title="${escapeHtml(home)} × ${escapeHtml(away)}">${formatTeamHtml(ev.home, esports ? "team-home esports-team" : "team-home")}<span class="vs"> × </span>${formatTeamHtml(ev.away, esports ? "team-away esports-team" : "team-away")}</div>
-            ${esportsBadge}
+      const extraMeta = isTennisSbSport(ev.sport)
+        ? (() => {
+          const shown = meta.shown_odds ?? (Array.isArray(ev.offer_groups)
+            ? ev.offer_groups.reduce((n, g) => n + (g.selections || []).length, 0)
+            : 0);
+          const groups = meta.shown_groups ?? (ev.offer_groups || []).length;
+          const raw = meta.odds_count != null ? meta.odds_count : "?";
+          return `${shown} odds · ${groups} mercados (de ${raw} no JSON)`;
+        })()
+        : detailLoadingIds.has(ev.id)
+        ? "Carregando mercados…"
+        : detailErrorById.has(ev.id)
+          ? "Falha ao carregar"
+        : extraCount === 1
+          ? "1 disponível"
+          : extraCount > 1
+            ? `${extraCount} disponíveis`
+            : (detailFetchedIds.has(ev.id) ? "Sem extras neste jogo" : "Toque + para carregar");
+      const tennisSbBody = isTennisSbSport(ev.sport)
+        ? `<div class="odds-group odds-extra">${renderSuperbetOfferGroups(ev)}</div>`
+        : `${extra ? `<div class="odds-group odds-extra">${extra}</div>` : ""}
+            ${renderSuperbetCompareBlock(ev)}
+            <div class="markets-soon">${renderSoonMarkets(ev.sport)}</div>`;
+      return `<article class="event-card${isOpen ? " expanded" : ""}" data-event-id="${escapeHtml(ev.id)}" data-provider-event-id="${escapeHtml(ev.provider_event_id || "")}">
+        <div class="row">
+          <div class="match-block">
+            <div class="match-title-row">
+              <div class="match-name" title="${escapeHtml(home)} × ${escapeHtml(away)}">${formatTeamHtml(ev.home, "team-home")}<span class="vs"> × </span>${formatTeamHtml(ev.away, "team-away")}</div>
+            </div>
+            <div class="match-meta-line">
+              <span class="cell-min">${escapeHtml(min)}</span>
+              <span class="cell-score">${score}</span>
+            </div>
           </div>
-          <div class="match-meta-line">
-            <span class="cell-min">${min}</span>
-            <span class="cell-score">${score}</span>
+          <div class="odds-main">
+            <div class="odds-group">${compact}</div>
+            <button type="button" class="btn-more-mkts" data-extra-count="${isTennisSbSport(ev.sport) ? (ev.offer_groups || []).length || extraCount : extraCount}" aria-expanded="${isOpen ? "true" : "false"}" aria-label="${isOpen ? "Recolher mercados" : "Mais mercados"}">
+              <span class="more-k">${isOpen ? "Menos" : "Mais"}</span>
+              <span class="more-n">${isOpen ? "−" : (isTennisSbSport(ev.sport) && (ev.offer_groups || []).length ? `+${(ev.offer_groups || []).length}` : moreLabel)}</span>
+            </button>
           </div>
         </div>
-        <div class="odds-group">${cols}</div>
+        <div class="markets-extra">
+          <div class="markets-extra-body">
+            <div class="markets-extra-head">
+              <span class="title">${isTennisSbSport(ev.sport) ? "Mercados SuperBet" : "Outros mercados"}</span>
+              <span class="meta">${extraMeta}</span>
+            </div>
+            ${tennisSbBody}
+          </div>
+        </div>
       </article>`;
     }
 
@@ -1213,15 +2181,26 @@
       if (pollTimer) clearInterval(pollTimer);
       pollTimer = setInterval(() => {
         const term = document.getElementById("panel-terminal");
-        if (!term.hidden) loadTerminal();
-        else refreshHeaderStats();
+        if (!term.hidden) {
+          if (selectedSport === "tennis_sb") loadSuperbetTennis(true);
+          else loadTerminal();
+        } else refreshHeaderStats();
       }, 30000);
     }
 
     document.querySelectorAll(".tabs button").forEach((b) => {
       b.addEventListener("click", () => setTab(b.dataset.tab));
     });
-    document.getElementById("btn-refresh").addEventListener("click", loadTerminal);
+    document.querySelectorAll(".catalog-nav-btn").forEach((btn) => {
+      btn.addEventListener("click", () => {
+        catalogMode = btn.dataset.catalog === "scheduled" ? "scheduled" : "live";
+        selectedSport = null;
+        document.querySelectorAll(".catalog-nav-btn").forEach((b) => {
+          b.classList.toggle("active", b === btn);
+        });
+        loadTerminal();
+      });
+    });
     document.getElementById("rank-period").addEventListener("change", loadRanking);
     document.getElementById("toast-close").addEventListener("click", () => {
       document.getElementById("toast").classList.remove("show");

@@ -1,90 +1,61 @@
 ---
-description: Monitor Betano — mercado Gols +0,5, Supabase + HCTG HTML na Kubmix (BD-first)
+description: Arena Tipster — fonte da verdade e arquitetura vigente do projeto
 alwaysApply: true
 ---
 
-# Monitor Betano — Mercado Gols +0,5 (Supabase)
+# Arena Tipster (projeto vigente)
 
-Projeto vigente: **betano-monitor**. Toda documentação, regras Cursor, scripts e nomenclatura devem referir-se apenas a este monitor (Betano futebol ao vivo, mercado Over +0,5).
+Foco do repositório e do agente: **Arena Tipster** — paper trading multi-esporte com catálogo Betano + SuperBet, matching determinístico e validação Sportradar/Betradar.
 
-## Legado e nomenclatura
+## Fora de escopo ativo
 
-- **Não** usar nomes de projetos anteriores (ex.: CasinoScores, Sic Bo, Lightning Storm) em código novo, regras, scripts ou UI.
-- Pastas legadas **removidas**: `scripts/oracle/`, ScrapingBee em produção, deploy VPS HostGator.
-- Migrations `20260710`–`20260716` = histórico; reset futebol: `20260719000000_futebol_reset_vps_hctg.sql`.
-- **HCTG produção:** worker HTML na **Kubmix VPS (São Paulo, sa-east-1)** via systemd `kubmix-hctg-worker` (`scripts/deploy-kubmix-hctg-worker.ps1`).
-- AWS Lightsail (`18.231.33.148`) = legado / fallback; HostGator VPS = IP bloqueado na Betano (não usar).
-- **Não** usar JSON Betano (`overview` / `markets-offers`) para gravar `hctg_lines` — gerou odds erradas.
-- OddsPapi = opcional (REST limitado; WS exige B2B).
+Monitor legado Betano (Mercado +0,5, HCTG, Favorito 1X2, workers Kubmix/Lightsail, painel `web/index.html` de futebol) **não é prioridade**. Código pode permanecer no repo; não expandir nem redeployar esses monitores salvo pedido explícito.
 
-## Princípio
+## Princípios
 
-- **Fonte da verdade = PostgreSQL (Supabase)**. Painel só lê tabelas.
-- **Worker Kubmix (produção atual):** só **prints** do odd inicial favorito (Playwright). **Não** coleta mais Total de Gols / `hctg_lines` (`HCTG_SCRAPE=0`).
-- **Odds Total de Gols (HCTG):** legado — religar com `HCTG_SCRAPE=1` se necessário; Mercado +0,5 sem scrape DOM novo.
-- **Análise favorito 1X2 (fase atual):** Edge lê `ml_home`/`ml_away` do overview JSON → tabela `futebol_favorito_drift` (odd inicial → máximo + minuto → se o favorito venceu). Print via worker Kubmix.
-- Edge `betano-futebol-live`: placar, lista, mercado +0,5, **favorito drift**; **não** gera odds HCTG.
-- **Print favorito:** worker Kubmix → Storage `betano-screenshot-debug`; Edge apaga no settle.
+- **Fonte da verdade tipster = PostgreSQL (Supabase)** (`live_events`, links, picks, logs).
+- Odds exibidas/picks: haircut × **0,855** (−14,5%).
+- **1xBet** fora de cogitação (Cloudflare + odds só em códigos).
+- **Sem IA** para matching de jogos nem settle (regras determinísticas + logs).
+- Settler de mercados complexos: preferir fatos (placar / GISMO / status SuperBet), não chute por nome.
 
-## Análise favorito 1X2 (fase atual)
+## Casas e IDs
 
-- Fonte: overview JSON Betano na Edge (`extractMlOdds`) — lote, sem worker.
-- Tabela: `futebol_favorito_drift`.
-- Favorito = menor odd Casa/Fora na 1ª leitura **com minuto ≤ 5** (ou sem minuto); rastreia **odd_max** + minuto; no fim `favorito_venceu`.
-- Jogos que só aparecem depois dos 5' não entram na amostra.
-- Print (prova): worker Playwright (Kubmix) grava `screenshot_url` enquanto `watching`; Edge apaga no settle.
-- Painel: aba **Favorito 1X2** (coluna Print).
-- Teste: `.\scripts\run-favorito-test.ps1` (checklist / `--capture` / `--coleta on`). Edge secret `FAVORITO_OPEN_MAX_MINUTE` (default 5).
+| Campo | Significado |
+|---|---|
+| Betano `provider_event_id` / overview | Evento na Betano |
+| SuperBet `offerId` | Evento na SuperBet |
+| `betradarId` / `betradarMatchId` | ID do **jogo** no Sportradar/Betradar (não é ID da odd) |
+| Odd SuperBet `uuid` / `outcomeId` | Seleção na casa (settle pela casa ou por regra de placar) |
 
-## HCTG — fonte e proibições
+Betradar ⊆ Sportradar (marca/produto B2B). GISMO público: `stats.fn.sportradar.com/.../gismo/match_info|{timeline}/{id}`.
 
-**Produção atual (Kubmix):** worker **não** scrapeia Total de Gols (`HCTG_SCRAPE=0`). Só prints favorito.  
-Religar scrape HCTG: `HCTG_SCRAPE=1` no unit systemd + restart.
+## Matching Betano ↔ SuperBet (sem IA)
 
-**Legado / opcional:** Playwright HTML → aba Gols → Total de Gols → `hctg_lines` (`html-dom-kubmix`).
+Pré-requisito para bridge: pelo menos um lado com **`betradar_id`**, ou ambos com o **mesmo** ID.
 
-**Proibido para odds HCTG em produção:**
-- Extrair/gravar HCTG a partir de `overview/latest`, `overview?eventId=`, `markets-offers` da Betano (mistura mercados).
-- `extractMatchTotalGoalsLines` / harvest loose / monotonicidade como fonte primária.
-- ScrapingBee / heurísticas não validadas.
-- Worker HCTG na HostGator / `hctg_source=html-dom-vps` (legado bloqueado no BD).
+Ordem de confiança:
 
-**Permitido (não é odds HCTG):** overview JSON Betano na Edge para lista live, minuto, placar, `betradarMatchId`, ML 1X2.
+1. **Mesmo `betradar_id`** nas duas casas → link automático.
+2. Senão: mesmo **esporte** + janela de **horário** (`starts_at` ± 15 min) + **nomes normalizados** (acentos off, ordem Nome/Sobrenome, home/away ou invertido).
+3. Aceitar só se houver **único** candidato claro (score alto e 2º colocado bem pior). Empate → `unmatched` (não inventar).
+4. **Validação Sportradar obrigatória** antes de `sr_validated`: GISMO `match_info/{betradar_id}` deve devolver times compatíveis com o par. Resultado + razões em **`tipster_validation_logs`**.
+5. Após o jogo começar: placar/timeline (SuperBet metadata e/ou GISMO) para confirmação contínua e settle.
 
-**Fallback:** AWS Lightsail (`.\scripts\deploy-aws-hctg-worker.ps1`) ou local `.\scripts\run-local-hctg-worker.ps1` (`html-dom-local`).
+Duplas/abreviados: exigir evidência forte (ID igual ou tokens suficientes); na dúvida, não linkar.
 
-## Coleta
+## Pipeline vigente (fase atual)
 
-| Componente | Função |
-|------------|--------|
-| `betano-futebol-live` (cron */2) | Jogos live, placar, gols, mercado +0,5; lê `hctg_lines` do BD |
-| `kubmix-hctg-worker` (Kubmix) | DOM HCTG → grava `hctg_lines` (`html-dom-kubmix`) |
-| Painel `web/index.html` | Login Supabase Auth; leitura só com JWT |
+1. Coleta pré-jogo Betano (`tipster-prematch-collector` / hot trending) → `live_events` `scheduled` + `betradar_id` quando existir.
+2. Coleta pré-jogo SuperBet (`offerState=prematch`).
+3. **`tipster-prematch-bridge`**: match + GISMO validate + grava `tipster_event_links` + logs (cron */10).
+4. **`tipster-link-sync`**: placar/status GISMO nos links `sr_validated`/`live` → promove `live`/`finished` e atualiza `live_events` (cron */2).
+5. **`tipster-settle`**: liquida picks abertos em eventos `finished` (também reforça finished a partir dos links).
 
-## Mercado +0,5
+## Código-chave
 
-- Over +0,5 real = Mais de (placar + 0,5); estrategia unica `estrategia_05`.
-- Apos 1ª oportunidade +0,5: monitora a odd ate o gol (GREEN) ou fim (RED); `over_05_odd` = abertura, `over_05_odd_ultima` = ultima antes do settle.
-- Resultados: `watching` | `pending` | `win` | `loss` | `sem_linha_05` | `excluido`.
-
-## Secrets
-
-- Edge: secrets Supabase; Telegram opcional
-- Worker Kubmix: `SUPABASE_URL`, `SUPABASE_SERVICE_ROLE_KEY` em `/home/admin/betano-monitor/.env`
-- SSH: `$env:USERPROFILE\.ssh\kubmix-hctg.pem` → `admin@189.45.251.202`
-- Legacy AWS: `$env:USERPROFILE\.ssh\lightsail-sa-east-1.pem` → `ubuntu@18.231.33.148`
-- **Não** usar `SCRAPINGBEE_API_KEY` em produção
-
-## Fluxo
-
-1. `supabase functions deploy betano-futebol-live`
-2. Deploy worker: `.\scripts\deploy-kubmix-hctg-worker.ps1` (opcional `-StopAws` para desligar Lightsail)
-3. Painel: GitHub Pages ou `scripts/serve-monitor.ps1`
-
-## Código
-
-- Edge: `supabase/functions/betano-futebol-live/`
-- HCTG HTML: `scripts/hctg-worker.mjs`, `scripts/lib/betano-hctg-playwright.mjs`
-- Kubmix: `scripts/kubmix-hctg-worker.service`, `scripts/deploy-kubmix-hctg-worker.ps1`
-- Legacy AWS: `scripts/aws-hctg-worker.service`, `scripts/deploy-aws-hctg-worker.ps1`
-- Fallback local: `scripts/run-local-hctg-worker.ps1`
+- UI: `web/tipster.html`
+- Edge: `supabase/functions/tipster-*`
+- Shared: `supabase/functions/_shared/live-feed/`
+- Docs: `docs/tipster-arena.md`
+- Regras detalhadas de matching/validação: `.cursor/rules/01-tipster-matching.mdc`

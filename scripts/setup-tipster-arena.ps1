@@ -29,6 +29,9 @@ $body = @{
   id = "default"
   ativo = $true
   collector_url = "$base/functions/v1/tipster-live-collector"
+  prematch_url = "$base/functions/v1/tipster-prematch-collector"
+  bridge_url = "$base/functions/v1/tipster-prematch-bridge"
+  link_sync_url = "$base/functions/v1/tipster-link-sync"
   settle_url = "$base/functions/v1/tipster-settle"
   cron_secret = $cron
   updated_at = (Get-Date).ToUniversalTime().ToString("o")
@@ -43,6 +46,10 @@ $headers = @{
 
 Invoke-RestMethod -Uri "$base/rest/v1/tipster_collector_config?on_conflict=id" -Method POST -Headers $headers -Body $body | Out-Null
 Write-Host "OK tipster_collector_config apontando para:"
-Write-Host "  collector: $base/functions/v1/tipster-live-collector"
-Write-Host "  settle:    $base/functions/v1/tipster-settle"
-Write-Host "Deploy Edges + secrets LIVE_FEED_* antes do cron ter efeito."
+Write-Host "  collector:  $base/functions/v1/tipster-live-collector"
+Write-Host "  prematch:   $base/functions/v1/tipster-prematch-collector"
+Write-Host "  bridge:     $base/functions/v1/tipster-prematch-bridge"
+Write-Host "  link-sync:  $base/functions/v1/tipster-link-sync"
+Write-Host "  settle:     $base/functions/v1/tipster-settle"
+Write-Host "Crons: bridge */10, link-sync */2, prematch */5, settle (existente)."
+Write-Host "Deploy Edges + secrets LIVE_FEED_* / CRON_SECRET antes do cron ter efeito."

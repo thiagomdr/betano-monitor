@@ -151,6 +151,29 @@ Deno.serve(async (req) => {
       return jsonResponse({ ok: true, mode: "force", ...result });
     }
 
+    // Promote finished links → live_events.finished (placar do GISMO via tipster-link-sync)
+    const { data: finishedLinks } = await supabase
+      .from("tipster_event_links")
+      .select("id,live_event_id,last_score_home,last_score_away,betradar_id")
+      .eq("status", "finished")
+      .not("live_event_id", "is", null)
+      .limit(100);
+
+    for (const link of finishedLinks ?? []) {
+      if (link.last_score_home == null || link.last_score_away == null) continue;
+      await supabase
+        .from("live_events")
+        .update({
+          home_score: link.last_score_home,
+          away_score: link.last_score_away,
+          status: "finished",
+          finished_at: new Date().toISOString(),
+          updated_at: new Date().toISOString(),
+        })
+        .eq("id", link.live_event_id)
+        .neq("status", "finished");
+    }
+
     // Natural settle: finished events with open picks
     const { data: events, error } = await supabase
       .from("live_events")
@@ -187,6 +210,7 @@ Deno.serve(async (req) => {
       mode: "auto",
       settled: totalSettled,
       events: perEvent.length,
+      finished_links: (finishedLinks ?? []).length,
       details: perEvent,
     });
   } catch (err) {

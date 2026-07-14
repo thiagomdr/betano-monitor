@@ -15,7 +15,7 @@ export type SelectionKey =
   | "x2"
   | "12";
 
-export type EventStatus = "live" | "suspended" | "finished" | "cancelled";
+export type EventStatus = "live" | "scheduled" | "suspended" | "finished" | "cancelled";
 export type MarketStatus = "open" | "suspended" | "settled" | "void";
 
 export type SelectionDraft = {
@@ -44,6 +44,7 @@ export type EventDraft = {
   minute: number | null;
   home_score: number | null;
   away_score: number | null;
+  starts_at?: string | null;
   status: EventStatus;
   betradar_id: string | null;
   markets: MarketDraft[];
