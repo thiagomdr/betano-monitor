@@ -225,13 +225,68 @@ function extractScore(event: Json): { home: number | null; away: number | null }
   return { home, away };
 }
 
+function parseClockToMinute(value: unknown): number | null {
+  const n = toInt(value);
+  if (n != null) return n;
+  if (typeof value === "string") {
+    const trimmed = value.trim();
+    const m = trimmed.match(/^(\d{1,3})\s*(?:[':]|\s|$)/);
+    if (m) return Number(m[1]);
+  }
+  return null;
+}
+
 function extractMinute(event: Json): number | null {
-  const direct = toInt(
-    event.minute ?? event.matchMinute ?? event.elapsed ?? event.totalElapsedMinutes,
+  const direct = parseClockToMinute(
+    event.minute ??
+      event.matchMinute ??
+      event.elapsed ??
+      event.totalElapsedMinutes ??
+      event.time ??
+      event.gameTime ??
+      event.clock,
   );
   if (direct != null) return direct;
-  const liveData = asRecord(event.liveData) ?? asRecord(event.live) ?? asRecord(event.liveDataDTO);
-  return toInt(liveData?.minute ?? liveData?.matchTime ?? liveData?.matchMinute);
+
+  const seconds = toInt(
+    event.totalElapsedSeconds ??
+      event.elapsedSeconds ??
+      event.matchTimeInSeconds ??
+      event.seconds,
+  );
+  if (seconds != null) return Math.floor(seconds / 60);
+
+  const liveData = asRecord(event.liveData) ?? asRecord(event.live) ??
+    asRecord(event.liveDataDTO) ?? asRecord(event.match) ?? asRecord(event.game);
+  if (liveData) {
+    const m = parseClockToMinute(
+      liveData.minute ??
+        liveData.elapsed ??
+        liveData.matchMinute ??
+        liveData.time ??
+        liveData.gameMinute ??
+        liveData.matchTime ??
+        liveData.clock,
+    );
+    if (m != null) return m;
+
+    const liveClock = asRecord(liveData.clock);
+    const clockMin = parseClockToMinute(
+      liveClock?.minute ?? liveClock?.minutes ?? liveClock?.displayTime,
+    );
+    if (clockMin != null) return clockMin;
+
+    const s = toInt(
+      liveData.totalElapsedSeconds ??
+        liveData.elapsedSeconds ??
+        liveData.seconds ??
+        liveClock?.secondsSinceStart ??
+        liveClock?.seconds,
+    );
+    if (s != null) return Math.floor(s / 60);
+  }
+
+  return null;
 }
 
 function marketSuspended(market: Json): boolean {
