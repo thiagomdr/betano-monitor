@@ -1,0 +1,678 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Arena Tipster · Terminal</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&family=IBM+Plex+Sans:wght@400;500;600;700&display=swap" rel="stylesheet" />
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.49.1/dist/umd/supabase.min.js"></script>
+  <style>
+    :root {
+      --bg: #0e1114;
+      --bg-2: #151a1f;
+      --line: #2a333c;
+      --text: #e6edf3;
+      --muted: #8b9aab;
+      --accent: #3ecf8e;
+      --warn: #e8b84a;
+      --loss: #e85d5d;
+      --chip: #1c242c;
+      --focus: #5b9fd4;
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      min-height: 100vh;
+      font-family: "IBM Plex Sans", system-ui, sans-serif;
+      background:
+        radial-gradient(1200px 600px at 10% -10%, #1a2833 0%, transparent 55%),
+        linear-gradient(180deg, #0c0f12 0%, var(--bg) 40%);
+      color: var(--text);
+    }
+    .mono { font-family: "IBM Plex Mono", ui-monospace, monospace; }
+    [hidden] { display: none !important; }
+
+    .login-screen {
+      min-height: 100vh;
+      display: grid;
+      place-items: center;
+      padding: 1.5rem;
+    }
+    .login-box {
+      width: min(380px, 100%);
+      border: 1px solid var(--line);
+      background: var(--bg-2);
+      padding: 1.5rem;
+    }
+    .login-box h1 {
+      margin: 0 0 0.25rem;
+      font-size: 1.45rem;
+      letter-spacing: -0.02em;
+    }
+    .login-box p { margin: 0 0 1rem; color: var(--muted); font-size: 0.9rem; }
+    .login-box label { display: block; font-size: 0.75rem; color: var(--muted); margin-bottom: 0.2rem; }
+    .login-box input {
+      width: 100%;
+      margin-bottom: 0.75rem;
+      padding: 0.55rem 0.65rem;
+      border: 1px solid var(--line);
+      background: var(--bg);
+      color: var(--text);
+      font: inherit;
+    }
+    .login-box button, .btn {
+      border: 1px solid var(--accent);
+      background: transparent;
+      color: var(--accent);
+      padding: 0.5rem 0.85rem;
+      font: inherit;
+      font-weight: 600;
+      cursor: pointer;
+    }
+    .login-box button:hover, .btn:hover { background: color-mix(in srgb, var(--accent) 15%, transparent); }
+    .btn-muted { border-color: var(--line); color: var(--muted); }
+    .err { color: var(--loss); font-size: 0.85rem; margin-top: 0.5rem; }
+
+    header.app-bar {
+      display: flex;
+      flex-wrap: wrap;
+      align-items: baseline;
+      gap: 0.75rem 1.25rem;
+      padding: 0.85rem 1.1rem;
+      border-bottom: 1px solid var(--line);
+      background: color-mix(in srgb, var(--bg-2) 88%, transparent);
+      backdrop-filter: blur(8px);
+      position: sticky;
+      top: 0;
+      z-index: 5;
+    }
+    header .brand {
+      font-size: 1.15rem;
+      font-weight: 700;
+      letter-spacing: -0.03em;
+      margin: 0;
+    }
+    header .brand span { color: var(--accent); }
+    header .meta { color: var(--muted); font-size: 0.8rem; }
+    header .spacer { flex: 1; }
+    .tabs { display: flex; gap: 0.35rem; }
+    .tabs button {
+      border: 1px solid var(--line);
+      background: transparent;
+      color: var(--muted);
+      padding: 0.35rem 0.7rem;
+      font: inherit;
+      font-size: 0.85rem;
+      cursor: pointer;
+    }
+    .tabs button.active {
+      color: var(--text);
+      border-color: var(--focus);
+      background: color-mix(in srgb, var(--focus) 12%, transparent);
+    }
+
+    main { padding: 0.85rem 1.1rem 2rem; max-width: 1280px; margin: 0 auto; }
+    .toolbar {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 0.5rem 1rem;
+      align-items: center;
+      margin-bottom: 0.75rem;
+      color: var(--muted);
+      font-size: 0.8rem;
+    }
+    .toolbar select {
+      background: var(--bg-2);
+      color: var(--text);
+      border: 1px solid var(--line);
+      padding: 0.3rem 0.45rem;
+      font: inherit;
+    }
+
+    .event {
+      border: 1px solid var(--line);
+      background: var(--bg-2);
+      margin-bottom: 0.55rem;
+      padding: 0.65rem 0.75rem;
+    }
+    .event-head {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 0.35rem 0.85rem;
+      align-items: baseline;
+      margin-bottom: 0.5rem;
+    }
+    .event-head .match { font-weight: 600; }
+    .event-head .league { color: var(--muted); font-size: 0.78rem; }
+    .event-head .clock {
+      margin-left: auto;
+      font-family: "IBM Plex Mono", monospace;
+      font-size: 0.85rem;
+      color: var(--warn);
+    }
+    .markets { display: flex; flex-wrap: wrap; gap: 0.65rem 1rem; }
+    .mkt-block { min-width: 0; }
+    .mkt-label {
+      font-size: 0.68rem;
+      text-transform: uppercase;
+      letter-spacing: 0.06em;
+      color: var(--muted);
+      margin-bottom: 0.25rem;
+    }
+    .chips { display: flex; flex-wrap: wrap; gap: 0.3rem; }
+    .chip {
+      display: inline-flex;
+      align-items: center;
+      gap: 0.35rem;
+      border: 1px solid var(--line);
+      background: var(--chip);
+      color: var(--text);
+      padding: 0.28rem 0.45rem;
+      font-family: "IBM Plex Mono", monospace;
+      font-size: 0.78rem;
+      cursor: pointer;
+    }
+    .chip:hover { border-color: var(--accent); }
+    .chip:disabled { opacity: 0.45; cursor: not-allowed; }
+    .chip .k { color: var(--muted); font-size: 0.7rem; }
+    .chip .o { color: var(--accent); font-weight: 600; }
+
+    table.data {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: 0.85rem;
+    }
+    table.data th, table.data td {
+      border-bottom: 1px solid var(--line);
+      padding: 0.45rem 0.4rem;
+      text-align: left;
+      vertical-align: top;
+    }
+    table.data th {
+      color: var(--muted);
+      font-weight: 500;
+      font-size: 0.72rem;
+      text-transform: uppercase;
+      letter-spacing: 0.04em;
+    }
+    .pnl-pos { color: var(--accent); }
+    .pnl-neg { color: var(--loss); }
+    .status-open { color: var(--warn); }
+    .status-won { color: var(--accent); }
+    .status-lost { color: var(--loss); }
+    .status-void { color: var(--muted); }
+    .empty { color: var(--muted); padding: 1.5rem 0; }
+
+    @media (max-width: 720px) {
+      header.app-bar { padding: 0.7rem 0.75rem; }
+      main { padding: 0.7rem 0.75rem 2rem; }
+      .event-head .clock { margin-left: 0; }
+    }
+  </style>
+</head>
+<body>
+  <div id="login" class="login-screen">
+    <form class="login-box" id="login-form">
+      <h1>Arena <span style="color:var(--accent)">Tipster</span></h1>
+      <p>Terminal de paper trading · 1 unidade por pick</p>
+      <label for="email">E-mail</label>
+      <input id="email" type="email" autocomplete="username" required />
+      <label for="password">Senha</label>
+      <input id="password" type="password" autocomplete="current-password" required />
+      <label for="display-name">Apelido no ranking (opcional)</label>
+      <input id="display-name" type="text" maxlength="40" placeholder="Seu nome de tipster" />
+      <button type="submit">Entrar</button>
+      <div id="login-err" class="err" hidden></div>
+    </form>
+  </div>
+
+  <div id="app" hidden>
+    <header class="app-bar">
+      <h1 class="brand">Arena <span>Tipster</span></h1>
+      <div class="meta mono" id="tipster-meta">—</div>
+      <div class="spacer"></div>
+      <nav class="tabs" aria-label="Abas">
+        <button type="button" data-tab="terminal" class="active">Terminal</button>
+        <button type="button" data-tab="picks">Meus picks</button>
+        <button type="button" data-tab="ranking">Ranking</button>
+      </nav>
+      <button type="button" class="btn btn-muted" id="btn-logout">Sair</button>
+    </header>
+
+    <main>
+      <section id="panel-terminal">
+        <div class="toolbar">
+          <span id="feed-meta" class="mono">Carregando feed…</span>
+          <button type="button" class="btn" id="btn-refresh">Atualizar</button>
+        </div>
+        <div id="events"></div>
+      </section>
+
+      <section id="panel-picks" hidden>
+        <div class="toolbar"><span>Histórico de picks (stake fixo 1u)</span></div>
+        <div style="overflow-x:auto">
+          <table class="data">
+            <thead>
+              <tr>
+                <th>Quando</th>
+                <th>Jogo</th>
+                <th>Mercado</th>
+                <th>Odd</th>
+                <th>Status</th>
+                <th>PnL</th>
+              </tr>
+            </thead>
+            <tbody id="picks-body"></tbody>
+          </table>
+        </div>
+      </section>
+
+      <section id="panel-ranking" hidden>
+        <div class="toolbar">
+          <label>
+            Período
+            <select id="rank-period">
+              <option value="all">Todo o concurso</option>
+              <option value="7">Últimos 7 dias</option>
+              <option value="30">Últimos 30 dias</option>
+            </select>
+          </label>
+        </div>
+        <div style="overflow-x:auto">
+          <table class="data">
+            <thead>
+              <tr>
+                <th>#</th>
+                <th>Tipster</th>
+                <th>PnL (u)</th>
+                <th>Winrate</th>
+                <th>Settled</th>
+                <th>Open</th>
+              </tr>
+            </thead>
+            <tbody id="rank-body"></tbody>
+          </table>
+        </div>
+      </section>
+    </main>
+  </div>
+
+  <script>
+    const SEL_LABEL = {
+      home: "1", draw: "X", away: "2",
+      over: "Mais", under: "Menos",
+      yes: "Sim", no: "Não",
+      "1x": "1X", x2: "X2", "12": "12",
+    };
+    const MKT_LABEL = {
+      "1x2": "1X2",
+      total: "Total",
+      btts: "Ambas",
+      double_chance: "Dupla",
+    };
+
+    let sb = null;
+    let tipster = null;
+    let pollTimer = null;
+
+    function fmtOdd(n) {
+      const x = Number(n);
+      return Number.isFinite(x) ? x.toFixed(2) : "—";
+    }
+    function fmtPnl(n) {
+      if (n == null) return "—";
+      const x = Number(n);
+      const s = (x >= 0 ? "+" : "") + x.toFixed(2);
+      return s;
+    }
+    function fmtWhen(iso) {
+      if (!iso) return "—";
+      const d = new Date(iso);
+      return d.toLocaleString("pt-BR", { hour12: false });
+    }
+
+    async function loadClient() {
+      const cfgRes = await fetch("./supabase.config.json");
+      if (!cfgRes.ok) throw new Error("web/supabase.config.json não encontrado");
+      const cfg = await cfgRes.json();
+      if (!cfg.url || !cfg.anonKey) throw new Error("Configure url e anonKey");
+      sb = window.supabase.createClient(cfg.url, cfg.anonKey, {
+        auth: { persistSession: true, autoRefreshToken: true },
+      });
+    }
+
+    async function ensureProfile(displayName) {
+      const { data, error } = await sb.rpc("ensure_tipster", {
+        p_display_name: displayName || null,
+      });
+      if (error) throw error;
+      tipster = Array.isArray(data) ? data[0] : data;
+      document.getElementById("tipster-meta").textContent =
+        `${tipster.display_name} · paper · 1u`;
+    }
+
+    function showApp(on) {
+      document.getElementById("login").hidden = on;
+      document.getElementById("app").hidden = !on;
+    }
+
+    function setTab(name) {
+      document.querySelectorAll(".tabs button").forEach((b) => {
+        b.classList.toggle("active", b.dataset.tab === name);
+      });
+      document.getElementById("panel-terminal").hidden = name !== "terminal";
+      document.getElementById("panel-picks").hidden = name !== "picks";
+      document.getElementById("panel-ranking").hidden = name !== "ranking";
+      if (name === "picks") loadPicks();
+      if (name === "ranking") loadRanking();
+    }
+
+    async function placePick(eventId, marketKey, selectionKey, line) {
+      const { data, error } = await sb.rpc("place_pick", {
+        p_event_id: eventId,
+        p_market_key: marketKey,
+        p_selection_key: selectionKey,
+        p_line: line,
+        p_contest_slug: "arena-open",
+      });
+      if (error) {
+        alert("Falha ao apostar: " + error.message);
+        return;
+      }
+      const pick = Array.isArray(data) ? data[0] : data;
+      alert(`Pick registrado @ ${fmtOdd(pick.odd_snapshot)} (1u)`);
+      loadPicks();
+    }
+
+    function renderChip(evId, m) {
+      return m.selections.map((s) => {
+        const disabled = m.status !== "open" || s.status !== "open";
+        const linePart = m.market_key === "total" && m.line != null
+          ? ` ${String(m.line).replace(".", ",")}`
+          : "";
+        const label = `${SEL_LABEL[s.selection_key] || s.selection_key}${linePart}`;
+        return `<button type="button" class="chip" ${disabled ? "disabled" : ""}
+          data-event="${evId}" data-mkt="${m.market_key}" data-sel="${s.selection_key}"
+          data-line="${m.line == null ? "" : m.line}">
+          <span class="k">${label}</span>
+          <span class="o">${fmtOdd(s.odd)}</span>
+        </button>`;
+      }).join("");
+    }
+
+    function groupMarkets(markets) {
+      const order = ["1x2", "btts", "total", "double_chance"];
+      const map = new Map();
+      for (const m of markets) {
+        if (!map.has(m.market_key)) map.set(m.market_key, []);
+        map.get(m.market_key).push(m);
+      }
+      return order.filter((k) => map.has(k)).map((k) => ({ key: k, items: map.get(k) }));
+    }
+
+    async function loadTerminal() {
+      const feedEl = document.getElementById("feed-meta");
+      const root = document.getElementById("events");
+
+      const { data: meta } = await sb
+        .from("tipster_live_meta")
+        .select("fetched_at,live_total,last_error")
+        .eq("id", 1)
+        .maybeSingle();
+
+      if (meta?.last_error) {
+        feedEl.textContent = `Erro feed: ${meta.last_error}`;
+      } else if (meta?.fetched_at) {
+        feedEl.textContent =
+          `${meta.live_total || 0} jogos · atualizado ${fmtWhen(meta.fetched_at)}`;
+      } else {
+        feedEl.textContent = "Aguardando collector…";
+      }
+
+      const { data: events, error } = await sb
+        .from("live_events")
+        .select("id,home,away,league,minute,home_score,away_score,status,updated_at")
+        .eq("status", "live")
+        .order("minute", { ascending: true, nullsFirst: false });
+
+      if (error) {
+        root.innerHTML = `<div class="empty">Erro: ${error.message}</div>`;
+        return;
+      }
+      if (!events?.length) {
+        root.innerHTML = `<div class="empty">Nenhum jogo ao vivo no catálogo.</div>`;
+        return;
+      }
+
+      const ids = events.map((e) => e.id);
+      const { data: markets } = await sb
+        .from("live_markets")
+        .select("id,event_id,market_key,line,status")
+        .in("event_id", ids);
+
+      const mktIds = (markets || []).map((m) => m.id);
+      const { data: selections } = mktIds.length
+        ? await sb
+          .from("live_selections")
+          .select("market_id,selection_key,odd,status")
+          .in("market_id", mktIds)
+        : { data: [] };
+
+      const selsByMkt = new Map();
+      for (const s of selections || []) {
+        if (!selsByMkt.has(s.market_id)) selsByMkt.set(s.market_id, []);
+        selsByMkt.get(s.market_id).push(s);
+      }
+      const mktsByEvent = new Map();
+      for (const m of markets || []) {
+        const full = { ...m, selections: selsByMkt.get(m.id) || [] };
+        if (!mktsByEvent.has(m.event_id)) mktsByEvent.set(m.event_id, []);
+        mktsByEvent.get(m.event_id).push(full);
+      }
+
+      root.innerHTML = events.map((ev) => {
+        const score = `${ev.home_score ?? 0}:${ev.away_score ?? 0}`;
+        const min = ev.minute != null ? `${ev.minute}'` : "—";
+        const grouped = groupMarkets(mktsByEvent.get(ev.id) || []);
+        const blocks = grouped.map(({ key, items }) => {
+          const chips = items.map((m) => renderChip(ev.id, m)).join("");
+          return `<div class="mkt-block">
+            <div class="mkt-label">${MKT_LABEL[key] || key}</div>
+            <div class="chips">${chips}</div>
+          </div>`;
+        }).join("");
+
+        return `<article class="event">
+          <div class="event-head">
+            <span class="match">${ev.home} × ${ev.away}</span>
+            <span class="league">${ev.league || ""}</span>
+            <span class="clock mono">${min} · ${score}</span>
+          </div>
+          <div class="markets">${blocks || '<span class="empty">Sem mercados MVP</span>'}</div>
+        </article>`;
+      }).join("");
+
+      root.querySelectorAll(".chip").forEach((btn) => {
+        btn.addEventListener("click", () => {
+          const lineRaw = btn.dataset.line;
+          const line = lineRaw === "" ? null : Number(lineRaw);
+          placePick(btn.dataset.event, btn.dataset.mkt, btn.dataset.sel, line);
+        });
+      });
+    }
+
+    async function loadPicks() {
+      if (!tipster) return;
+      const { data, error } = await sb
+        .from("picks")
+        .select("id,placed_at,market_key,selection_key,line,odd_snapshot,status,pnl_u,event_id,live_events(home,away)")
+        .eq("tipster_id", tipster.id)
+        .order("placed_at", { ascending: false })
+        .limit(100);
+
+      const body = document.getElementById("picks-body");
+      if (error) {
+        body.innerHTML = `<tr><td colspan="6">${error.message}</td></tr>`;
+        return;
+      }
+      if (!data?.length) {
+        body.innerHTML = `<tr><td colspan="6" class="empty">Nenhum pick ainda.</td></tr>`;
+        return;
+      }
+      body.innerHTML = data.map((p) => {
+        const game = p.live_events
+          ? `${p.live_events.home} × ${p.live_events.away}`
+          : p.event_id;
+        const line = p.line != null ? ` ${String(p.line).replace(".", ",")}` : "";
+        const mkt =
+          `${MKT_LABEL[p.market_key] || p.market_key} ${SEL_LABEL[p.selection_key] || p.selection_key}${line}`;
+        const pnlClass = p.pnl_u == null ? "" : (Number(p.pnl_u) >= 0 ? "pnl-pos" : "pnl-neg");
+        return `<tr>
+          <td class="mono">${fmtWhen(p.placed_at)}</td>
+          <td>${game}</td>
+          <td>${mkt}</td>
+          <td class="mono">${fmtOdd(p.odd_snapshot)}</td>
+          <td class="status-${p.status}">${p.status}</td>
+          <td class="mono ${pnlClass}">${fmtPnl(p.pnl_u)}</td>
+        </tr>`;
+      }).join("");
+    }
+
+    async function loadRanking() {
+      const period = document.getElementById("rank-period").value;
+      const body = document.getElementById("rank-body");
+
+      if (period === "all") {
+        const { data, error } = await sb
+          .from("v_tipster_ranking")
+          .select("*")
+          .eq("contest_slug", "arena-open")
+          .order("pnl_u", { ascending: false });
+        if (error) {
+          body.innerHTML = `<tr><td colspan="6">${error.message}</td></tr>`;
+          return;
+        }
+        renderRankRows(body, data || []);
+        return;
+      }
+
+      const since = new Date();
+      since.setDate(since.getDate() - Number(period));
+      const { data: picks, error } = await sb
+        .from("picks")
+        .select("tipster_id,status,pnl_u,tipsters(display_name)")
+        .gte("placed_at", since.toISOString());
+      if (error) {
+        body.innerHTML = `<tr><td colspan="6">${error.message}</td></tr>`;
+        return;
+      }
+      const agg = new Map();
+      for (const p of picks || []) {
+        if (!agg.has(p.tipster_id)) {
+          agg.set(p.tipster_id, {
+            tipster_id: p.tipster_id,
+            display_name: p.tipsters?.display_name || "—",
+            pnl_u: 0,
+            wins: 0,
+            settled_n: 0,
+            open_n: 0,
+          });
+        }
+        const row = agg.get(p.tipster_id);
+        if (p.status === "open") row.open_n += 1;
+        if (p.status === "won" || p.status === "lost" || p.status === "void") {
+          row.pnl_u += Number(p.pnl_u || 0);
+        }
+        if (p.status === "won" || p.status === "lost") {
+          row.settled_n += 1;
+          if (p.status === "won") row.wins += 1;
+        }
+      }
+      const rows = [...agg.values()].map((r) => ({
+        ...r,
+        winrate: r.settled_n ? r.wins / r.settled_n : null,
+      })).sort((a, b) => b.pnl_u - a.pnl_u);
+      renderRankRows(body, rows);
+    }
+
+    function renderRankRows(body, rows) {
+      if (!rows.length) {
+        body.innerHTML = `<tr><td colspan="6" class="empty">Sem tipsters inscritos.</td></tr>`;
+        return;
+      }
+      body.innerHTML = rows.map((r, i) => {
+        const pnlClass = Number(r.pnl_u) >= 0 ? "pnl-pos" : "pnl-neg";
+        const wr = r.winrate == null ? "—" : `${(Number(r.winrate) * 100).toFixed(0)}%`;
+        return `<tr>
+          <td class="mono">${i + 1}</td>
+          <td>${r.display_name}</td>
+          <td class="mono ${pnlClass}">${fmtPnl(r.pnl_u)}</td>
+          <td class="mono">${wr}</td>
+          <td class="mono">${r.settled_n ?? 0}</td>
+          <td class="mono">${r.open_n ?? 0}</td>
+        </tr>`;
+      }).join("");
+    }
+
+    function startPoll() {
+      if (pollTimer) clearInterval(pollTimer);
+      pollTimer = setInterval(() => {
+        const term = document.getElementById("panel-terminal");
+        if (!term.hidden) loadTerminal();
+      }, 30000);
+    }
+
+    document.querySelectorAll(".tabs button").forEach((b) => {
+      b.addEventListener("click", () => setTab(b.dataset.tab));
+    });
+    document.getElementById("btn-refresh").addEventListener("click", loadTerminal);
+    document.getElementById("rank-period").addEventListener("change", loadRanking);
+    document.getElementById("btn-logout").addEventListener("click", async () => {
+      await sb.auth.signOut();
+      tipster = null;
+      showApp(false);
+    });
+
+    document.getElementById("login-form").addEventListener("submit", async (e) => {
+      e.preventDefault();
+      const errEl = document.getElementById("login-err");
+      errEl.hidden = true;
+      const email = document.getElementById("email").value.trim();
+      const password = document.getElementById("password").value;
+      const displayName = document.getElementById("display-name").value.trim();
+      try {
+        const { error } = await sb.auth.signInWithPassword({ email, password });
+        if (error) throw error;
+        await ensureProfile(displayName || null);
+        showApp(true);
+        setTab("terminal");
+        await loadTerminal();
+        startPoll();
+      } catch (err) {
+        errEl.textContent = err.message || String(err);
+        errEl.hidden = false;
+      }
+    });
+
+    (async () => {
+      try {
+        await loadClient();
+        const { data: { session } } = await sb.auth.getSession();
+        if (session) {
+          await ensureProfile(null);
+          showApp(true);
+          setTab("terminal");
+          await loadTerminal();
+          startPoll();
+        }
+      } catch (err) {
+        const errEl = document.getElementById("login-err");
+        errEl.textContent = err.message || String(err);
+        errEl.hidden = false;
+      }
+    })();
+  </script>
+</body>
+</html>
