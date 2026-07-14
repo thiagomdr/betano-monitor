@@ -243,7 +243,25 @@
     .section-head:hover { background: color-mix(in srgb, var(--accent) 6%, var(--bg-3)); }
     .section.collapsed .section-head { border-bottom: 0; }
     .section-head.esports {
-      border-left: 3px solid var(--esports);
+      background: color-mix(in srgb, var(--esports) 28%, #1a1228);
+      border-bottom-color: color-mix(in srgb, var(--esports) 45%, var(--line));
+    }
+    .section-head.esports:hover {
+      background: color-mix(in srgb, var(--esports) 38%, #1a1228);
+    }
+    .section-head.esports .country {
+      color: color-mix(in srgb, var(--esports) 75%, #fff);
+    }
+    .section-head.esports .league {
+      color: #d4ccff;
+    }
+    .section-head.esports .count {
+      color: color-mix(in srgb, var(--esports) 70%, var(--muted));
+    }
+    .section-head.esports .section-toggle {
+      border-color: color-mix(in srgb, var(--esports) 55%, var(--line));
+      color: #d4ccff;
+      background: color-mix(in srgb, var(--esports) 18%, var(--bg));
     }
     .section-toggle {
       flex: 0 0 auto;
