@@ -389,12 +389,28 @@
     }
     .badge {
       display: inline-block;
-      padding: 0.05rem 0.35rem;
-      border: 1px solid color-mix(in srgb, var(--esports) 55%, var(--line));
-      color: var(--esports);
-      font-size: 0.65rem;
+      padding: 0.08rem 0.35rem;
+      border: none;
+      border-radius: 0;
+      background: var(--esports);
+      color: #fff;
+      font-size: 0.62rem;
+      font-weight: 700;
       letter-spacing: 0.04em;
       text-transform: uppercase;
+      line-height: 1.2;
+      flex: 0 0 auto;
+    }
+    .match-title-row {
+      display: flex;
+      align-items: center;
+      gap: 0.4rem;
+      max-width: 100%;
+      min-width: 0;
+    }
+    .match-title-row .match-name {
+      flex: 1 1 auto;
+      min-width: 0;
     }
     .odds-group {
       display: grid;
@@ -704,6 +720,12 @@
     function isEsports(home, away, league) {
       const t = `${home || ""} ${away || ""} ${league || ""}`.toLowerCase();
       return t.includes("esports") || t.includes("e-sports");
+    }
+    function stripEsportsLabel(name) {
+      return String(name || "")
+        .replace(/\s*\(\s*e-?sports\s*\)\s*/gi, " ")
+        .replace(/\s{2,}/g, " ")
+        .trim();
     }
     function startOfLocalDayIso() {
       const d = new Date();
@@ -1027,12 +1049,20 @@
       const betanoBtn = url
         ? `<a class="btn-betano" href="${escapeHtml(url)}" target="_blank" rel="noopener noreferrer" title="Abrir na Betano">Betano</a>`
         : "";
+      const esports = isEsports(ev.home, ev.away, ev.league) ||
+        isEsports(ev.home, ev.away, ev.country);
+      const home = stripEsportsLabel(ev.home);
+      const away = stripEsportsLabel(ev.away);
+      const esportsBadge = esports ? `<span class="badge">Esports</span>` : "";
       return `<article class="row">
         <div class="cell-min-wrap">
           ${betanoBtn}
         </div>
         <div class="match-block">
-          <div class="match-name" title="${escapeHtml(ev.home)} × ${escapeHtml(ev.away)}"><span class="team-home">${escapeHtml(ev.home)}</span><span class="vs"> × </span><span class="team-away">${escapeHtml(ev.away)}</span></div>
+          <div class="match-title-row">
+            <div class="match-name" title="${escapeHtml(home)} × ${escapeHtml(away)}"><span class="team-home">${escapeHtml(home)}</span><span class="vs"> × </span><span class="team-away">${escapeHtml(away)}</span></div>
+            ${esportsBadge}
+          </div>
           <div class="match-meta-line">
             <span class="cell-min">${min}</span>
             <span class="cell-score">${score}</span>
