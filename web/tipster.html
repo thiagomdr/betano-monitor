@@ -426,9 +426,9 @@
         feedEl.textContent = `Erro feed: ${meta.last_error}`;
       } else if (meta?.fetched_at) {
         feedEl.textContent =
-          `${meta.live_total || 0} jogos · atualizado ${fmtWhen(meta.fetched_at)}`;
+          `${meta.live_total || 0} jogos no catálogo · atualizado ${fmtWhen(meta.fetched_at)}`;
       } else {
-        feedEl.textContent = "Aguardando collector…";
+        feedEl.textContent = "Aguardando collector (rodar tipster-live-collector)…";
       }
 
       const { data: events, error } = await sb
@@ -442,7 +442,9 @@
         return;
       }
       if (!events?.length) {
-        root.innerHTML = `<div class="empty">Nenhum jogo ao vivo no catálogo.</div>`;
+        root.innerHTML = `<div class="empty">Nenhum jogo de futebol no catálogo agora.
+          O collector ignora tênis/basquete/virtuais; se a Betano só tiver esses, a lista fica vazia.
+          Clique em Atualizar após o collector rodar.</div>`;
         return;
       }
 

@@ -56,11 +56,8 @@ function isFootballEvent(event: Json, overview: Json): boolean {
   const participants = event.participants;
   if (!Array.isArray(participants) || participants.length < 2) return false;
 
-  const names = participants
-    .map((p) => String(asRecord(p)?.name ?? ""))
-    .join(" ")
-    .toLowerCase();
-  if (names.includes("esports") || names.includes("e-sports")) return false;
+  // Tipster Arena: keep FOOT esports (more live inventory); still drop pure other sports.
+  // Virtual football uses sportId VRTS and is excluded below.
 
   const sportId = event.sportId ?? event.sportTypeId;
   if (sportId === 1 || sportId === "1" || sportId === "FOOT") return true;
