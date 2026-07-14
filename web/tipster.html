@@ -214,31 +214,55 @@
     .row:hover { background: color-mix(in srgb, var(--accent) 4%, transparent); }
     .row:last-child { border-bottom: 0; }
     .section {
-      border-bottom: 1px solid var(--line);
+      border: 1px solid var(--line);
+      margin-bottom: 0.85rem;
+      background: var(--bg-2);
+      overflow: hidden;
     }
-    .section:last-child { border-bottom: 0; }
+    .section:last-child { margin-bottom: 0; }
     .section-head {
       display: flex;
       flex-wrap: wrap;
-      align-items: baseline;
-      gap: 0.35rem 0.65rem;
-      padding: 0.55rem 0.7rem 0.4rem;
+      align-items: center;
+      gap: 0.4rem 0.65rem;
+      padding: 0.55rem 0.7rem;
       background: color-mix(in srgb, var(--bg-3) 88%, #000);
       border-bottom: 1px solid var(--line-soft);
-      border-top: 1px solid var(--line);
+      cursor: pointer;
+      user-select: none;
     }
-    .section:first-child .section-head { border-top: 0; }
+    .section-head:hover { background: color-mix(in srgb, var(--accent) 6%, var(--bg-3)); }
+    .section.collapsed .section-head { border-bottom: 0; }
     .section-head.esports {
       border-left: 3px solid var(--esports);
     }
-    .section-head .country {
+    .section-toggle {
+      flex: 0 0 auto;
+      width: 1.35rem;
+      height: 1.35rem;
+      display: inline-grid;
+      place-items: center;
+      border: 1px solid var(--line);
+      background: var(--bg);
+      color: var(--accent);
+      font-family: "IBM Plex Mono", monospace;
+      font-size: 0.95rem;
       font-weight: 700;
-      font-size: 0.82rem;
+      line-height: 1;
+      cursor: pointer;
+      padding: 0;
+    }
+    .section-head .country {
+      font-weight: 600;
+      font-size: 0.78rem;
+      color: var(--muted);
       letter-spacing: -0.01em;
     }
     .section-head .league {
-      color: var(--muted);
-      font-size: 0.78rem;
+      color: var(--text);
+      font-size: 0.88rem;
+      font-weight: 700;
+      letter-spacing: -0.01em;
     }
     .section-head .count {
       margin-left: auto;
@@ -246,6 +270,8 @@
       font-size: 0.7rem;
       color: var(--muted);
     }
+    .section-body { display: block; }
+    .section.collapsed .section-body { display: none; }
     .section .row { border-bottom: 1px solid var(--line-soft); }
     .section .row:last-child { border-bottom: 0; }
     .cell-min {
@@ -821,18 +847,44 @@
       const groups = groupEventsByCountryLeague(events);
       root.innerHTML = groups.map((g) => {
         const rows = g.events.map((ev) => renderEventRow(ev, mktsByEvent.get(ev.id) || [])).join("");
-        return `<section class="section">
-          <div class="section-head ${g.esports ? "esports" : ""}">
+        return `<section class="section" data-section-key="${escapeHtml(g.key)}">
+          <div class="section-head ${g.esports ? "esports" : ""}" role="button" tabindex="0" aria-expanded="true">
+            <button type="button" class="section-toggle" aria-label="Recolher liga">−</button>
             <span class="country">${escapeHtml(g.country)}</span>
             <span class="league">${escapeHtml(g.league)}</span>
             <span class="count">${g.events.length}</span>
           </div>
-          ${rows}
+          <div class="section-body">${rows}</div>
         </section>`;
       }).join("");
 
+      root.querySelectorAll(".section-head").forEach((head) => {
+        const toggleSection = () => {
+          const section = head.closest(".section");
+          if (!section) return;
+          const collapsed = section.classList.toggle("collapsed");
+          const btn = head.querySelector(".section-toggle");
+          head.setAttribute("aria-expanded", collapsed ? "false" : "true");
+          if (btn) {
+            btn.textContent = collapsed ? "+" : "−";
+            btn.setAttribute("aria-label", collapsed ? "Expandir liga" : "Recolher liga");
+          }
+        };
+        head.addEventListener("click", (e) => {
+          e.preventDefault();
+          toggleSection();
+        });
+        head.addEventListener("keydown", (e) => {
+          if (e.key === "Enter" || e.key === " ") {
+            e.preventDefault();
+            toggleSection();
+          }
+        });
+      });
+
       root.querySelectorAll(".chip:not(:disabled)").forEach((btn) => {
-        btn.addEventListener("click", () => {
+        btn.addEventListener("click", (e) => {
+          e.stopPropagation();
           const lineRaw = btn.dataset.line;
           const line = lineRaw === "" ? null : Number(lineRaw);
           const label = `${MKT_LABEL[btn.dataset.mkt] || btn.dataset.mkt} ${btn.dataset.label || btn.dataset.sel}`;
