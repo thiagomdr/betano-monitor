@@ -303,6 +303,35 @@
       overflow: hidden;
       text-overflow: ellipsis;
     }
+    .match-line {
+      display: flex;
+      flex-wrap: wrap;
+      align-items: center;
+      gap: 0.45rem 0.55rem;
+      min-width: 0;
+    }
+    .match-line .match-name {
+      flex: 1 1 auto;
+      min-width: 0;
+    }
+    .btn-betano {
+      flex: 0 0 auto;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      padding: 0.18rem 0.45rem;
+      border: none;
+      background: #ff5500;
+      color: #fff;
+      font-family: "IBM Plex Sans", system-ui, sans-serif;
+      font-size: 0.68rem;
+      font-weight: 700;
+      letter-spacing: 0.02em;
+      text-decoration: none;
+      line-height: 1.2;
+      white-space: nowrap;
+    }
+    .btn-betano:hover { filter: brightness(1.08); color: #fff; }
     .match-name .vs {
       color: var(--muted);
       font-weight: 500;
@@ -820,7 +849,7 @@
 
       const { data: events, error } = await sb
         .from("live_events")
-        .select("id,home,away,league,country,league_id,minute,home_score,away_score,status,updated_at")
+        .select("id,home,away,league,country,league_id,minute,home_score,away_score,status,updated_at,event_url,provider_event_id")
         .eq("status", "live")
         .order("minute", { ascending: true, nullsFirst: false });
 
@@ -956,11 +985,18 @@
       const score = `${ev.home_score ?? 0}:${ev.away_score ?? 0}`;
       const min = ev.minute != null ? `${ev.minute}'` : "—";
       const cols = renderMarketColumns(ev.id, markets);
+      const url = ev.event_url || "";
+      const betanoBtn = url
+        ? `<a class="btn-betano" href="${escapeHtml(url)}" target="_blank" rel="noopener noreferrer" title="Abrir na Betano">Betano</a>`
+        : "";
       return `<article class="row">
         <div class="cell-min">${min}</div>
         <div class="cell-score">${score}</div>
         <div class="match-block">
-          <div class="match-name" title="${escapeHtml(ev.home)} × ${escapeHtml(ev.away)}"><span class="team-home">${escapeHtml(ev.home)}</span><span class="vs"> × </span><span class="team-away">${escapeHtml(ev.away)}</span></div>
+          <div class="match-line">
+            <div class="match-name" title="${escapeHtml(ev.home)} × ${escapeHtml(ev.away)}"><span class="team-home">${escapeHtml(ev.home)}</span><span class="vs"> × </span><span class="team-away">${escapeHtml(ev.away)}</span></div>
+            ${betanoBtn}
+          </div>
         </div>
         <div class="odds-group">${cols}</div>
       </article>`;

@@ -52,6 +52,25 @@ async function fetchOverview(): Promise<unknown> {
   return await res.json();
 }
 
+function buildEventUrl(
+  baseUrl: string,
+  providerEventId: string,
+  home: string,
+  away: string,
+): string {
+  const base = baseUrl.replace(/\/$/, "");
+  const slugify = (text: string) =>
+    text
+      .normalize("NFD")
+      .replace(/[\u0300-\u036f]/g, "")
+      .toLowerCase()
+      .replace(/[^a-z0-9]+/g, "-")
+      .replace(/^-|-$/g, "");
+  const slug = [home, away].filter(Boolean).map((s) => slugify(String(s))).join("-") ||
+    "evento";
+  return `${base}/live/${slug}/${providerEventId}/`;
+}
+
 async function upsertCatalog(
   supabase: ReturnType<typeof createClient>,
   drafts: EventDraft[],
@@ -59,9 +78,13 @@ async function upsertCatalog(
   let markets = 0;
   let selections = 0;
   const seenProviderIds = new Set<string>();
+  const feedBase = (Deno.env.get("LIVE_FEED_BASE_URL") || "").replace(/\/$/, "");
 
   for (const draft of drafts) {
     seenProviderIds.add(draft.provider_event_id);
+    const eventUrl = feedBase
+      ? buildEventUrl(feedBase, draft.provider_event_id, draft.home, draft.away)
+      : null;
 
     const { data: evRow, error: evErr } = await supabase
       .from("live_events")
@@ -79,6 +102,7 @@ async function upsertCatalog(
           away_score: draft.away_score,
           status: draft.status,
           betradar_id: draft.betradar_id,
+          event_url: eventUrl,
           raw: draft.raw ?? {},
           updated_at: new Date().toISOString(),
           finished_at: draft.status === "finished" ? new Date().toISOString() : null,
