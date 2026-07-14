@@ -294,10 +294,11 @@
     }
     .cell-min {
       font-family: "IBM Plex Mono", monospace;
-      font-size: 0.9rem;
+      font-size: 0.85rem;
       color: var(--warn);
       font-weight: 600;
       line-height: 1.1;
+      white-space: nowrap;
     }
     .btn-betano {
       flex: 0 0 auto;
@@ -327,13 +328,20 @@
       line-height: 1.1;
       white-space: nowrap;
     }
+    .match-meta-line {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 0.55rem;
+      flex-wrap: wrap;
+    }
     .match-block {
       min-width: 0;
       display: flex;
       flex-direction: column;
       align-items: center;
       justify-content: center;
-      gap: 0.2rem;
+      gap: 0.22rem;
       text-align: center;
     }
     .match-name {
@@ -570,7 +578,7 @@
         </div>
         <div class="board" id="board">
           <div class="board-head">
-            <div>Min</div>
+            <div></div>
             <div>Jogo</div>
             <div class="odds-cols">
               <div>1X2</div>
@@ -1003,12 +1011,14 @@
         : "";
       return `<article class="row">
         <div class="cell-min-wrap">
-          <div class="cell-min">${min}</div>
           ${betanoBtn}
         </div>
         <div class="match-block">
           <div class="match-name" title="${escapeHtml(ev.home)} × ${escapeHtml(ev.away)}"><span class="team-home">${escapeHtml(ev.home)}</span><span class="vs"> × </span><span class="team-away">${escapeHtml(ev.away)}</span></div>
-          <div class="cell-score">${score}</div>
+          <div class="match-meta-line">
+            <span class="cell-min">${min}</span>
+            <span class="cell-score">${score}</span>
+          </div>
         </div>
         <div class="odds-group">${cols}</div>
       </article>`;
