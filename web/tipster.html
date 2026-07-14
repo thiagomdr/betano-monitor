@@ -268,7 +268,7 @@
       letter-spacing: -0.01em;
     }
     .section-head .league {
-      color: var(--text);
+      color: var(--accent);
       font-size: 0.88rem;
       font-weight: 700;
       letter-spacing: -0.01em;
@@ -303,6 +303,13 @@
       overflow: hidden;
       text-overflow: ellipsis;
     }
+    .match-name .vs {
+      color: var(--muted);
+      font-weight: 500;
+      margin: 0 0.2rem;
+    }
+    .team-home { color: #5b9fd4; }
+    .team-away { color: #e85d5d; }
     .match-meta {
       display: flex;
       flex-wrap: wrap;
@@ -953,7 +960,7 @@
         <div class="cell-min">${min}</div>
         <div class="cell-score">${score}</div>
         <div class="match-block">
-          <div class="match-name" title="${escapeHtml(ev.home)} × ${escapeHtml(ev.away)}">${escapeHtml(ev.home)} × ${escapeHtml(ev.away)}</div>
+          <div class="match-name" title="${escapeHtml(ev.home)} × ${escapeHtml(ev.away)}"><span class="team-home">${escapeHtml(ev.home)}</span><span class="vs"> × </span><span class="team-away">${escapeHtml(ev.away)}</span></div>
         </div>
         <div class="odds-group">${cols}</div>
       </article>`;
