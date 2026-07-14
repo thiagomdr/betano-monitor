@@ -37,6 +37,8 @@ export type EventDraft = {
   provider_event_id: string;
   sport: string;
   league: string | null;
+  league_id: string | null;
+  country: string | null;
   home: string;
   away: string;
   minute: number | null;

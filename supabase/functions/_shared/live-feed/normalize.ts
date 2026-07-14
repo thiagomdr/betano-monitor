@@ -51,6 +51,91 @@ function leaguesMap(overview: Json): Json {
   return asRecord(overview.leagues) ?? asRecord(overview.leaguesById) ?? {};
 }
 
+function regionsMap(overview: Json): Json {
+  return asRecord(overview.regions) ??
+    asRecord(overview.regionsById) ??
+    asRecord(overview.countries) ??
+    {};
+}
+
+function extractCountry(
+  event: Json,
+  league: Json | null,
+  overview: Json,
+): string | null {
+  const direct = [
+    event.regionName,
+    event.countryName,
+    event.country,
+    event.region,
+    league?.regionName,
+    league?.country,
+    league?.region,
+    league?.areaName,
+    league?.locationName,
+    league?.parentName,
+  ];
+  for (const v of direct) {
+    if (v != null && String(v).trim()) return String(v).trim();
+  }
+
+  const regionId = league?.regionId ?? league?.countryId ?? league?.areaId ??
+    event.regionId ?? event.countryId;
+  if (regionId != null) {
+    const regions = regionsMap(overview);
+    const rec = asRecord(regions[String(regionId)]);
+    if (rec) {
+      const name = rec.name ?? rec.shortName ?? rec.regionName;
+      if (name != null && String(name).trim()) return String(name).trim();
+    }
+  }
+
+  // Reverse lookup: region whose leagueIdList contains this league
+  const leagueId = league?.id ?? event.leagueId ?? event.competitionId;
+  if (leagueId != null) {
+    const regions = regionsMap(overview);
+    const lid = String(leagueId);
+    for (const recVal of Object.values(regions)) {
+      const rec = asRecord(recVal);
+      if (!rec) continue;
+      const list = rec.leagueIdList ?? rec.leagueIds ?? rec.competitionIdList;
+      if (!Array.isArray(list)) continue;
+      if (list.map(String).includes(lid)) {
+        const name = rec.name ?? rec.shortName ?? rec.regionName;
+        if (name != null && String(name).trim()) return String(name).trim();
+      }
+    }
+
+    // sports.byId.FOOT sometimes has region → leagues nesting
+    const sports = asRecord(overview.sports);
+    const byId = asRecord(sports?.byId);
+    const foot = asRecord(byId?.FOOT);
+    const regionIds = foot?.regionIdList ?? foot?.regionIds;
+    if (Array.isArray(regionIds)) {
+      const regions2 = regionsMap(overview);
+      for (const rid of regionIds) {
+        const rec = asRecord(regions2[String(rid)]);
+        if (!rec) continue;
+        const list = rec.leagueIdList ?? rec.leagueIds;
+        if (Array.isArray(list) && list.map(String).includes(lid)) {
+          const name = rec.name ?? rec.shortName;
+          if (name != null && String(name).trim()) return String(name).trim();
+        }
+      }
+    }
+  }
+
+  // Some overviews nest region on league.region object
+  const nested = asRecord(league?.regionObj) ??
+    (typeof league?.region === "object" ? asRecord(league.region) : null);
+  if (nested) {
+    const name = nested.name ?? nested.shortName ?? nested.regionName;
+    if (name != null && String(name).trim()) return String(name).trim();
+  }
+
+  return null;
+}
+
 function isFootballEvent(event: Json, overview: Json): boolean {
   if (event.isOutrightEvent === true) return false;
   const participants = event.participants;
@@ -455,6 +540,7 @@ export function normalizeOverview(overviewRaw: unknown): EventDraft[] {
     const leagueName = league
       ? String(league.name ?? league.shortName ?? "")
       : String(event.leagueName ?? "");
+    const countryName = extractCountry(event, league, overview);
 
     const markets = buildMarketsForEvent(eventId, event, overview);
     if (!markets.length) continue;
@@ -463,6 +549,8 @@ export function normalizeOverview(overviewRaw: unknown): EventDraft[] {
       provider_event_id: eventId,
       sport: "football",
       league: leagueName || null,
+      league_id: leagueId != null ? String(leagueId) : null,
+      country: countryName,
       home: teams.home,
       away: teams.away,
       minute,
@@ -473,6 +561,8 @@ export function normalizeOverview(overviewRaw: unknown): EventDraft[] {
       markets,
       raw: {
         provider_event_id: eventId,
+        league_id: leagueId != null ? String(leagueId) : null,
+        country: countryName,
         minute,
         home_score: score.home,
         away_score: score.away,

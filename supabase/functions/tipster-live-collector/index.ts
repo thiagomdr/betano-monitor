@@ -70,6 +70,8 @@ async function upsertCatalog(
           provider_event_id: draft.provider_event_id,
           sport: draft.sport,
           league: draft.league,
+          league_id: draft.league_id,
+          country: draft.country,
           home: draft.home,
           away: draft.away,
           minute: draft.minute,

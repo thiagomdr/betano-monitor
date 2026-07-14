@@ -179,7 +179,7 @@
     .board {
       border: 1px solid var(--line);
       background: var(--bg-2);
-      overflow: hidden;
+      overflow: visible;
     }
     .board-head {
       display: grid;
@@ -193,9 +193,8 @@
       font-size: 0.65rem;
       text-transform: uppercase;
       letter-spacing: 0.06em;
-      position: sticky;
-      top: 57px;
-      z-index: 5;
+      position: relative;
+      z-index: 1;
     }
     .odds-cols {
       display: grid;
@@ -214,6 +213,41 @@
     }
     .row:hover { background: color-mix(in srgb, var(--accent) 4%, transparent); }
     .row:last-child { border-bottom: 0; }
+    .section {
+      border-bottom: 1px solid var(--line);
+    }
+    .section:last-child { border-bottom: 0; }
+    .section-head {
+      display: flex;
+      flex-wrap: wrap;
+      align-items: baseline;
+      gap: 0.35rem 0.65rem;
+      padding: 0.55rem 0.7rem 0.4rem;
+      background: color-mix(in srgb, var(--bg-3) 88%, #000);
+      border-bottom: 1px solid var(--line-soft);
+      border-top: 1px solid var(--line);
+    }
+    .section:first-child .section-head { border-top: 0; }
+    .section-head.esports {
+      border-left: 3px solid var(--esports);
+    }
+    .section-head .country {
+      font-weight: 700;
+      font-size: 0.82rem;
+      letter-spacing: -0.01em;
+    }
+    .section-head .league {
+      color: var(--muted);
+      font-size: 0.78rem;
+    }
+    .section-head .count {
+      margin-left: auto;
+      font-family: "IBM Plex Mono", monospace;
+      font-size: 0.7rem;
+      color: var(--muted);
+    }
+    .section .row { border-bottom: 1px solid var(--line-soft); }
+    .section .row:last-child { border-bottom: 0; }
     .cell-min {
       font-family: "IBM Plex Mono", monospace;
       font-size: 0.9rem;
@@ -744,7 +778,7 @@
 
       const { data: events, error } = await sb
         .from("live_events")
-        .select("id,home,away,league,minute,home_score,away_score,status,updated_at")
+        .select("id,home,away,league,country,league_id,minute,home_score,away_score,status,updated_at")
         .eq("status", "live")
         .order("minute", { ascending: true, nullsFirst: false });
 
@@ -784,23 +818,17 @@
         mktsByEvent.get(m.event_id).push(full);
       }
 
-      root.innerHTML = events.map((ev) => {
-        const score = `${ev.home_score ?? 0}:${ev.away_score ?? 0}`;
-        const min = ev.minute != null ? `${ev.minute}'` : "—";
-        const esports = isEsports(ev.home, ev.away, ev.league);
-        const cols = renderMarketColumns(ev.id, mktsByEvent.get(ev.id) || []);
-        return `<article class="row">
-          <div class="cell-min">${min}</div>
-          <div class="cell-score">${score}</div>
-          <div class="match-block">
-            <div class="match-name" title="${ev.home} × ${ev.away}">${ev.home} × ${ev.away}</div>
-            <div class="match-meta">
-              ${esports ? '<span class="badge">Esports</span>' : ""}
-              <span>${ev.league || "—"}</span>
-            </div>
+      const groups = groupEventsByCountryLeague(events);
+      root.innerHTML = groups.map((g) => {
+        const rows = g.events.map((ev) => renderEventRow(ev, mktsByEvent.get(ev.id) || [])).join("");
+        return `<section class="section">
+          <div class="section-head ${g.esports ? "esports" : ""}">
+            <span class="country">${escapeHtml(g.country)}</span>
+            <span class="league">${escapeHtml(g.league)}</span>
+            <span class="count">${g.events.length}</span>
           </div>
-          <div class="odds-group">${cols}</div>
-        </article>`;
+          ${rows}
+        </section>`;
       }).join("");
 
       root.querySelectorAll(".chip:not(:disabled)").forEach((btn) => {
@@ -813,6 +841,61 @@
       });
 
       refreshHeaderStats();
+    }
+
+    function escapeHtml(s) {
+      return String(s ?? "")
+        .replace(/&/g, "&amp;")
+        .replace(/</g, "&lt;")
+        .replace(/>/g, "&gt;")
+        .replace(/"/g, "&quot;");
+    }
+
+    function groupEventsByCountryLeague(events) {
+      const map = new Map();
+      for (const ev of events) {
+        const esports = isEsports(ev.home, ev.away, ev.league) ||
+          isEsports(ev.home, ev.away, ev.country);
+        const country = esports
+          ? "Esports"
+          : (ev.country && String(ev.country).trim()) || "Outros";
+        const league = (ev.league && String(ev.league).trim()) || "Sem liga";
+        const key = `${esports ? "1" : "0"}|${country.toLowerCase()}|${league.toLowerCase()}`;
+        if (!map.has(key)) {
+          map.set(key, { key, esports, country, league, events: [] });
+        }
+        map.get(key).events.push(ev);
+      }
+
+      const groups = [...map.values()];
+      groups.sort((a, b) => {
+        if (a.esports !== b.esports) return a.esports ? 1 : -1; // real first, esports last
+        const c = a.country.localeCompare(b.country, "pt-BR");
+        if (c !== 0) return c;
+        return a.league.localeCompare(b.league, "pt-BR");
+      });
+      for (const g of groups) {
+        g.events.sort((x, y) => {
+          const mx = x.minute == null ? 999 : Number(x.minute);
+          const my = y.minute == null ? 999 : Number(y.minute);
+          return mx - my;
+        });
+      }
+      return groups;
+    }
+
+    function renderEventRow(ev, markets) {
+      const score = `${ev.home_score ?? 0}:${ev.away_score ?? 0}`;
+      const min = ev.minute != null ? `${ev.minute}'` : "—";
+      const cols = renderMarketColumns(ev.id, markets);
+      return `<article class="row">
+        <div class="cell-min">${min}</div>
+        <div class="cell-score">${score}</div>
+        <div class="match-block">
+          <div class="match-name" title="${escapeHtml(ev.home)} × ${escapeHtml(ev.away)}">${escapeHtml(ev.home)} × ${escapeHtml(ev.away)}</div>
+        </div>
+        <div class="odds-group">${cols}</div>
+      </article>`;
     }
 
     async function loadPicks() {
