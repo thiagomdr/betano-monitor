@@ -193,7 +193,7 @@
     .board-head {
       display: grid;
       grid-template-columns:
-        52px 56px minmax(160px, 1.4fr) minmax(280px, 2.2fr);
+        64px 56px minmax(160px, 1.4fr) minmax(280px, 2.2fr);
       gap: 0.5rem 0.65rem;
       padding: 0.4rem 0.7rem;
       border: 1px solid var(--line);
@@ -213,7 +213,7 @@
     .row {
       display: grid;
       grid-template-columns:
-        52px 56px minmax(160px, 1.4fr) minmax(280px, 2.2fr);
+        64px 56px minmax(160px, 1.4fr) minmax(280px, 2.2fr);
       gap: 0.5rem 0.65rem;
       align-items: center;
       padding: 0.45rem 0.7rem;
@@ -283,12 +283,38 @@
     .section.collapsed .section-body { display: none; }
     .section .row { border-bottom: 1px solid var(--line-soft); }
     .section .row:last-child { border-bottom: 0; }
+    .cell-min-wrap {
+      display: flex;
+      flex-direction: column;
+      align-items: flex-start;
+      gap: 0.28rem;
+      min-width: 0;
+    }
     .cell-min {
       font-family: "IBM Plex Mono", monospace;
       font-size: 0.9rem;
       color: var(--warn);
       font-weight: 600;
     }
+    .btn-betano {
+      flex: 0 0 auto;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      padding: 0.16rem 0.4rem;
+      border: none;
+      border-radius: 999px;
+      background: #ff5500;
+      color: #fff;
+      font-family: "IBM Plex Sans", system-ui, sans-serif;
+      font-size: 0.62rem;
+      font-weight: 700;
+      letter-spacing: 0.02em;
+      text-decoration: none;
+      line-height: 1.15;
+      white-space: nowrap;
+    }
+    .btn-betano:hover { filter: brightness(1.08); color: #fff; }
     .cell-score {
       font-family: "IBM Plex Mono", monospace;
       font-size: 0.95rem;
@@ -303,35 +329,6 @@
       overflow: hidden;
       text-overflow: ellipsis;
     }
-    .match-line {
-      display: flex;
-      flex-wrap: wrap;
-      align-items: center;
-      gap: 0.45rem 0.55rem;
-      min-width: 0;
-    }
-    .match-line .match-name {
-      flex: 1 1 auto;
-      min-width: 0;
-    }
-    .btn-betano {
-      flex: 0 0 auto;
-      display: inline-flex;
-      align-items: center;
-      justify-content: center;
-      padding: 0.18rem 0.45rem;
-      border: none;
-      background: #ff5500;
-      color: #fff;
-      font-family: "IBM Plex Sans", system-ui, sans-serif;
-      font-size: 0.68rem;
-      font-weight: 700;
-      letter-spacing: 0.02em;
-      text-decoration: none;
-      line-height: 1.2;
-      white-space: nowrap;
-    }
-    .btn-betano:hover { filter: brightness(1.08); color: #fff; }
     .match-name .vs {
       color: var(--muted);
       font-weight: 500;
@@ -990,13 +987,13 @@
         ? `<a class="btn-betano" href="${escapeHtml(url)}" target="_blank" rel="noopener noreferrer" title="Abrir na Betano">Betano</a>`
         : "";
       return `<article class="row">
-        <div class="cell-min">${min}</div>
+        <div class="cell-min-wrap">
+          <div class="cell-min">${min}</div>
+          ${betanoBtn}
+        </div>
         <div class="cell-score">${score}</div>
         <div class="match-block">
-          <div class="match-line">
-            <div class="match-name" title="${escapeHtml(ev.home)} × ${escapeHtml(ev.away)}"><span class="team-home">${escapeHtml(ev.home)}</span><span class="vs"> × </span><span class="team-away">${escapeHtml(ev.away)}</span></div>
-            ${betanoBtn}
-          </div>
+          <div class="match-name" title="${escapeHtml(ev.home)} × ${escapeHtml(ev.away)}"><span class="team-home">${escapeHtml(ev.home)}</span><span class="vs"> × </span><span class="team-away">${escapeHtml(ev.away)}</span></div>
         </div>
         <div class="odds-group">${cols}</div>
       </article>`;
