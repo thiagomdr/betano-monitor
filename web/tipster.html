@@ -193,7 +193,7 @@
     .board-head {
       display: grid;
       grid-template-columns:
-        64px 56px minmax(160px, 1.4fr) minmax(280px, 2.2fr);
+        64px minmax(200px, 1.6fr) minmax(280px, 2.2fr);
       gap: 0.5rem 0.65rem;
       padding: 0.4rem 0.7rem;
       border: 1px solid var(--line);
@@ -213,7 +213,7 @@
     .row {
       display: grid;
       grid-template-columns:
-        64px 56px minmax(160px, 1.4fr) minmax(280px, 2.2fr);
+        64px minmax(200px, 1.6fr) minmax(280px, 2.2fr);
       gap: 0.5rem 0.65rem;
       align-items: center;
       padding: 0.45rem 0.7rem;
@@ -321,16 +321,27 @@
     .cell-score {
       font-family: "IBM Plex Mono", monospace;
       font-size: 0.95rem;
-      font-weight: 600;
+      font-weight: 700;
       letter-spacing: 0.02em;
+      color: var(--text);
+      flex: 0 0 auto;
+      white-space: nowrap;
+      margin-left: 0.35rem;
     }
-    .match-block { min-width: 0; }
+    .match-block {
+      min-width: 0;
+      display: flex;
+      align-items: center;
+      gap: 0.35rem;
+    }
     .match-name {
       font-weight: 600;
       font-size: 0.92rem;
       white-space: nowrap;
       overflow: hidden;
       text-overflow: ellipsis;
+      min-width: 0;
+      flex: 1 1 auto;
     }
     .match-name .vs {
       color: var(--muted);
@@ -497,7 +508,7 @@
         padding: 0.7rem;
       }
       .match-name { white-space: normal; }
-      .cell-min, .cell-score {
+      .cell-min {
         display: inline-block;
         margin-right: 0.55rem;
       }
@@ -558,7 +569,6 @@
         <div class="board" id="board">
           <div class="board-head">
             <div>Min</div>
-            <div>Placar</div>
             <div>Jogo</div>
             <div class="odds-cols">
               <div>1X2</div>
@@ -982,7 +992,7 @@
     }
 
     function renderEventRow(ev, markets) {
-      const score = `${ev.home_score ?? 0}:${ev.away_score ?? 0}`;
+      const score = `${ev.home_score ?? 0} x ${ev.away_score ?? 0}`;
       const min = ev.minute != null ? `${ev.minute}'` : "—";
       const cols = renderMarketColumns(ev.id, markets);
       const url = ev.event_url || "";
@@ -994,9 +1004,9 @@
           <div class="cell-min">${min}</div>
           ${betanoBtn}
         </div>
-        <div class="cell-score">${score}</div>
         <div class="match-block">
           <div class="match-name" title="${escapeHtml(ev.home)} × ${escapeHtml(ev.away)}"><span class="team-home">${escapeHtml(ev.home)}</span><span class="vs"> × </span><span class="team-away">${escapeHtml(ev.away)}</span></div>
+          <div class="cell-score">${score}</div>
         </div>
         <div class="odds-group">${cols}</div>
       </article>`;
